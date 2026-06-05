@@ -14,7 +14,15 @@ export function createApp(): express.Express {
   // Ensure DB is initialized.
   getDb();
 
-  app.use(helmet({ contentSecurityPolicy: false }));
+  // COOP / Origin-Agent-Cluster only apply on HTTPS or localhost; over plain-HTTP LAN
+  // access (e.g. http://<wsl-ip>:3000) browsers ignore them and log warnings — drop them.
+  app.use(
+    helmet({
+      contentSecurityPolicy: false,
+      crossOriginOpenerPolicy: false,
+      originAgentCluster: false,
+    })
+  );
   const frontendUrl = process.env.FRONTEND_URL;
   if (frontendUrl) {
     app.use(cors({ origin: frontendUrl, credentials: true }));

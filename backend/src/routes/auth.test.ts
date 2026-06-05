@@ -1,23 +1,18 @@
 import path from 'path';
 import os from 'os';
 import fs from 'fs';
-
-beforeAll(() => {
-  process.env.DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'sa-auth-'));
-  process.env.REGISTRATION_MODE = 'open';
-});
-
 import request from 'supertest';
 
-function makeApp() {
-  // Imported lazily so DATA_DIR env is set before db.ts runs.
-  const { createApp } = require('../index');
-  return createApp();
-}
+// Set DATA_DIR to a fresh temp dir BEFORE requiring the app, so db.ts (which reads
+// DATA_DIR at module load) opens an isolated throwaway database for this run.
+// NOTE: must use require() (not a hoisted top-level import) so it runs AFTER this assignment.
+process.env.DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'sa-auth-'));
+process.env.REGISTRATION_MODE = 'open';
+
+const { createApp } = require('../index');
+const app = createApp();
 
 describe('auth routes', () => {
-  const app = makeApp();
-
   it('registers a new user and returns tokens', async () => {
     const res = await request(app)
       .post('/api/auth/register')
