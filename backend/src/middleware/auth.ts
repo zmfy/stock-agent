@@ -1,0 +1,31 @@
+import { Request, Response, NextFunction } from 'express';
+import jwt from 'jsonwebtoken';
+import { errorResponse } from '../utils/response';
+import { JwtPayload } from '../types';
+import { JWT_SECRET } from '../secret';
+
+export function authMiddleware(req: Request, res: Response, next: NextFunction): void {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    errorResponse(res, 401, 'AUTH_UNAUTHORIZED', '未提供认证令牌');
+    return;
+  }
+  const token = authHeader.slice(7);
+  try {
+    const payload = jwt.verify(token, JWT_SECRET) as JwtPayload;
+    req.user = payload;
+    next();
+  } catch {
+    errorResponse(res, 401, 'AUTH_UNAUTHORIZED', '令牌无效或已过期');
+  }
+}
+
+export function generateTokens(
+  userId: string,
+  role: 'admin' | 'user'
+): { accessToken: string; refreshToken: string } {
+  const payload: JwtPayload = { userId, role };
+  const accessToken = jwt.sign(payload, JWT_SECRET, { expiresIn: '30m' });
+  const refreshToken = jwt.sign(payload, JWT_SECRET, { expiresIn: '30d' });
+  return { accessToken, refreshToken };
+}

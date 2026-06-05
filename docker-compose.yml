@@ -1,0 +1,16 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - DATA_DIR=/app/backend/data
+      - REGISTRATION_MODE=open
+    volumes:
+      - stock_agent_data:/app/backend/data
+
+volumes:
+  stock_agent_data:

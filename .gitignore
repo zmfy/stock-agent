@@ -4,7 +4,11 @@ dist/
 .env
 .env.*
 !.env.example
-data/*.db
-data/*.sqlite
+data/
+**/data/
+*.db
+*.sqlite
+*.db-shm
+*.db-wal
 __pycache__/
 *.pyc
