@@ -53,17 +53,24 @@ export function createApp(): express.Express {
     message: { success: false, code: 'RATE_LIMIT', message: '请求过于频繁，请稍后再试' },
   });
 
+  // Throttle LLM-triggering endpoints per IP so a client can't hammer the model (cost + 429 防护).
+  const aiLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: process.env.NODE_ENV === 'test' ? 100000 : Number(process.env.AI_ROUTE_RATE_MAX) || 40,
+    message: { success: false, code: 'RATE_LIMIT', message: 'AI 调用过于频繁，请稍后再试' },
+  });
+
   app.use('/api/auth', authLimiter, authRoutes);
   app.use('/api/settings', settingsRoutes);
   app.use('/api/rulebook', rulebookRoutes);
   app.use('/api/ai', aiRoutes);
   app.use('/api/plugins', pluginRoutes);
   app.use('/api/data', dataRoutes);
-  app.use('/api/analysis', analysisRoutes);
+  app.use('/api/analysis', aiLimiter, analysisRoutes);
   app.use('/api/agent', agentRoutes);
-  app.use('/api/chat', chatRoutes);
-  app.use('/api/meetings', meetingsRoutes);
-  app.use('/api/screen', screenRoutes);
+  app.use('/api/chat', aiLimiter, chatRoutes);
+  app.use('/api/meetings', aiLimiter, meetingsRoutes);
+  app.use('/api/screen', aiLimiter, screenRoutes);
   app.use('/api/account', accountRoutes);
 
   app.get('/health', (_req, res) => {

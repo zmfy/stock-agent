@@ -46,8 +46,23 @@ export function wipeUserData(userId: string): void {
   tx();
 }
 
+// Allowed columns per table, read from the live schema. `table` is always one of our
+// trusted constants; column names are validated against this set so a tampered backup
+// bundle can never inject column names into the SQL.
+const colCache = new Map<string, Set<string>>();
+function allowedColumns(table: string): Set<string> {
+  let s = colCache.get(table);
+  if (!s) {
+    const rows = getDb().prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
+    s = new Set(rows.map((r) => r.name));
+    colCache.set(table, s);
+  }
+  return s;
+}
+
 function insertRow(table: string, row: Record<string, any>): void {
-  const cols = Object.keys(row);
+  const allow = allowedColumns(table);
+  const cols = Object.keys(row).filter((c) => allow.has(c)); // drop unknown/malicious keys
   if (!cols.length) return;
   const placeholders = cols.map(() => '?').join(',');
   getDb()
