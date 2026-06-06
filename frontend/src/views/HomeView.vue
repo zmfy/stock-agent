@@ -664,7 +664,7 @@ onMounted(async () => {
 .ops-btn.dashed { border-style: dashed; background: #f0f7f2; }
 .ops-btn:disabled { opacity: 0.6; cursor: not-allowed; }
 .ops-side .tplswitch, .ops-side .propose-bar, .ops-side .proposal { margin: 0; }
-.ops-fab { position: fixed; right: 22px; bottom: 22px; z-index: 50; background: var(--accent); color: #fff; border: none; border-radius: 22px; padding: 10px 16px; box-shadow: var(--shadow-md); cursor: pointer; font-size: 13px; font-weight: 600; }
+.ops-fab { position: fixed; right: 22px; bottom: 104px; z-index: 50; background: var(--accent); color: #fff; border: none; border-radius: 22px; padding: 10px 16px; box-shadow: var(--shadow-md); cursor: pointer; font-size: 13px; font-weight: 600; }
 .ops-fab:hover { background: var(--accent-600); }
 .initbar { background: #fff7e6; border: 1px solid #ffe0a3; border-radius: 6px; padding: 8px 12px; font-size: 13px; margin-bottom: 8px; }
 .empty { margin: auto; text-align: center; color: var(--text-soft); max-width: 460px; }
