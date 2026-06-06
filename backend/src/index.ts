@@ -9,6 +9,7 @@ import { getDb } from './db';
 import authRoutes from './routes/auth';
 import settingsRoutes from './routes/settings';
 import rulebookRoutes from './routes/rulebook';
+import aiRoutes from './routes/ai';
 
 export function createApp(): express.Express {
   const app = express();
@@ -47,6 +48,7 @@ export function createApp(): express.Express {
   app.use('/api/auth', authLimiter, authRoutes);
   app.use('/api/settings', settingsRoutes);
   app.use('/api/rulebook', rulebookRoutes);
+  app.use('/api/ai', aiRoutes);
 
   app.get('/health', (_req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });

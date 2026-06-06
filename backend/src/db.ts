@@ -85,9 +85,22 @@ function initSchema(): void {
       sort_order INTEGER DEFAULT 0
     );
 
+    CREATE TABLE IF NOT EXISTS ai_configs (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      provider TEXT NOT NULL,
+      api_key_enc TEXT,
+      base_url TEXT,
+      model TEXT,
+      is_active INTEGER DEFAULT 0,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(user_id, provider)
+    );
+
     CREATE INDEX IF NOT EXISTS idx_rulebook_user_active ON rulebook_versions (user_id, is_active);
     CREATE INDEX IF NOT EXISTS idx_gates_version ON gates (version_id);
     CREATE INDEX IF NOT EXISTS idx_soft_rules_version ON soft_rules (version_id);
+    CREATE INDEX IF NOT EXISTS idx_ai_configs_user_active ON ai_configs (user_id, is_active);
   `);
 
   // Registration is invite-only by default; set REGISTRATION_MODE=open to allow self sign-up.
