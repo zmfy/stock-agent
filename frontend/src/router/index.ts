@@ -9,6 +9,7 @@ const routes: RouteRecordRaw[] = [
   { path: '/ai', name: 'ai', component: () => import('../views/AiSettingsView.vue'), meta: { requiresAuth: true } },
   { path: '/plugins', name: 'plugins', component: () => import('../views/PluginsView.vue'), meta: { requiresAuth: true } },
   { path: '/data', name: 'data', component: () => import('../views/DataView.vue'), meta: { requiresAuth: true } },
+  { path: '/analysis', name: 'analysis', component: () => import('../views/AnalysisView.vue'), meta: { requiresAuth: true } },
 ];
 
 const router = createRouter({ history: createWebHistory(), routes });

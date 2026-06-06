@@ -156,7 +156,30 @@ function initSchema(): void {
 
     CREATE INDEX IF NOT EXISTS idx_ai_configs_user_active ON ai_configs (user_id, is_active);
     CREATE INDEX IF NOT EXISTS idx_plugins_user_enabled ON plugins (user_id, enabled);
+    CREATE TABLE IF NOT EXISTS reports (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      stock_code TEXT NOT NULL,
+      stock_name TEXT,
+      rulebook_version_id TEXT,
+      data_date TEXT,
+      ai_provider TEXT,
+      ai_model TEXT,
+      snapshot TEXT,
+      gate_results TEXT,
+      soft_findings TEXT,
+      a_conclusion TEXT,
+      b_conclusion TEXT,
+      exception_channel TEXT,
+      position_suggestion TEXT,
+      one_liner TEXT,
+      teach_notes TEXT,
+      raw_ai_response TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
     CREATE INDEX IF NOT EXISTS idx_quote_daily_code ON quote_daily (code);
+    CREATE INDEX IF NOT EXISTS idx_reports_user ON reports (user_id, created_at);
   `);
 
   migrate();

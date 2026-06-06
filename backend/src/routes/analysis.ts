@@ -1,0 +1,37 @@
+import { Router, Request, Response } from 'express';
+import { z } from 'zod';
+import { authMiddleware } from '../middleware/auth';
+import { successResponse, errorResponse } from '../utils/response';
+import { runAnalysis } from '../analysis/orchestrator';
+import { listReports, getReport } from '../analysis/report-service';
+
+const router = Router();
+router.use(authMiddleware);
+
+// POST /api/analysis/run { code }
+router.post('/run', async (req: Request, res: Response) => {
+  const parsed = z.object({ code: z.string().min(1).max(20) }).safeParse(req.body);
+  if (!parsed.success) return errorResponse(res, 422, 'VALIDATION_ERROR', '请提供股票代码');
+  try {
+    const report = await runAnalysis(req.user!.userId, parsed.data.code.trim());
+    successResponse(res, report, '分析完成', 201);
+  } catch (e: any) {
+    if (e.message === 'NO_RULEBOOK') return errorResponse(res, 400, 'BUSINESS_CONFLICT', '请先在「核心规则」导入或设定规则版本');
+    if (e.message === 'NO_MODEL') return errorResponse(res, 400, 'BUSINESS_CONFLICT', '请先在「AI 模型」配置并启用一个可用模型');
+    return errorResponse(res, 502, 'UPSTREAM_ERROR', `分析失败：${e.message || '未知错误'}`);
+  }
+});
+
+// GET /api/analysis/reports
+router.get('/reports', (req: Request, res: Response) => {
+  successResponse(res, listReports(req.user!.userId));
+});
+
+// GET /api/analysis/reports/:id
+router.get('/reports/:id', (req: Request, res: Response) => {
+  const report = getReport(req.user!.userId, req.params.id);
+  if (!report) return errorResponse(res, 404, 'RESOURCE_NOT_FOUND', '报告不存在');
+  successResponse(res, report);
+});
+
+export default router;

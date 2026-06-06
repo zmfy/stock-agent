@@ -3,6 +3,7 @@
     <h1>股票小作手</h1>
     <p v-if="auth.user">欢迎，{{ auth.user.username }}（{{ auth.user.role }}）</p>
     <nav class="nav">
+      <router-link to="/analysis">选股分析</router-link>
       <router-link to="/rulebook">核心规则</router-link>
       <router-link to="/ai">AI 模型</router-link>
       <router-link to="/data">数据</router-link>

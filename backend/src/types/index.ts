@@ -50,6 +50,28 @@ export interface StockSnapshot {
   _missing: string[];
 }
 
+export interface GateResult {
+  gate_key: string;
+  label: string;
+  system: 'A' | 'B';
+  field: string;
+  op: string;
+  threshold: number | null;
+  threshold2: number | null;
+  ref_field: string | null;
+  unit: string;
+  veto: number;
+  actual: number | null;
+  status: 'pass' | 'fail' | 'unknown';
+  teach: string;
+}
+
+export interface GateEvaluation {
+  gateResults: GateResult[];
+  aVeto: { passed: boolean; failed: string[] };
+  bEmotion: { passed: boolean; failed: string[] };
+}
+
 export type GateOp = '>=' | '>' | '<=' | '<' | 'between' | 'gt_field';
 
 export interface Gate {
