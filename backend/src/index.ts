@@ -7,6 +7,7 @@ import path from 'path';
 import fs from 'fs';
 import { getDb } from './db';
 import authRoutes from './routes/auth';
+import settingsRoutes from './routes/settings';
 
 export function createApp(): express.Express {
   const app = express();
@@ -43,6 +44,7 @@ export function createApp(): express.Express {
   });
 
   app.use('/api/auth', authLimiter, authRoutes);
+  app.use('/api/settings', settingsRoutes);
 
   app.get('/health', (_req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });

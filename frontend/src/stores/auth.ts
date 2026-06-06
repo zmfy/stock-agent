@@ -14,6 +14,7 @@ export const useAuthStore = defineStore('auth', {
   }),
   getters: {
     isAuthenticated: (s) => !!s.accessToken,
+    isAdmin: (s) => s.user?.role === 'admin',
   },
   actions: {
     persist(accessToken: string, refreshToken: string, user: AuthUser) {
@@ -35,6 +36,9 @@ export const useAuthStore = defineStore('auth', {
     async fetchMe() {
       const res = await api.get('/auth/me');
       this.user = res.data.data;
+    },
+    async changePassword(currentPassword: string, newPassword: string) {
+      await api.put('/auth/password', { currentPassword, newPassword });
     },
     logout() {
       localStorage.removeItem('accessToken');

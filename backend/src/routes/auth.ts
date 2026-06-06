@@ -4,8 +4,9 @@ import jwt from 'jsonwebtoken';
 import { v4 as uuidv4 } from 'uuid';
 import { z } from 'zod';
 import { getDb } from '../db';
-import { authMiddleware, adminMiddleware, generateTokens } from '../middleware/auth';
+import { authMiddleware, generateTokens } from '../middleware/auth';
 import { successResponse, errorResponse } from '../utils/response';
+import { strongPassword } from '../utils/validation';
 import { JWT_SECRET } from '../secret';
 import { User, JwtPayload } from '../types';
 
@@ -96,21 +97,24 @@ router.post('/logout', authMiddleware, (_req: Request, res: Response) => {
   successResponse(res, null, '已登出');
 });
 
-// Admin mints an invite code so a new user can register under invite-only mode.
-router.post('/invite', authMiddleware, adminMiddleware, (req: Request, res: Response) => {
+// PUT /api/auth/password — logged-in user changes their OWN password (verifies current).
+router.put('/password', authMiddleware, (req: Request, res: Response) => {
+  const schema = z.object({ currentPassword: z.string().min(1), newPassword: strongPassword });
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) {
+    return errorResponse(res, 422, 'VALIDATION_ERROR', parsed.error.errors[0]?.message || '参数校验失败');
+  }
   const db = getDb();
-  const code = uuidv4().replace(/-/g, '').slice(0, 10);
-  db.prepare('INSERT INTO invite_codes (code, created_by) VALUES (?, ?)').run(code, req.user!.userId);
-  successResponse(res, { code }, '邀请码已生成', 201);
-});
-
-// Admin lists invite codes (unused first).
-router.get('/invites', authMiddleware, adminMiddleware, (_req: Request, res: Response) => {
-  const db = getDb();
-  const codes = db
-    .prepare('SELECT code, created_by, used_by, used_at, expires_at FROM invite_codes ORDER BY used_by IS NOT NULL, code')
-    .all();
-  successResponse(res, codes);
+  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user!.userId) as User | undefined;
+  if (!user) return errorResponse(res, 404, 'RESOURCE_NOT_FOUND', '用户不存在');
+  if (!bcrypt.compareSync(parsed.data.currentPassword, user.password_hash)) {
+    return errorResponse(res, 401, 'AUTH_UNAUTHORIZED', '当前密码错误');
+  }
+  db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(
+    bcrypt.hashSync(parsed.data.newPassword, 10),
+    user.id
+  );
+  successResponse(res, null, '密码已修改');
 });
 
 router.get('/me', authMiddleware, (req: Request, res: Response) => {

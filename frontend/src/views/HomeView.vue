@@ -2,7 +2,10 @@
   <div class="home">
     <h1>股票小作手</h1>
     <p v-if="auth.user">欢迎，{{ auth.user.username }}（{{ auth.user.role }}）</p>
-    <button @click="logout">登出</button>
+    <nav class="nav">
+      <router-link to="/settings">设置 / 修改密码</router-link>
+      <button @click="logout">登出</button>
+    </nav>
     <p class="hint">规则管理、选股分析等功能将在后续计划中加入。</p>
   </div>
 </template>
