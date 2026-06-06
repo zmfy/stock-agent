@@ -33,10 +33,10 @@ describe('ai/service (per-user)', () => {
     expect(svc.listConfigs(B).map((c: any) => c.provider)).toEqual(['qwen']);
   });
 
-  it('activate switches the active provider and getActiveConfig returns the decrypted key', () => {
-    svc.activate(A, 'deepseek');
-    const active = svc.getActiveConfig(A);
+  it('getActiveConfig (core, auto) resolves to the enabled model with its decrypted key', () => {
+    const active = svc.getActiveConfig(A); // only deepseek enabled so far
     expect(active.provider).toBe('deepseek');
+    expect(active.model).toBe('deepseek-reasoner');
     expect(active.apiKey).toBe('sk-abcdefgh1234');
   });
 
@@ -48,5 +48,37 @@ describe('ai/service (per-user)', () => {
   it('ollama needs no api key', () => {
     svc.saveConfig(A, 'ollama', { baseUrl: 'http://localhost:11434', model: 'qwen2.5' });
     expect(svc.listConfigs(A).find((c: any) => c.provider === 'ollama').apiKeySet).toBe(false);
+  });
+
+  // From here A's enabled pool = deepseek (deepseek-reasoner=strong) + ollama (qwen2.5=balanced)
+  it('auto routing: analysis prefers strong, data prefers fast/balanced', () => {
+    expect(svc.getModelForRole(A, 'analysis').provider).toBe('deepseek'); // strong
+    expect(svc.getModelForRole(A, 'data').provider).toBe('ollama'); // no fast -> balanced beats strong
+  });
+
+  it('a manual pin overrides auto, and reverting to auto restores routing', () => {
+    svc.setRoleAssignment(A, 'data', { mode: 'manual', provider: 'deepseek' });
+    expect(svc.getModelForRole(A, 'data').provider).toBe('deepseek');
+    svc.setRoleAssignment(A, 'data', { mode: 'auto' });
+    expect(svc.getModelForRole(A, 'data').provider).toBe('ollama');
+  });
+
+  it('disabling a provider removes it from the pool', () => {
+    svc.setEnabled(A, 'ollama', false);
+    expect(svc.getModelForRole(A, 'data').provider).toBe('deepseek'); // only deepseek left
+    svc.setEnabled(A, 'ollama', true);
+  });
+
+  it('manual pin to a disabled provider falls back to auto', () => {
+    svc.setRoleAssignment(A, 'analysis', { mode: 'manual', provider: 'ollama' });
+    svc.setEnabled(A, 'ollama', false);
+    expect(svc.getModelForRole(A, 'analysis').provider).toBe('deepseek'); // ollama gone -> auto
+    svc.setEnabled(A, 'ollama', true);
+  });
+
+  it('listRoleAssignments returns all 5 roles with resolved models', () => {
+    const roles = svc.listRoleAssignments(A);
+    expect(roles.map((r: any) => r.role)).toEqual(['core', 'data', 'analysis', 'qualitative', 'review']);
+    expect(roles.every((r: any) => r.resolvedProvider)).toBe(true);
   });
 });

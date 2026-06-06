@@ -45,15 +45,41 @@ router.put('/configs/:provider', (req: Request, res: Response) => {
   }
 });
 
-// POST /api/ai/configs/:provider/activate
-router.post('/configs/:provider/activate', (req: Request, res: Response) => {
+// POST /api/ai/configs/:provider/enable — toggle whether this config is in the usable pool
+router.post('/configs/:provider/enable', (req: Request, res: Response) => {
+  const parsed = z.object({ enabled: z.boolean() }).safeParse(req.body);
+  if (!parsed.success) return errorResponse(res, 422, 'VALIDATION_ERROR', '参数校验失败');
+  svc.setEnabled(req.user!.userId, req.params.provider, parsed.data.enabled);
+  successResponse(res, null, parsed.data.enabled ? '已启用' : '已停用');
+});
+
+// GET /api/ai/roles — task roles with current assignment + resolved model (no keys)
+router.get('/roles', (req: Request, res: Response) => {
+  successResponse(res, svc.listRoleAssignments(req.user!.userId));
+});
+
+const roleSchema = z.object({
+  mode: z.enum(['manual', 'auto']),
+  provider: z.string().nullable().optional(),
+  model: z.string().nullable().optional(),
+});
+
+// PUT /api/ai/roles/:role — pin a model to a task, or set it to auto (agent picks)
+router.put('/roles/:role', (req: Request, res: Response) => {
+  const parsed = roleSchema.safeParse(req.body);
+  if (!parsed.success) return errorResponse(res, 422, 'VALIDATION_ERROR', '参数校验失败');
   try {
-    svc.activate(req.user!.userId, req.params.provider);
-    successResponse(res, null, '已设为当前使用');
+    svc.setRoleAssignment(req.user!.userId, req.params.role, parsed.data);
+    successResponse(res, null, '已更新分工');
   } catch (e: any) {
-    if (e.message === 'NOT_CONFIGURED') return errorResponse(res, 400, 'BUSINESS_CONFLICT', '请先配置该提供商');
-    if (e.message === 'API_KEY_REQUIRED') return errorResponse(res, 400, 'BUSINESS_CONFLICT', '该提供商需要 API Key');
-    return errorResponse(res, 400, 'BUSINESS_CONFLICT', e.message || '操作失败');
+    const map: Record<string, [number, string]> = {
+      UNKNOWN_ROLE: [422, '未知任务角色'],
+      PROVIDER_REQUIRED: [422, '手动指定需选择提供商'],
+      NOT_ENABLED: [400, '该提供商未配置或未启用'],
+      API_KEY_REQUIRED: [400, '该提供商需要 API Key'],
+    };
+    const [code, msg] = map[e.message] || [400, e.message || '操作失败'];
+    errorResponse(res, code, code === 422 ? 'VALIDATION_ERROR' : 'BUSINESS_CONFLICT', msg);
   }
 });
 

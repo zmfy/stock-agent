@@ -64,12 +64,38 @@ describe('ai routes', () => {
     expect(res.status).toBe(400);
   });
 
-  it('activates a configured provider; /active reflects it', async () => {
-    const act = await request(app).post('/api/ai/configs/deepseek/activate').set(h(adminTok));
-    expect(act.status).toBe(200);
+  it('/active auto-resolves to the configured deepseek (core role)', async () => {
     const active = await request(app).get('/api/ai/active').set(h(adminTok));
     expect(active.body.data.provider).toBe('deepseek');
     expect(active.body.data.model).toBe('deepseek-chat');
+  });
+
+  it('GET /roles returns all 5 roles, resolved to the only enabled config', async () => {
+    const res = await request(app).get('/api/ai/roles').set(h(adminTok));
+    expect(res.status).toBe(200);
+    expect(res.body.data.map((r: any) => r.role)).toEqual(['core', 'data', 'analysis', 'qualitative', 'review']);
+    expect(res.body.data.every((r: any) => r.resolvedProvider === 'deepseek')).toBe(true);
+  });
+
+  it('PUT /roles/:role pins manually then reverts to auto', async () => {
+    const pin = await request(app).put('/api/ai/roles/data').set(h(adminTok)).send({ mode: 'manual', provider: 'deepseek' });
+    expect(pin.status).toBe(200);
+    const auto = await request(app).put('/api/ai/roles/data').set(h(adminTok)).send({ mode: 'auto' });
+    expect(auto.status).toBe(200);
+  });
+
+  it('PUT /roles/:role manual without provider is 422', async () => {
+    const res = await request(app).put('/api/ai/roles/data').set(h(adminTok)).send({ mode: 'manual' });
+    expect(res.status).toBe(422);
+  });
+
+  it('enable toggle removes/returns the config from the pool', async () => {
+    await request(app).post('/api/ai/configs/deepseek/enable').set(h(adminTok)).send({ enabled: false });
+    const off = await request(app).get('/api/ai/active').set(h(adminTok));
+    expect(off.body.data).toBeNull();
+    await request(app).post('/api/ai/configs/deepseek/enable').set(h(adminTok)).send({ enabled: true });
+    const on = await request(app).get('/api/ai/active').set(h(adminTok));
+    expect(on.body.data.provider).toBe('deepseek');
   });
 
   it('test endpoint reports ok with a mocked successful provider call', async () => {

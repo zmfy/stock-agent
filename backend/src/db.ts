@@ -93,8 +93,20 @@ function initSchema(): void {
       base_url TEXT,
       model TEXT,
       is_active INTEGER DEFAULT 0,
+      enabled INTEGER DEFAULT 1,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       UNIQUE(user_id, provider)
+    );
+
+    CREATE TABLE IF NOT EXISTS ai_role_assignments (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      role TEXT NOT NULL,
+      mode TEXT DEFAULT 'auto',
+      provider TEXT,
+      model TEXT,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(user_id, role)
     );
 
     CREATE INDEX IF NOT EXISTS idx_rulebook_user_active ON rulebook_versions (user_id, is_active);
@@ -102,6 +114,8 @@ function initSchema(): void {
     CREATE INDEX IF NOT EXISTS idx_soft_rules_version ON soft_rules (version_id);
     CREATE INDEX IF NOT EXISTS idx_ai_configs_user_active ON ai_configs (user_id, is_active);
   `);
+
+  migrate();
 
   // Registration is invite-only by default; set REGISTRATION_MODE=open to allow self sign-up.
   const mode = process.env.REGISTRATION_MODE === 'open' ? 'open' : 'invite';
@@ -111,6 +125,14 @@ function initSchema(): void {
   ).run(mode);
 
   seedDefaultAdmin();
+}
+
+// Add columns introduced after an earlier DB was created (SQLite has no ADD COLUMN IF NOT EXISTS).
+function migrate(): void {
+  const cols = db.prepare('PRAGMA table_info(ai_configs)').all() as { name: string }[];
+  if (!cols.some((c) => c.name === 'enabled')) {
+    db.exec('ALTER TABLE ai_configs ADD COLUMN enabled INTEGER DEFAULT 1');
+  }
 }
 
 // Seed a default admin account on first init so an invite-only system is reachable.
