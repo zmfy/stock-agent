@@ -6,8 +6,8 @@
     </header>
 
     <section class="card run">
-      <input v-model="code" placeholder="股票代码，如 300241" @keyup.enter="run" />
-      <button @click="run" :disabled="busy">{{ busy ? '分析中…' : '分析' }}</button>
+      <StockPicker placeholder="代码 / 名称 / 拼音，选中即分析" @pick="onPick" />
+      <button @click="run" :disabled="busy || !code">{{ busy ? '分析中…' : '分析' }}</button>
       <p v-if="err" class="err">{{ err }}</p>
       <p class="hint">分析会：代码算硬门槛 → AI 写软判断与结论 → 生成报告并存档（可在下方历史里回看）。</p>
     </section>
@@ -68,6 +68,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, defineComponent, h } from 'vue';
 import { analysisApi, type AnalysisReport, type ReportSummary, type GateResult } from '../api/analysis';
+import StockPicker from '../components/StockPicker.vue';
 
 const ICON: Record<string, string> = { pass: '✅', fail: '❌', unknown: '⚠️' };
 
@@ -109,6 +110,10 @@ function authorityCn(a: string) {
   return { uploaded: '以上传数据为准', cross: '交叉验证', internal: '合理性检查', none: '无来源' }[a] || a;
 }
 
+function onPick(c: string) {
+  code.value = c;
+  run();
+}
 async function run() {
   if (!code.value.trim()) return;
   err.value = ''; busy.value = true;

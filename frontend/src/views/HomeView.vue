@@ -32,12 +32,8 @@
         </div>
 
         <div class="freeq">
-          <input v-model="queryCode" placeholder="自由查询：代码/名称/拼音(如 gzmt)" @input="onQueryInput" @keyup.enter="freeQuery" />
-          <button @click="freeQuery">查</button>
+          <StockPicker placeholder="自由查询：代码/名称/拼音" @pick="openStockCode" />
         </div>
-        <ul v-if="stockSuggest.length" class="suggest">
-          <li v-for="s in stockSuggest" :key="s.code" @click="pickStock(s)">{{ s.name }} <span class="muted">{{ s.code }}</span></li>
-        </ul>
 
         <!-- 晚会 -->
         <button v-if="meetings.evening" class="pin-btn" :class="{ active: active?.kind === 'evening' }" @click="openMeeting('evening')">
@@ -196,7 +192,6 @@ import { chatApi, type ChatSession, type ChatMessage, type ChatKind } from '../a
 import { rulebookApi, type ProposeResult, type FullRulebook, type Gate, type TemplateMeta } from '../api/rulebook';
 import { meetingsApi, type Meeting } from '../api/meetings';
 import { screenApi, type ScreenRun } from '../api/screen';
-import { dataApi } from '../api/data';
 import AnalysisView from './AnalysisView.vue';
 import RulebookView from './RulebookView.vue';
 import AiSettingsView from './AiSettingsView.vue';
@@ -204,6 +199,7 @@ import PluginsView from './PluginsView.vue';
 import DataView from './DataView.vue';
 import SettingsView from './SettingsView.vue';
 import MeetingsHistoryView from './MeetingsHistoryView.vue';
+import StockPicker from '../components/StockPicker.vue';
 
 const auth = useAuthStore();
 
@@ -235,7 +231,6 @@ const messages = ref<ChatMessage[]>([]);
 const input = ref('');
 const sending = ref(false);
 const chatErr = ref('');
-const queryCode = ref('');
 const needsInit = ref(false);
 const analyzing = ref(false);
 const msgsEl = ref<HTMLElement | null>(null);
@@ -500,35 +495,6 @@ async function openStockCode(code: string) {
     s = sessions.value.find((x) => x.id === id);
   }
   if (s) await open(s);
-}
-// stock search-as-you-type (code / name / pinyin initials)
-const stockSuggest = ref<Array<{ code: string; name: string }>>([]);
-let suggestTimer: ReturnType<typeof setTimeout> | null = null;
-function onQueryInput() {
-  if (suggestTimer) clearTimeout(suggestTimer);
-  const q = queryCode.value.trim();
-  if (!q) { stockSuggest.value = []; return; }
-  suggestTimer = setTimeout(async () => {
-    try {
-      stockSuggest.value = (await dataApi.stockSearch(q)).data.data;
-    } catch {
-      stockSuggest.value = [];
-    }
-  }, 250);
-}
-async function pickStock(s: { code: string; name: string }) {
-  stockSuggest.value = [];
-  queryCode.value = '';
-  await openStockCode(s.code);
-}
-async function freeQuery() {
-  // if there's a single/first suggestion, use it; else treat input as a code
-  const first = stockSuggest.value[0];
-  const code = first ? first.code : queryCode.value.trim();
-  if (!code) return;
-  stockSuggest.value = [];
-  queryCode.value = '';
-  await openStockCode(code);
 }
 async function runScreen() {
   screening.value = true;

@@ -96,8 +96,7 @@
     <section class="card">
       <h2>查看个股快照</h2>
       <div class="row">
-        <input v-model="code" placeholder="股票代码，如 600519" @keyup.enter="lookup" />
-        <button @click="lookup" :disabled="busy">查询</button>
+        <StockPicker placeholder="代码 / 名称 / 拼音，选中即查询" @pick="onPickSnapshot" />
         <button @click="refresh" :disabled="busy">刷新数据源</button>
       </div>
       <table v-if="snap" class="snap">
@@ -125,6 +124,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue';
 import { dataApi, type StockSnapshot, type NewsItem, type DataSource } from '../api/data';
+import StockPicker from '../components/StockPicker.vue';
 
 const source = reactive({ sidecarConfigured: false, base: null as string | null, sidecarHealthy: false });
 const file = ref<File | null>(null);
@@ -169,6 +169,10 @@ async function doUpload() {
   }
 }
 
+function onPickSnapshot(c: string) {
+  code.value = c;
+  lookup();
+}
 async function lookup() {
   if (!code.value.trim()) return;
   lookupMsg.value = ''; busy.value = true;
