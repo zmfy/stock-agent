@@ -103,6 +103,7 @@
               <button v-if="screen" class="fold" @click="screenOpen = !screenOpen">{{ screenOpen ? '▾' : '▸' }} 选股结果（{{ screen.results.length }}）</button>
               <div v-if="screen && screenOpen" class="screen-list">
                 <div class="snote muted">{{ screen.note }}</div>
+                <div v-if="screen.discussion" class="screen-disc">{{ screen.discussion }}</div>
                 <div v-for="r in screen.results" :key="r.code" class="srow" @click="openStockCode(r.code)">
                   <span class="badge2" :class="r.aPass ? 'a' : r.bPass ? 'b' : 'no'">{{ r.aPass ? 'A' : r.bPass ? 'B' : '—' }}</span>
                   {{ r.name || r.code }} <span class="muted">{{ r.code }} · {{ r.passed }}/{{ r.total }}</span>
@@ -677,8 +678,9 @@ onMounted(async () => {
 .pin-card.gen { background: #eef7ee; cursor: pointer; border: 1px dashed #b7d7b7; text-align: left; }
 .screen-sect { display: flex; flex-direction: column; gap: 4px; }
 .fold { text-align: left; background: none; border: none; color: #666; font-size: 12px; cursor: pointer; padding: 2px 4px; }
-.screen-list { max-height: 220px; overflow-y: auto; border: 1px solid #eee; border-radius: 6px; padding: 4px; }
+.screen-list { max-height: 340px; overflow-y: auto; border: 1px solid #eee; border-radius: 6px; padding: 4px; }
 .snote { padding: 2px 4px; }
+.screen-disc { white-space: pre-wrap; font-size: 12px; line-height: 1.55; color: var(--text-soft); background: var(--surface-2); border: 1px solid var(--border-soft); border-radius: 6px; padding: 6px 8px; margin: 4px 0; }
 .srow { padding: 4px 6px; border-radius: 4px; cursor: pointer; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .srow:hover { background: #f3f3f3; }
 .badge2 { display: inline-block; width: 16px; text-align: center; border-radius: 4px; font-size: 11px; margin-right: 4px; }

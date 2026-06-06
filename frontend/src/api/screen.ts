@@ -13,6 +13,7 @@ export interface ScreenResult {
 export interface ScreenRun {
   note: string;
   results: ScreenResult[];
+  discussion?: string;
   created_at?: string;
 }
 

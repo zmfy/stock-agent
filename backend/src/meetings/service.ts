@@ -1,7 +1,8 @@
 import { v4 as uuidv4 } from 'uuid';
 import { getDb } from '../db';
 import { getActive } from '../rulebook/service';
-import { getLatestMarket } from '../data/service';
+import { getLatestMarket, listNews } from '../data/service';
+import { resolveSidecarBase, fetchHotSectors } from '../data/sidecar';
 import { getModelForRole } from '../ai/service';
 import { getProvider } from '../ai/providers';
 import { chat } from '../ai/manager';
@@ -22,6 +23,20 @@ function marketText(): { text: string; data: any } {
     text: `大盘情绪（${m.date}）：涨停 ${m.limit_up_count ?? '?'} 家、跌停 ${m.limit_down_count ?? '?'} 家、上证20日线斜率 ${slope ?? '?'}（趋势${trend}）。`,
     data: m,
   };
+}
+
+async function sectorText(userId: string): Promise<{ text: string; sectors: string[] }> {
+  const base = resolveSidecarBase(userId);
+  let sectors: string[] = [];
+  if (base) sectors = (await fetchHotSectors(base, 6).catch(() => null)) || [];
+  const text = sectors.length ? `近期热门板块（按涨幅排序）：${sectors.join('、')}。` : '（暂无板块热度数据）';
+  return { text, sectors };
+}
+
+function newsText(): string {
+  const ns = listNews(8);
+  if (!ns.length) return '（暂无近期财经新闻）';
+  return '近期财经要闻：\n' + ns.slice(0, 8).map((n) => `- ${n.title}`).join('\n');
 }
 
 function rulebookText(userId: string): string {
@@ -48,13 +63,15 @@ function personaOf(userId: string, role: string): string {
   return listProfiles(userId).find((p) => p.role === role)?.persona || '';
 }
 
-// 数据员：把今日盘面数据读成要点
-export function buildMorningDataPrompt(persona: string, market: string): string {
+// 数据员：把今日盘面数据 + 板块热度 + 新闻读成要点
+export function buildMorningDataPrompt(persona: string, market: string, sectors: string, news: string): string {
   return `${persona || '你是后台数据员，只客观整理盘面事实，不下结论。'}
 
 你是早会上的【数据员】。今日盘面原始数据：
 ${market}
-请用 2-4 条要点，客观整理今日盘面事实（涨跌停对比、上证趋势、情绪冷热程度），只陈述事实、不下交易结论。中文、简短。`;
+${sectors}
+${news}
+请用 3-5 条要点，客观整理今日盘面事实（涨跌停对比、上证趋势、情绪冷热、近期强势板块、值得注意的新闻），只陈述事实、不下交易结论。中文、简短。`;
 }
 
 // 分析师：按核心原则把数据读成交易研判
@@ -68,13 +85,18 @@ ${rulebook}
 请据此判断：今日能否开新仓？A / B 系统今日是否开闸？给出理由（对照硬门槛/情绪闸门）。中文、分点、简短。`;
 }
 
-// 情绪面：题材/情绪观察
-export function buildMorningQualPrompt(persona: string, market: string): string {
+// 情绪面：题材/情绪观察 + 预测今日可能走强的板块
+export function buildMorningQualPrompt(persona: string, market: string, sectors: string, news: string): string {
   return `${persona || '你负责情绪与题材面观察，提炼成要点。'}
 
-你是早会上的【情绪面观察员】。今日盘面：
+你是早会上的【情绪面观察员】。今日盘面与近况：
 ${market}
-请从市场情绪/题材活跃度角度给 1-3 条观察（情绪是否过热或冰点、是否适合做短线题材）。中文、简短。`;
+${sectors}
+${news}
+请输出：
+1）市场情绪/题材活跃度观察（情绪过热还是冰点、是否适合做短线题材）；
+2）**即使今天大盘不适合操作，也要根据新闻与近期板块走势，预测今日哪些板块可能走强**——列出 2-4 个板块名，每个配一句理由。
+中文、简短、分点。`;
 }
 
 // 主 agent 来财：综合三位子助手，给最终研判并指出依据
@@ -98,32 +120,74 @@ ${rulebook}
 请你综合三位的汇报，给出今日的最终研判：
 1）大盘研判（情绪冷热、能否开新仓、A/B 系统今日是否开闸）
 2）今日操作思路（偏防守还是进攻、重点关注什么）
+3）**今日可能走强的板块**：即使今天不操作，也要明确列出 2-4 个你判断今日可能走强的板块（板块名 + 一句理由），作为复盘对照。最后用一行「今日可能走强板块：A、B、C」收尾。
 并务必说明：你主要采纳了哪位子助手的哪条结论作为依据（点名「数据员/分析师/情绪面」）。
 要求：简洁、可执行、不预测点位。中文、分点输出。`;
 }
 
-export function buildEveningPrompt(
+// 晚会·数据员：今日收盘实际表现 + 今日实际走强板块
+export function buildEveningDataPrompt(persona: string, market: string, sectors: string): string {
+  return `${persona || '你是后台数据员，只客观整理收盘事实。'}
+
+你是晚会上的【数据员】。今日收盘数据：
+${market}
+${sectors}
+请客观整理今日盘面实际表现（涨跌停、上证趋势、情绪冷热）与今日实际走强的板块，2-4 条要点，只陈述事实。中文、简短。`;
+}
+
+// 晚会·分析师：对照早会研判（含板块预测）逐条判断对错
+export function buildEveningAnalysisPrompt(persona: string, morning: string | null, dataOut: string): string {
+  return `${persona || '你是分析师，对照预测与实际，客观判断对错。'}
+
+你是晚会上的【分析师】，负责复盘。今日早会的研判与板块预测如下：
+${morning || '（今日无早会记录）'}
+今日实际表现（数据员整理）：
+${dataOut}
+请逐条对照判断：早会的大盘研判是否成立？早会预测「今日可能走强的板块」哪些命中、哪些落空？给出对/错判断与简短依据。中文、分点。`;
+}
+
+// 晚会·复盘员：总结经验、是否调原则
+export function buildEveningReviewPrompt(
   persona: string,
-  market: string,
   rulebook: string,
-  morning: string | null,
+  analysisOut: string,
   ops: Array<{ stock_code: string; one_liner: string }>
 ): string {
   const opsText = ops.length ? ops.map((o) => `- ${o.stock_code}：${o.one_liner}`).join('\n') : '（今日无分析/操作记录）';
-  return `${persona}
+  return `${persona || '你负责复盘总结与规则优化建议。'}
 
-你在主持盘后【晚会】复盘。已知信息：
-${market}
-${rulebook}
-今日早会观点：${morning || '（今日无早会记录）'}
+你是晚会上的【复盘员】。分析师的对错判断：
+${analysisOut}
 今日的分析/操作：
 ${opsText}
+${rulebook}
+请总结今日经验教训，并判断是否建议调整核心原则；如建议，明确指出改哪条、怎么改（用户将另行确认）。中文、分点、简短。`;
+}
 
-请复盘：
-1）今日早会研判是否成立（成功/失败，结合大盘收盘表现）
-2）若有偏差，找出原因（情绪误判？原则太松/太严？执行问题？）
-3）是否建议调整核心原则；如建议，明确指出改哪条、怎么改（用户将另行确认）
-用中文，分点输出，简洁。`;
+// 晚会·来财综合：明确早会哪些对哪些错（含板块预测命中与否），总结
+export function buildEveningSynthPrompt(
+  persona: string,
+  market: string,
+  morning: string | null,
+  dataOut: string,
+  analysisOut: string,
+  reviewOut: string
+): string {
+  return `${persona}
+
+你是主 agent「来财」，正在主持盘后【晚会】复盘。子助手已分别汇报：
+〖数据员·今日实际〗${dataOut}
+〖分析师·对错判断〗${analysisOut}
+〖复盘员·总结建议〗${reviewOut}
+今日早会的研判与板块预测：
+${morning || '（今日无早会记录）'}
+${market}
+
+请综合给出今日复盘结论：
+1）今日早会研判是否成立（成功/失败，结合收盘）；
+2）**早会预测的板块走强，哪些命中、哪些落空**——逐个点评对错；
+3）今日经验总结，以及是否建议调整核心原则。
+并说明你主要采纳了哪位子助手的哪条结论。中文、分点输出。`;
 }
 
 async function defaultAiCall(userId: string, prompt: string, role: string): Promise<string> {
@@ -156,11 +220,13 @@ export async function generateMorning(userId: string, opts: GenOpts = {}): Promi
   const persona = getCorePersona(userId);
   const mkt = marketText();
   const rbText = rulebookText(userId);
+  const sec = await sectorText(userId);
+  const news = newsText();
   const aiCall = opts.aiCall || ((p: string, role: string) => defaultAiCall(userId, p, role));
 
-  const dataOut = (await aiCall(buildMorningDataPrompt(personaOf(userId, 'data'), mkt.text), 'data')).trim();
+  const dataOut = (await aiCall(buildMorningDataPrompt(personaOf(userId, 'data'), mkt.text, sec.text, news), 'data')).trim();
   const analysisOut = (await aiCall(buildMorningAnalysisPrompt(personaOf(userId, 'analysis'), mkt.text, rbText, dataOut), 'analysis')).trim();
-  const qualOut = (await aiCall(buildMorningQualPrompt(personaOf(userId, 'qualitative'), mkt.text), 'qualitative')).trim();
+  const qualOut = (await aiCall(buildMorningQualPrompt(personaOf(userId, 'qualitative'), mkt.text, sec.text, news), 'qualitative')).trim();
   const coreOut = (await aiCall(buildMorningSynthPrompt(persona, mkt.text, rbText, dataOut, analysisOut, qualOut), 'core')).trim();
 
   const content = [
@@ -180,18 +246,42 @@ export async function generateMorning(userId: string, opts: GenOpts = {}): Promi
     coreOut,
   ].join('\n');
 
-  return upsert(userId, 'morning', content, { market: mkt.data, discussion: { data: dataOut, analysis: analysisOut, qualitative: qualOut, core: coreOut } });
+  return upsert(userId, 'morning', content, { market: mkt.data, sectors: sec.sectors, discussion: { data: dataOut, analysis: analysisOut, qualitative: qualOut, core: coreOut } });
 }
 
+// 晚会 = 多 agent 复盘讨论：数据员(今日实际)→分析师(对错判断)→复盘员(总结建议)→来财综合。
 export async function generateEvening(userId: string, opts: GenOpts = {}): Promise<any> {
   const persona = getCorePersona(userId);
   const mkt = marketText();
+  const rbText = rulebookText(userId);
+  const sec = await sectorText(userId);
   const morning = getMorningOfToday(userId)?.content ?? null;
   const ops = todaysReports(userId);
-  const prompt = buildEveningPrompt(persona, mkt.text, rulebookText(userId), morning, ops);
   const aiCall = opts.aiCall || ((p: string, role: string) => defaultAiCall(userId, p, role));
-  const content = await aiCall(prompt, 'review');
-  return upsert(userId, 'evening', content.trim(), { market: mkt.data, ops });
+
+  const dataOut = (await aiCall(buildEveningDataPrompt(personaOf(userId, 'data'), mkt.text, sec.text), 'data')).trim();
+  const analysisOut = (await aiCall(buildEveningAnalysisPrompt(personaOf(userId, 'analysis'), morning, dataOut), 'analysis')).trim();
+  const reviewOut = (await aiCall(buildEveningReviewPrompt(personaOf(userId, 'review'), rbText, analysisOut, ops), 'review')).trim();
+  const coreOut = (await aiCall(buildEveningSynthPrompt(persona, mkt.text, morning, dataOut, analysisOut, reviewOut), 'core')).trim();
+
+  const content = [
+    `🗣 晚会复盘 · ${today()}`,
+    '',
+    '【数据员】今日实际表现：',
+    dataOut,
+    '',
+    '【分析师】早会研判/板块预测对错：',
+    analysisOut,
+    '',
+    '【复盘员】经验总结与原则建议：',
+    reviewOut,
+    '',
+    '———',
+    '🧠 来财复盘结论：',
+    coreOut,
+  ].join('\n');
+
+  return upsert(userId, 'evening', content, { market: mkt.data, sectors: sec.sectors, ops, discussion: { data: dataOut, analysis: analysisOut, review: reviewOut, core: coreOut } });
 }
 
 export function getToday(userId: string): { morning: any | null; evening: any | null } {

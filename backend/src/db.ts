@@ -312,6 +312,10 @@ function migrate(): void {
   if (scols.length && !scols.some((c) => c.name === 'pinned')) {
     db.exec('ALTER TABLE chat_sessions ADD COLUMN pinned INTEGER DEFAULT 0');
   }
+  const sccols = db.prepare('PRAGMA table_info(screenings)').all() as { name: string }[];
+  if (sccols.length && !sccols.some((c) => c.name === 'discussion')) {
+    db.exec('ALTER TABLE screenings ADD COLUMN discussion TEXT');
+  }
   const ncols = db.prepare('PRAGMA table_info(stock_names)').all() as { name: string }[];
   if (ncols.length) {
     if (!ncols.some((c) => c.name === 'py')) db.exec('ALTER TABLE stock_names ADD COLUMN py TEXT');

@@ -44,17 +44,21 @@ describe('meetings service', () => {
     expect(JSON.parse(m.data).discussion.core).toContain('防守');
   });
 
-  it('generateEvening references the morning meeting and today reports', async () => {
-    let seen = '';
+  it('generateEvening is a multi-agent review; core synthesis references the morning (forecast) content', async () => {
+    const roles: string[] = [];
+    let corePrompt = '';
     const e = await svc.generateEvening(USER, {
-      aiCall: async (p: string) => {
-        seen = p;
-        return '早会判断成立，今日无操作，原则无需调整。';
+      aiCall: async (p: string, role: string) => {
+        roles.push(role);
+        if (role === 'core') corePrompt = p;
+        return `（${role}）复盘要点`;
       },
     });
     expect(e.kind).toBe('evening');
-    expect(seen).toContain('今日早会观点');
-    expect(seen).toContain('防守'); // morning content included
+    expect(roles).toEqual(['data', 'analysis', 'review', 'core']);
+    expect(e.content).toContain('晚会复盘');
+    expect(e.content).toContain('来财复盘结论');
+    expect(corePrompt).toContain('防守'); // 早会内容（含板块预测）被带入复盘
   });
 
   it('getToday returns both; getTodayContent returns text', () => {
