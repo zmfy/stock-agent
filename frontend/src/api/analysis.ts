@@ -32,6 +32,13 @@ export interface AnalysisReport {
   one_liner: string;
   teach_notes: Array<{ gate_key: string; note: string }>;
   created_at: string;
+  sources?: {
+    quote: { source: string; date: string; fetched_at: string } | null;
+    fundamentals: { source: string; date: string; fetched_at: string } | null;
+    market: { source: string; date: string; fetched_at: string } | null;
+    sidecarBase: string | null;
+  } | null;
+  validation?: { trusted: boolean; authority: string; checks: Array<{ name: string; ok: boolean; detail: string }> } | null;
 }
 
 export interface ReportSummary {

@@ -113,6 +113,7 @@
         <div class="msgs" ref="msgsEl">
           <div v-for="m in messages" :key="m.id" class="msg" :class="m.role">
             <div class="bubble">{{ m.content }}</div>
+            <div v-if="m.created_at" class="mtime">{{ fmtTime(m.created_at) }}</div>
           </div>
           <div v-if="sending" class="msg assistant"><div class="bubble typing">思考中…</div></div>
         </div>
@@ -272,6 +273,11 @@ async function applyProposal() {
   }
 }
 
+function fmtTime(ts: string) {
+  // sqlite CURRENT_TIMESTAMP is UTC "YYYY-MM-DD HH:MM:SS"; show local time.
+  const d = new Date(ts.includes('T') ? ts : ts.replace(' ', 'T') + 'Z');
+  return isNaN(d.getTime()) ? ts : d.toLocaleString('zh-CN', { hour12: false });
+}
 function kindIcon(k: ChatKind) {
   return { general: '💬', core_principle: '📜', stock: '📊', morning: '📈', evening: '🌙' }[k] || '💬';
 }
@@ -532,11 +538,13 @@ onMounted(async () => {
 .badge2.b { background: #fde2e2; color: #c0392b; }
 .badge2.no { background: #eee; color: #aaa; }
 .msgs { flex: 1; overflow-y: auto; padding: 12px 0; display: flex; flex-direction: column; gap: 10px; }
-.msg { display: flex; }
-.msg.user { justify-content: flex-end; }
+.msg { display: flex; flex-direction: column; align-items: flex-start; }
+.msg.user { align-items: flex-end; }
 .bubble { max-width: 75%; padding: 8px 12px; border-radius: 10px; white-space: pre-wrap; line-height: 1.5; font-size: 14px; }
 .msg.user .bubble { background: #d8e6ff; }
 .msg.assistant .bubble { background: #f2f2f2; }
+.mtime { font-size: 10px; color: #bbb; margin-top: 2px; }
+.msg.user .mtime { text-align: right; }
 .typing { color: #999; }
 .propose-bar { margin: 6px 0; }
 .propose-btn { width: 100%; background: #fff7e6; border: 1px solid #ffe0a3; border-radius: 6px; padding: 8px; cursor: pointer; font-size: 13px; }

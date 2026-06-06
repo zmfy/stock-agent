@@ -21,6 +21,15 @@
         </div>
       </div>
 
+      <div class="prov">
+        <span v-if="report.validation" :class="report.validation.trusted ? 'ok' : 'warn'">
+          数据校验：{{ report.validation.trusted ? '✅ 通过' : '⚠️ 存疑' }}（{{ authorityCn(report.validation.authority) }}）
+        </span>
+        <span v-if="report.sources?.quote">· 行情 {{ report.sources.quote.source }}@{{ report.sources.quote.date }}</span>
+        <span v-if="report.sources?.fundamentals">· 基本面 {{ report.sources.fundamentals.source }}@{{ report.sources.fundamentals.date }}</span>
+        <span v-if="report.sources?.sidecarBase">· 源 {{ report.sources.sidecarBase }}</span>
+      </div>
+
       <p class="oneliner">👉 {{ report.one_liner }}</p>
 
       <h3>A 系统 · 中线业绩仓</h3>
@@ -95,6 +104,9 @@ const gatesB = computed(() => report.value?.gate_results.filter((g) => g.system 
 function labelOf(key: string) {
   return report.value?.gate_results.find((g) => g.gate_key === key)?.label || key;
 }
+function authorityCn(a: string) {
+  return { uploaded: '以上传数据为准', cross: '交叉验证', internal: '合理性检查', none: '无来源' }[a] || a;
+}
 
 async function run() {
   if (!code.value.trim()) return;
@@ -127,6 +139,9 @@ onMounted(loadList);
 .hint { color: #888; font-size: 12px; width: 100%; margin: 0; }
 .rhead h2 { margin: 0; }
 .meta { color: #999; font-size: 12px; }
+.prov { font-size: 12px; color: #888; margin: 6px 0; }
+.prov .ok { color: #2a8a2a; }
+.prov .warn { color: #c08; }
 .oneliner { background: #f3faf3; border: 1px solid #cce8cc; padding: 8px 12px; border-radius: 6px; font-weight: 600; }
 .concl { margin: 6px 0; }
 :deep(table.gates), table { width: 100%; border-collapse: collapse; margin: 6px 0 12px; }
