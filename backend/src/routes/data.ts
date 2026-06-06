@@ -144,6 +144,23 @@ router.delete('/sources/:id', (req: Request, res: Response) => {
   }
 });
 
+// ---- stock universe (local code+name+pinyin) ----
+// GET /api/data/stocks/search?q=
+router.get('/stocks/search', (req: Request, res: Response) => {
+  successResponse(res, svc.searchStocks(String(req.query.q || ''), 20));
+});
+
+// GET /api/data/stocks/sync-status — background sync progress + local count
+router.get('/stocks/sync-status', (_req: Request, res: Response) => {
+  successResponse(res, { ...(svc.getSyncStatus() || { state: 'idle' }), count: svc.countStocks() });
+});
+
+// POST /api/data/stocks/sync — start an incremental background sync (returns immediately)
+router.post('/stocks/sync', (req: Request, res: Response) => {
+  void svc.syncStockUniverse(req.user!.userId); // fire-and-forget
+  successResponse(res, null, '已在后台开始同步股票库');
+});
+
 // GET /api/data/source — is the sidecar configured + healthy?
 router.get('/source', async (req: Request, res: Response) => {
   const base = resolveSidecarBase(req.user!.userId);

@@ -143,6 +143,8 @@ async function saveSubs() {
 }
 
 function finish() {
+  // kick off the background stock-universe sync so search is ready (fire-and-forget)
+  import('../api/data').then((m) => m.dataApi.stockSync().catch(() => {}));
   router.push('/');
 }
 

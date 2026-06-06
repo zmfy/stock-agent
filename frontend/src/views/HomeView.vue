@@ -32,9 +32,12 @@
         </div>
 
         <div class="freeq">
-          <input v-model="queryCode" placeholder="自由查询：代码/名称" @keyup.enter="freeQuery" />
+          <input v-model="queryCode" placeholder="自由查询：代码/名称/拼音(如 gzmt)" @input="onQueryInput" @keyup.enter="freeQuery" />
           <button @click="freeQuery">查</button>
         </div>
+        <ul v-if="stockSuggest.length" class="suggest">
+          <li v-for="s in stockSuggest" :key="s.code" @click="pickStock(s)">{{ s.name }} <span class="muted">{{ s.code }}</span></li>
+        </ul>
 
         <!-- 晚会 -->
         <button v-if="meetings.evening" class="pin-btn" :class="{ active: active?.kind === 'evening' }" @click="openMeeting('evening')">
@@ -193,6 +196,7 @@ import { chatApi, type ChatSession, type ChatMessage, type ChatKind } from '../a
 import { rulebookApi, type ProposeResult, type FullRulebook, type Gate, type TemplateMeta } from '../api/rulebook';
 import { meetingsApi, type Meeting } from '../api/meetings';
 import { screenApi, type ScreenRun } from '../api/screen';
+import { dataApi } from '../api/data';
 import AnalysisView from './AnalysisView.vue';
 import RulebookView from './RulebookView.vue';
 import AiSettingsView from './AiSettingsView.vue';
@@ -497,9 +501,32 @@ async function openStockCode(code: string) {
   }
   if (s) await open(s);
 }
+// stock search-as-you-type (code / name / pinyin initials)
+const stockSuggest = ref<Array<{ code: string; name: string }>>([]);
+let suggestTimer: ReturnType<typeof setTimeout> | null = null;
+function onQueryInput() {
+  if (suggestTimer) clearTimeout(suggestTimer);
+  const q = queryCode.value.trim();
+  if (!q) { stockSuggest.value = []; return; }
+  suggestTimer = setTimeout(async () => {
+    try {
+      stockSuggest.value = (await dataApi.stockSearch(q)).data.data;
+    } catch {
+      stockSuggest.value = [];
+    }
+  }, 250);
+}
+async function pickStock(s: { code: string; name: string }) {
+  stockSuggest.value = [];
+  queryCode.value = '';
+  await openStockCode(s.code);
+}
 async function freeQuery() {
-  const code = queryCode.value.trim();
+  // if there's a single/first suggestion, use it; else treat input as a code
+  const first = stockSuggest.value[0];
+  const code = first ? first.code : queryCode.value.trim();
   if (!code) return;
+  stockSuggest.value = [];
   queryCode.value = '';
   await openStockCode(code);
 }
@@ -580,6 +607,9 @@ onMounted(async () => {
 .pin-btn.active { background: #d8e6ff; }
 .freeq { display: flex; gap: 4px; }
 .freeq input { flex: 1; padding: 6px; }
+.suggest { list-style: none; margin: 2px 0; padding: 0; max-height: 180px; overflow-y: auto; border: 1px solid #e5e5e5; border-radius: 6px; background: #fff; }
+.suggest li { padding: 5px 8px; cursor: pointer; font-size: 13px; }
+.suggest li:hover { background: #eef; }
 .sect-head { display: flex; justify-content: space-between; align-items: center; margin: 12px 0 4px; font-size: 12px; color: #999; }
 .sessions { list-style: none; padding: 0; margin: 0; flex: 1; }
 .sessions li { display: flex; align-items: center; gap: 4px; padding: 6px 8px; border-radius: 6px; cursor: pointer; font-size: 13px; }

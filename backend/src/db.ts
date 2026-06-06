@@ -176,9 +176,22 @@ function initSchema(): void {
     CREATE TABLE IF NOT EXISTS stock_names (
       code TEXT PRIMARY KEY,
       name TEXT,
+      py TEXT,
+      industry TEXT,
+      list_date TEXT,
       source TEXT,
       fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
+
+    CREATE TABLE IF NOT EXISTS sync_status (
+      job TEXT PRIMARY KEY,
+      state TEXT,
+      total INTEGER DEFAULT 0,
+      done INTEGER DEFAULT 0,
+      message TEXT,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
 
     CREATE TABLE IF NOT EXISTS market_sentiment (
       date TEXT PRIMARY KEY,
@@ -299,6 +312,14 @@ function migrate(): void {
   if (scols.length && !scols.some((c) => c.name === 'pinned')) {
     db.exec('ALTER TABLE chat_sessions ADD COLUMN pinned INTEGER DEFAULT 0');
   }
+  const ncols = db.prepare('PRAGMA table_info(stock_names)').all() as { name: string }[];
+  if (ncols.length) {
+    if (!ncols.some((c) => c.name === 'py')) db.exec('ALTER TABLE stock_names ADD COLUMN py TEXT');
+    if (!ncols.some((c) => c.name === 'industry')) db.exec('ALTER TABLE stock_names ADD COLUMN industry TEXT');
+    if (!ncols.some((c) => c.name === 'list_date')) db.exec('ALTER TABLE stock_names ADD COLUMN list_date TEXT');
+  }
+  // index on py created after the column is guaranteed to exist
+  db.exec('CREATE INDEX IF NOT EXISTS idx_stock_names_py ON stock_names (py)');
 }
 
 // Seed a default admin account on first init so an invite-only system is reachable.

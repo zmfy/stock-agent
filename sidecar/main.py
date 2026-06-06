@@ -28,6 +28,33 @@ def health():
 
 _NAME_DF = None
 
+try:
+    from pypinyin import lazy_pinyin, Style
+
+    def _py_initials(name: str) -> str:
+        try:
+            return ''.join(s[0] for s in lazy_pinyin(name, style=Style.FIRST_LETTER) if s).lower()
+        except Exception:
+            return ''
+except Exception:
+    def _py_initials(name: str) -> str:
+        return ''
+
+
+@app.get("/stocks")
+def stocks_all():
+    """全量 A 股 code+name+拼音首字母（静态、低失效性，供本地缓存与搜索）。"""
+    try:
+        df = ak.stock_info_a_code_name()
+        out = []
+        for _, r in df.iterrows():
+            code = str(r.get("code"))[-6:]
+            name = str(r.get("name"))
+            out.append({"code": code, "name": name, "py": _py_initials(name)})
+        return out
+    except Exception:
+        return []
+
 
 @app.get("/name/{code}")
 def stock_name(code: str):

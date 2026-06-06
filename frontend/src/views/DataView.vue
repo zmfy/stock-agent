@@ -45,6 +45,17 @@
     </section>
 
     <section class="card">
+      <h2>股票库（本地全量 A 股）</h2>
+      <p class="hint">代码 + 名称 + 拼音首字母存本地，用于自由查询的快速搜索。后台同步，可手动触发增量同步（对比增删改，不全量重拉）。</p>
+      <div class="row">
+        <span>本地：<b>{{ sync.count }}</b> 只 · 状态：{{ syncStateCn }}</span>
+        <button @click="doStockSync" :disabled="sync.state === 'running'">{{ sync.state === 'running' ? '同步中…' : '重新同步（增量）' }}</button>
+      </div>
+      <div v-if="sync.state === 'running'" class="muted">{{ sync.message }}（{{ sync.done }}/{{ sync.total }}）</div>
+      <div v-else-if="sync.message" class="muted">{{ sync.message }}</div>
+    </section>
+
+    <section class="card">
       <h2>数据采集</h2>
       <div class="row">
         <button @click="refreshMarket" :disabled="busy">刷新大盘/情绪数据</button>
@@ -112,7 +123,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue';
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue';
 import { dataApi, type StockSnapshot, type NewsItem, type DataSource } from '../api/data';
 
 const source = reactive({ sidecarConfigured: false, base: null as string | null, sidecarHealthy: false });
@@ -276,9 +287,28 @@ async function removeSource(s: DataSource) {
   }
 }
 
+// ---- stock universe sync ----
+const sync = reactive({ state: 'idle', total: 0, done: 0, message: '', count: 0 });
+let syncPoll: ReturnType<typeof setInterval> | null = null;
+const syncStateCn = computed(() => ({ idle: '未同步', running: '同步中', done: '已完成', error: '出错' }[sync.state] || sync.state));
+async function loadSyncStatus() {
+  try { Object.assign(sync, (await dataApi.stockSyncStatus()).data.data); } catch { /* ignore */ }
+}
+async function doStockSync() {
+  await dataApi.stockSync();
+  sync.state = 'running';
+  if (syncPoll) clearInterval(syncPoll);
+  syncPoll = setInterval(async () => {
+    await loadSyncStatus();
+    if (sync.state !== 'running' && syncPoll) { clearInterval(syncPoll); syncPoll = null; }
+  }, 1500);
+}
+onUnmounted(() => { if (syncPoll) clearInterval(syncPoll); });
+
 onMounted(async () => {
   await loadSource();
   await loadSources();
+  await loadSyncStatus();
   try {
     news.value = (await dataApi.getNews()).data.data;
   } catch { /* ignore */ }
