@@ -70,6 +70,38 @@ describe('chat routes', () => {
     jest.restoreAllMocks();
   });
 
+  it('stock session: analyze runs a report and seeds an opening message; follow-up is grounded', async () => {
+    await request(app).post('/api/rulebook/init').set(h(tok)).send({}); // ensure rulebook (409 if exists is fine)
+    // deepseek already configured above; mock AI for analysis + chat, sidecar -> 404 (graceful)
+    const ANALYSIS_JSON =
+      '{"a_conclusion":"ROE达标，进A观察","b_conclusion":"情绪闸门关","exception_channel":null,"position_suggestion":"试仓","one_liner":"可中线关注","teach_notes":[]}';
+    (global as any).fetch = jest.fn((url: string) =>
+      String(url).includes('/chat/completions')
+        ? Promise.resolve({ ok: true, json: async () => ({ choices: [{ message: { content: ANALYSIS_JSON } }] }) })
+        : Promise.resolve({ ok: false, status: 404, statusText: 'NF', text: async () => '' })
+    );
+
+    const s = await request(app).post('/api/chat/sessions').set(h(tok)).send({ kind: 'stock', refId: '600519', title: '个股 600519' });
+    const sid = s.body.data.id;
+    const a = await request(app).post(`/api/chat/sessions/${sid}/analyze`).set(h(tok));
+    expect(a.status).toBe(201);
+    expect(a.body.data.report.stock_code).toBe('600519');
+    expect(a.body.data.message.role).toBe('assistant');
+    expect(a.body.data.message.content).toContain('可中线关注');
+
+    const msgs = await request(app).get(`/api/chat/sessions/${sid}/messages`).set(h(tok));
+    expect(msgs.body.data).toHaveLength(1); // seeded assistant opening
+
+    // a follow-up returns another assistant message (grounded in the report)
+    (global as any).fetch = jest.fn(() =>
+      Promise.resolve({ ok: true, json: async () => ({ choices: [{ message: { content: '基于上面的判定，建议轻仓试一手。' } }] }) })
+    );
+    const f = await request(app).post(`/api/chat/sessions/${sid}/messages`).set(h(tok)).send({ content: '那我能买吗？' });
+    expect(f.status).toBe(201);
+    expect(f.body.data.content).toContain('轻仓');
+    jest.restoreAllMocks();
+  });
+
   it("cannot read another user's session", async () => {
     const s = await request(app).post('/api/chat/sessions').set(h(tok)).send({ kind: 'general' });
     const res = await request(app).get(`/api/chat/sessions/${s.body.data.id}/messages`).set(h(userTok));

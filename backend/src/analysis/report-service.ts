@@ -70,3 +70,10 @@ export function getReport(userId: string, id: string): any | null {
   const row = getDb().prepare('SELECT * FROM reports WHERE id = ? AND user_id = ?').get(id, userId);
   return hydrate(row);
 }
+
+export function getLatestReportByCode(userId: string, code: string): any | null {
+  const row = getDb()
+    .prepare('SELECT * FROM reports WHERE user_id = ? AND stock_code = ? ORDER BY created_at DESC LIMIT 1')
+    .get(userId, code);
+  return hydrate(row);
+}

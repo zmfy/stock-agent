@@ -4,6 +4,8 @@ import { getModelForRole } from '../ai/service';
 import { getProvider } from '../ai/providers';
 import { chat } from '../ai/manager';
 import { getCorePersona } from '../agent/profiles-service';
+import { runAnalysis } from '../analysis/orchestrator';
+import { getLatestReportByCode } from '../analysis/report-service';
 
 export type ChatKind = 'general' | 'core_principle' | 'stock' | 'morning' | 'evening';
 
@@ -90,13 +92,46 @@ async function defaultAiCall(userId: string, prompt: string): Promise<{ raw: str
   return { raw, provider: cfg.provider, model: cfg.model };
 }
 
+function reportContext(report: any): string {
+  if (!report) return '';
+  const fails = (report.gate_results || [])
+    .filter((g: any) => g.status === 'fail')
+    .map((g: any) => `${g.label}(实测 ${g.actual})`)
+    .join('、');
+  return [
+    `已对 ${report.stock_code}${report.stock_name ? '（' + report.stock_name + '）' : ''} 按当前核心原则做过判定：`,
+    `一句话：${report.one_liner}`,
+    `A系统：${report.a_conclusion}`,
+    `B系统：${report.b_conclusion}`,
+    fails ? `未通过的硬门槛：${fails}` : '',
+  ]
+    .filter(Boolean)
+    .join('\n');
+}
+
+// Run a fresh analysis on a stock session's code and seed the conversation with it.
+export async function analyzeStockSession(userId: string, sessionId: string): Promise<{ report: any; message: ChatMessage }> {
+  const session = ownSession(userId, sessionId);
+  if (!session) throw new Error('NOT_FOUND');
+  if (session.kind !== 'stock' || !session.ref_id) throw new Error('NOT_STOCK');
+  const report = await runAnalysis(userId, session.ref_id);
+  const summary = `${reportContext(report)}\n\n你可以继续追问这只股票（估值、买点、仓位、与同类比较等）。`;
+  const message = addMessage(sessionId, 'assistant', summary);
+  return { report, message };
+}
+
 export async function postMessage(userId: string, sessionId: string, content: string, opts: PostOptions = {}): Promise<ChatMessage> {
   const session = ownSession(userId, sessionId);
   if (!session) throw new Error('NOT_FOUND');
   addMessage(sessionId, 'user', content);
   const history = getMessages(userId, sessionId);
   const persona = getCorePersona(userId);
-  const prompt = buildPrompt(persona, session.kind, history, opts.extraContext);
+  // Ground stock-session follow-ups in the latest analysis report for that code.
+  let extra = opts.extraContext;
+  if (!extra && session.kind === 'stock' && session.ref_id) {
+    extra = reportContext(getLatestReportByCode(userId, session.ref_id));
+  }
+  const prompt = buildPrompt(persona, session.kind, history, extra);
   const aiCall = opts.aiCall || ((p: string) => defaultAiCall(userId, p));
   const { raw } = await aiCall(prompt);
   return addMessage(sessionId, 'assistant', (raw || '').trim() || '（无回复）');

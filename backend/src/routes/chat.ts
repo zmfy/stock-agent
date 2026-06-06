@@ -48,6 +48,20 @@ router.post('/sessions/:id/messages', async (req: Request, res: Response) => {
   }
 });
 
+// POST /api/chat/sessions/:id/analyze — run analysis on a stock session and seed it
+router.post('/sessions/:id/analyze', async (req: Request, res: Response) => {
+  try {
+    const out = await chat.analyzeStockSession(req.user!.userId, req.params.id);
+    successResponse(res, out, '分析完成', 201);
+  } catch (e: any) {
+    if (e.message === 'NOT_FOUND') return errorResponse(res, 404, 'RESOURCE_NOT_FOUND', '会话不存在');
+    if (e.message === 'NOT_STOCK') return errorResponse(res, 400, 'BUSINESS_CONFLICT', '该会话不是个股会话');
+    if (e.message === 'NO_RULEBOOK') return errorResponse(res, 400, 'BUSINESS_CONFLICT', '请先在「核心规则」导入或设定规则版本');
+    if (e.message === 'NO_MODEL') return errorResponse(res, 400, 'BUSINESS_CONFLICT', '请先在「AI 模型」配置并启用一个可用模型');
+    return errorResponse(res, 502, 'UPSTREAM_ERROR', `分析失败：${e.message || '未知错误'}`);
+  }
+});
+
 // DELETE /api/chat/sessions/:id
 router.delete('/sessions/:id', (req: Request, res: Response) => {
   chat.deleteSession(req.user!.userId, req.params.id);

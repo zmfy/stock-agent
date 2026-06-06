@@ -27,5 +27,6 @@ export const chatApi = {
   getMessages: (id: string) => api.get<{ data: ChatMessage[] }>(`/chat/sessions/${id}/messages`),
   postMessage: (id: string, content: string) =>
     api.post<{ data: ChatMessage }>(`/chat/sessions/${id}/messages`, { content }),
+  analyze: (id: string) => api.post<{ data: { report: any; message: ChatMessage } }>(`/chat/sessions/${id}/analyze`),
   deleteSession: (id: string) => api.delete(`/chat/sessions/${id}`),
 };

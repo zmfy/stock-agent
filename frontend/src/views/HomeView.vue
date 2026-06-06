@@ -57,7 +57,14 @@
       </div>
 
       <template v-else>
-        <div class="title">{{ active.title || sessionLabel(active) }}</div>
+        <div class="title">
+          {{ active.title || sessionLabel(active) }}
+          <span v-if="active.kind === 'stock'" class="stock-head">
+            <button class="mini" :disabled="analyzing" @click="doAnalyze(active)">{{ analyzing ? '按原则分析中…' : '🔄 重新按核心原则分析' }}</button>
+            <router-link class="mini" to="/analysis">完整报告</router-link>
+          </span>
+        </div>
+        <div v-if="analyzing" class="analyzing">正在按你的核心原则分析 {{ active.ref_id }} …</div>
         <div class="msgs" ref="msgsEl">
           <div v-for="m in messages" :key="m.id" class="msg" :class="m.role">
             <div class="bubble">{{ m.content }}</div>
@@ -116,6 +123,7 @@ const sending = ref(false);
 const chatErr = ref('');
 const queryCode = ref('');
 const needsInit = ref(false);
+const analyzing = ref(false);
 const msgsEl = ref<HTMLElement | null>(null);
 
 // 核心原则修改提议
@@ -175,6 +183,25 @@ async function open(s: ChatSession) {
   applyMsg.value = '';
   messages.value = (await chatApi.getMessages(s.id)).data.data;
   scrollDown();
+  // A freshly opened stock session auto-runs the rule-based analysis as its opener.
+  if (s.kind === 'stock' && messages.value.length === 0) {
+    await doAnalyze(s);
+  }
+}
+
+async function doAnalyze(s: ChatSession) {
+  if (analyzing.value) return;
+  analyzing.value = true;
+  chatErr.value = '';
+  try {
+    await chatApi.analyze(s.id);
+    messages.value = (await chatApi.getMessages(s.id)).data.data;
+    scrollDown();
+  } catch (e: any) {
+    chatErr.value = e.response?.data?.message || '分析失败';
+  } finally {
+    analyzing.value = false;
+  }
 }
 async function newGeneral() {
   const id = (await chatApi.createSession('general')).data.data.id;
@@ -269,7 +296,9 @@ onMounted(async () => {
 .chat { flex: 1; display: flex; flex-direction: column; padding: 12px 16px; }
 .initbar { background: #fff7e6; border: 1px solid #ffe0a3; border-radius: 6px; padding: 8px 12px; font-size: 13px; margin-bottom: 8px; }
 .empty { margin: auto; text-align: center; color: #666; }
-.title { font-weight: 600; padding-bottom: 8px; border-bottom: 1px solid #eee; }
+.title { font-weight: 600; padding-bottom: 8px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; }
+.stock-head { display: flex; gap: 8px; }
+.analyzing { color: #a76b00; font-size: 13px; padding: 8px 0; }
 .msgs { flex: 1; overflow-y: auto; padding: 12px 0; display: flex; flex-direction: column; gap: 10px; }
 .msg { display: flex; }
 .msg.user { justify-content: flex-end; }
