@@ -5,7 +5,7 @@ import { getProvider } from '../ai/providers';
 import { chat } from '../ai/manager';
 import { getCorePersona } from '../agent/profiles-service';
 import { runAnalysis } from '../analysis/orchestrator';
-import { getStockName } from '../data/service';
+import { getStockName, getCachedName } from '../data/service';
 import { getLatestReportByCode, deleteReportsByCode, deleteAllReports } from '../analysis/report-service';
 import { getTodayContent } from '../meetings/service';
 import { getActive } from '../rulebook/service';
@@ -30,9 +30,16 @@ const KIND_FRAMING: Record<ChatKind, string> = {
 
 export function createSession(userId: string, kind: ChatKind, refId?: string | null, title?: string): string {
   const id = uuidv4();
+  // 个股会话：本地股票库里已有名称就直接用「名称 代码」当标题（即时，无需联网）；
+  // 本地查不到时保留占位标题，由 analyzeStockSession 走 sidecar/AI 兜底补全。
+  let finalTitle = title ?? null;
+  if (kind === 'stock' && refId) {
+    const name = getCachedName(refId);
+    if (name) finalTitle = `${name} ${refId}`;
+  }
   getDb()
     .prepare('INSERT INTO chat_sessions (id, user_id, kind, ref_id, title) VALUES (?, ?, ?, ?, ?)')
-    .run(id, userId, kind, refId ?? null, title ?? null);
+    .run(id, userId, kind, refId ?? null, finalTitle);
   return id;
 }
 

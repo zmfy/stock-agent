@@ -108,6 +108,22 @@ describe('chat routes', () => {
     jest.restoreAllMocks();
   });
 
+  it('stock session title is set from the local 股票库 at creation (no AI/analyze needed)', async () => {
+    const data = require('../data/service');
+    data.cacheName('300348', '长亮科技'); // seed local stock_names
+    const s = await request(app).post('/api/chat/sessions').set(h(tok)).send({ kind: 'stock', refId: '300348', title: '个股 300348' });
+    const list = await request(app).get('/api/chat/sessions').set(h(tok));
+    const created = list.body.data.find((x: any) => x.id === s.body.data.id);
+    expect(created.title).toBe('长亮科技 300348'); // resolved locally, not the 「个股 …」 placeholder
+  });
+
+  it('stock session keeps the placeholder title when the code is NOT in the local 股票库', async () => {
+    const s = await request(app).post('/api/chat/sessions').set(h(tok)).send({ kind: 'stock', refId: '999998', title: '个股 999998' });
+    const list = await request(app).get('/api/chat/sessions').set(h(tok));
+    const created = list.body.data.find((x: any) => x.id === s.body.data.id);
+    expect(created.title).toBe('个股 999998'); // falls back; analyzeStockSession will fill via sidecar/AI later
+  });
+
   it('clear-all deletes every session for the user', async () => {
     await request(app).post('/api/chat/sessions').set(h(tok)).send({ kind: 'general' });
     const before = await request(app).get('/api/chat/sessions').set(h(tok));
