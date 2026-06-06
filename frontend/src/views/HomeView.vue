@@ -47,7 +47,7 @@
       <!-- 会话列表 -->
       <div class="sect-head">对话 <button class="mini" @click="newGeneral">＋新对话</button></div>
       <ul class="sessions">
-        <li v-for="s in sessions" :key="s.id" :class="{ active: active?.id === s.id, pinned: s.pinned === 1 }"
+        <li v-for="s in sessions" :key="s.id" :class="{ active: active?.id === s.id, 'is-pinned': s.pinned === 1 }"
             @click="open(s)" @mouseenter="startHover(s.id)" @mouseleave="endHover">
           <span class="kind">{{ kindIcon(s.kind) }}</span>
           <span class="stitle">{{ s.title || sessionLabel(s) }}</span>
@@ -578,7 +578,8 @@ onMounted(async () => {
 .suggest li:hover { background: #eef; }
 .sect-head { display: flex; justify-content: space-between; align-items: center; margin: 12px 0 4px; font-size: 12px; color: #999; }
 .sessions { list-style: none; padding: 0; margin: 0; flex: 1; }
-.sessions li { display: flex; flex-wrap: nowrap; align-items: center; gap: 4px; padding: 6px 8px; border-radius: 6px; cursor: pointer; font-size: 13px; }
+.sessions li { display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; gap: 4px; padding: 6px 8px; border-radius: 6px; cursor: pointer; font-size: 13px; }
+.sessions .kind { flex: none; }
 .sessions li.active { background: #eef; }
 .kind { flex: none; }
 .stitle { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -588,8 +589,8 @@ onMounted(async () => {
 .pin.on { opacity: 1; filter: none; }
 .sessions li:hover .pin { opacity: 0.6; }
 .sessions li:hover .pin.on { opacity: 1; }
-.sessions li.pinned { background: #fffdf3; }
-.sessions li.pinned.active { background: #eef; }
+.sessions li.is-pinned { background: #fffdf3; }
+.sessions li.is-pinned.active { background: #eef; }
 .clearall { background: #fff3f3; border-color: #f3d0d0; margin-bottom: 6px; }
 .menu { padding: 8px 4px; border-top: 1px solid #eee; }
 .settings-entry { width: 100%; text-align: left; background: #f2f2f2; border: 1px solid #e0e0e0; border-radius: 6px; padding: 8px 10px; font-size: 13px; cursor: pointer; }
