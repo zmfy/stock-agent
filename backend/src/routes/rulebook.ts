@@ -115,6 +115,19 @@ router.get('/versions/:id/diff', (req: Request, res: Response) => {
   successResponse(res, diff);
 });
 
+// POST /api/rulebook/apply-template { template } — switch active rulebook to a template (new version)
+router.post('/apply-template', (req: Request, res: Response) => {
+  const parsed = z.object({ template: z.string().min(1) }).safeParse(req.body);
+  if (!parsed.success) return errorResponse(res, 422, 'VALIDATION_ERROR', '请选择模板');
+  try {
+    const rb = svc.applyTemplateAsVersion(req.user!.userId, parsed.data.template);
+    successResponse(res, rb, '已换入模板为当前核心原则', 201);
+  } catch (e: any) {
+    if (e.message === 'UNKNOWN_TEMPLATE') return errorResponse(res, 422, 'VALIDATION_ERROR', '未知模板');
+    return errorResponse(res, 400, 'BUSINESS_CONFLICT', e.message || '换入失败');
+  }
+});
+
 // POST /api/rulebook/propose { instruction, sessionId? } — agent drafts a change (NOT saved)
 router.post('/propose', async (req: Request, res: Response) => {
   const parsed = z.object({ instruction: z.string().max(2000).optional(), sessionId: z.string().optional() }).safeParse(req.body);

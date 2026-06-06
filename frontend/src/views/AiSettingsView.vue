@@ -66,10 +66,13 @@
 
     <!-- 任务分工 -->
     <section class="card" v-if="configs.length">
-      <h2>任务分工</h2>
-      <p class="hint">每个任务可「自动（由 agent 在已启用模型里挑）」或手动指定一个模型。</p>
+      <div class="card-head">
+        <h2>任务分工</h2>
+        <button @click="autoAssign" :disabled="assigning">🤖 {{ assigning ? '主 agent 分配中…' : '让主 agent 分配' }}</button>
+      </div>
+      <p class="hint">「让主 agent 分配」由主 agent 按各任务需要从已启用模型里指派；也可在下方<b>每行手动改</b>（选「自动」则由系统按任务自动挑）。</p>
       <table>
-        <thead><tr><th>任务</th><th>分配</th><th>实际使用</th></tr></thead>
+        <thead><tr><th>任务</th><th>分配（可手动改）</th><th>实际使用</th></tr></thead>
         <tbody>
           <tr v-for="r in roles" :key="r.role">
             <td>{{ r.label }}<div class="muted">{{ r.hint }}</div></td>
@@ -187,6 +190,20 @@ async function remove(provider: string) {
   await reload();
 }
 
+const assigning = ref(false);
+async function autoAssign() {
+  assigning.value = true;
+  roleMsg.value = '';
+  try {
+    roles.value = (await aiApi.autoAssignRoles()).data.data;
+    roleOk.value = true; roleMsg.value = '主 agent 已完成分配（可再手动微调）';
+  } catch (e: any) {
+    roleOk.value = false; roleMsg.value = e.response?.data?.message || '分配失败';
+  } finally {
+    assigning.value = false;
+  }
+}
+
 async function onRoleChange(r: RoleAssignment, ev: Event) {
   const val = (ev.target as HTMLSelectElement).value;
   roleMsg.value = '';
@@ -214,6 +231,7 @@ onMounted(async () => {
 .bar { display: flex; justify-content: space-between; align-items: baseline; }
 .hint { color: #777; font-size: 13px; }
 .card { border: 1px solid #e5e5e5; border-radius: 8px; padding: 16px; margin-top: 16px; }
+.card-head { display: flex; justify-content: space-between; align-items: center; }
 label { display: block; margin-top: 10px; font-size: 13px; }
 input, select { width: 100%; box-sizing: border-box; padding: 5px; }
 td input[type="checkbox"] { width: auto; }

@@ -84,6 +84,7 @@ export const rulebookApi = {
   activate: (id: string) => api.post(`/rulebook/versions/${id}/activate`),
   diff: (id: string, against?: string) =>
     api.get<{ data: RulebookDiff }>(`/rulebook/versions/${id}/diff${against ? `?against=${against}` : ''}`),
+  applyTemplate: (template: string) => api.post<{ data: FullRulebook }>('/rulebook/apply-template', { template }),
   propose: (body: { instruction?: string; sessionId?: string }) =>
     api.post<{ data: ProposeResult }>('/rulebook/propose', body),
   apply: (versionLabel: string, proposal: any) =>

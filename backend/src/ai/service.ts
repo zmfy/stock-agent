@@ -2,6 +2,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { getDb } from '../db';
 import { getProvider } from './providers';
 import { ROLES, getRole, tierOf, searchOrder } from './roles';
+import { chat } from './manager';
 import { encryptSecret, decryptSecret } from '../utils/crypto';
 
 interface AiConfigRow {
@@ -192,6 +193,48 @@ export function getModelForRole(userId: string, role: string): ResolvedConfig | 
 // Back-compat: the agent's main brain.
 export function getActiveConfig(userId: string): ResolvedConfig | null {
   return getModelForRole(userId, 'core');
+}
+
+function pickProviderByTier(pool: ResolvedConfig[], prefer: ReturnType<typeof getRole>): string | null {
+  const p = prefer?.prefer ?? 'balanced';
+  for (const tier of searchOrder(p)) {
+    const hit = pool.find((c) => tierOf(c.model) === tier);
+    if (hit) return hit.provider;
+  }
+  return pool[0]?.provider ?? null;
+}
+
+// The main agent assigns a model to each task role from the enabled pool.
+// Tries an AI decision; falls back to deterministic tier matching. Persists manual pins.
+export async function autoAssignRoles(
+  userId: string,
+  opts: { aiCall?: (prompt: string) => Promise<string> } = {}
+): Promise<void> {
+  const pool = enabledConfigs(userId);
+  if (!pool.length) throw new Error('NO_MODEL');
+
+  const models = pool.map((c) => `${c.provider}(模型 ${c.model}，定位 ${tierOf(c.model)})`).join('；');
+  const rolesList = ROLES.map((r) => `${r.key}（${r.label}，偏好 ${r.prefer}）`).join('；');
+  const prompt = `你是主操盘 agent，请把现有可用模型分配给各任务：数据类用快/省的，分析/复盘/核心用强的，软料用均衡。\n可用模型：${models}。\n任务：${rolesList}。\n只输出 JSON：{${ROLES.map((r) => `"${r.key}":"provider名"`).join(',')}}`;
+
+  let mapping: Record<string, string> = {};
+  try {
+    const cfg = getModelForRole(userId, 'core');
+    let raw = '';
+    if (opts.aiCall) raw = await opts.aiCall(prompt);
+    else if (cfg) raw = await chat(getProvider(cfg.provider)?.apiStyle || 'openai', { baseUrl: cfg.baseUrl, model: cfg.model, apiKey: cfg.apiKey }, prompt, 400);
+    const s = raw.indexOf('{');
+    const e = raw.lastIndexOf('}');
+    if (s !== -1 && e > s) mapping = JSON.parse(raw.slice(s, e + 1));
+  } catch {
+    mapping = {};
+  }
+
+  for (const r of ROLES) {
+    let provider = mapping[r.key];
+    if (!provider || !pool.find((c) => c.provider === provider)) provider = pickProviderByTier(pool, getRole(r.key))!;
+    if (provider) setRoleAssignment(userId, r.key, { mode: 'manual', provider });
+  }
 }
 
 // Role assignments + their resolved provider/model (no keys) for the UI.

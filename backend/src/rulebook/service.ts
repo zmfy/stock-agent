@@ -124,6 +124,25 @@ export function instantiateTemplate(userId: string, templateKey?: string): FullR
   return instantiateFrom(userId, tpl.baseline, `导入模板：${tpl.label}`);
 }
 
+// Switch the active rulebook to a template: create a NEW version from it and activate.
+export function applyTemplateAsVersion(userId: string, templateKey: string): FullRulebook {
+  const tpl = getTemplate(templateKey);
+  if (!tpl) throw new Error('UNKNOWN_TEMPLATE');
+  const active = getActive(userId);
+  const created = createVersion(userId, {
+    versionLabel: tpl.baseline.versionLabel,
+    persona: tpl.baseline.persona,
+    note: `换入模板：${tpl.label}`,
+    parentVersionId: active?.version.id ?? null,
+    author: 'user',
+    gates: tpl.baseline.gates,
+    softRules: tpl.baseline.softRules,
+    positionRules: tpl.baseline.positionRules,
+  });
+  activateVersion(userId, created.version.id);
+  return { ...created, version: { ...created.version, is_active: 1 } };
+}
+
 export function getActive(userId: string): FullRulebook | null {
   const version = getDb()
     .prepare('SELECT * FROM rulebook_versions WHERE user_id = ? AND is_active = 1')

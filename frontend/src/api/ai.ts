@@ -42,6 +42,7 @@ export const aiApi = {
   test: (provider: string, body: { apiKey?: string; baseUrl?: string; model?: string }) =>
     api.post<{ data: { ok: boolean; reply?: string; error?: string } }>(`/ai/configs/${provider}/test`, body),
   getRoles: () => api.get<{ data: RoleAssignment[] }>('/ai/roles'),
+  autoAssignRoles: () => api.post<{ data: RoleAssignment[] }>('/ai/roles/auto-assign'),
   setRole: (role: string, body: { mode: 'manual' | 'auto'; provider?: string | null; model?: string | null }) =>
     api.put(`/ai/roles/${role}`, body),
 };

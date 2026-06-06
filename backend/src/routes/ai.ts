@@ -64,6 +64,17 @@ const roleSchema = z.object({
   model: z.string().nullable().optional(),
 });
 
+// POST /api/ai/roles/auto-assign — main agent assigns models to all task roles
+router.post('/roles/auto-assign', async (req: Request, res: Response) => {
+  try {
+    await svc.autoAssignRoles(req.user!.userId);
+    successResponse(res, svc.listRoleAssignments(req.user!.userId), '主 agent 已完成分配');
+  } catch (e: any) {
+    if (e.message === 'NO_MODEL') return errorResponse(res, 400, 'BUSINESS_CONFLICT', '请先在「AI 模型」启用至少一个模型');
+    return errorResponse(res, 502, 'UPSTREAM_ERROR', `分配失败：${e.message || '未知错误'}`);
+  }
+});
+
 // PUT /api/ai/roles/:role — pin a model to a task, or set it to auto (agent picks)
 router.put('/roles/:role', (req: Request, res: Response) => {
   const parsed = roleSchema.safeParse(req.body);

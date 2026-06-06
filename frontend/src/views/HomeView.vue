@@ -118,6 +118,17 @@
           </div>
           <div v-if="sending" class="msg assistant"><div class="bubble typing">思考中…</div></div>
         </div>
+        <!-- 核心原则：更换模板 -->
+        <div v-if="active.kind === 'core_principle'" class="tplswitch">
+          更换模板：
+          <select v-model="tplChoice">
+            <option value="">选择常用模板…</option>
+            <option v-for="t in templates" :key="t.key" :value="t.key">{{ t.label }}</option>
+          </select>
+          <button :disabled="!tplChoice" @click="switchTemplate">换入为当前核心原则</button>
+          <span v-if="tplMsg" class="ok-msg">{{ tplMsg }}</span>
+        </div>
+
         <!-- 核心原则：让 agent 提议修改 -->
         <div v-if="active.kind === 'core_principle'" class="propose-bar">
           <button class="propose-btn" :disabled="proposing" @click="propose">
@@ -158,7 +169,7 @@ import { ref, computed, nextTick, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 import { chatApi, type ChatSession, type ChatMessage, type ChatKind } from '../api/chat';
-import { rulebookApi, type ProposeResult, type FullRulebook, type Gate } from '../api/rulebook';
+import { rulebookApi, type ProposeResult, type FullRulebook, type Gate, type TemplateMeta } from '../api/rulebook';
 import { meetingsApi, type Meeting } from '../api/meetings';
 import { screenApi, type ScreenRun } from '../api/screen';
 import AnalysisView from './AnalysisView.vue';
@@ -209,6 +220,22 @@ const screen = ref<ScreenRun | null>(null);
 const screening = ref(false);
 const screenOpen = ref(true);
 const activeRulebook = ref<FullRulebook | null>(null);
+const templates = ref<TemplateMeta[]>([]);
+const tplChoice = ref('');
+const tplMsg = ref('');
+async function switchTemplate() {
+  if (!tplChoice.value) return;
+  const t = templates.value.find((x) => x.key === tplChoice.value);
+  if (!confirm(`将「${t?.label}」换入为当前核心原则？会新建一个版本并设为当前使用（旧版本保留可回滚）。`)) return;
+  try {
+    await rulebookApi.applyTemplate(tplChoice.value);
+    activeRulebook.value = (await rulebookApi.getActive()).data.data;
+    tplMsg.value = `已换入「${t?.label}」`;
+    tplChoice.value = '';
+  } catch (e: any) {
+    chatErr.value = e.response?.data?.message || '换入失败';
+  }
+}
 function gateCond(g: Gate) {
   if (g.op === 'gt_field') return `${g.field} > ${g.ref_field}`;
   if (g.op === 'between') return `${g.threshold} < 值 < ${g.threshold2} ${g.unit}`;
@@ -481,6 +508,7 @@ onMounted(async () => {
     const rb = (await rulebookApi.getActive()).data.data;
     activeRulebook.value = rb;
     needsInit.value = !rb;
+    templates.value = (await rulebookApi.getTemplates()).data.data;
   } catch {
     /* ignore */
   }
@@ -559,6 +587,8 @@ onMounted(async () => {
 .mtime { font-size: 10px; color: #bbb; margin-top: 2px; }
 .msg.user .mtime { text-align: right; }
 .typing { color: #999; }
+.tplswitch { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 13px; background: #f7f9fc; border: 1px solid #dfe7f2; border-radius: 6px; padding: 6px 10px; margin: 6px 0; }
+.tplswitch select { padding: 4px; }
 .propose-bar { margin: 6px 0; }
 .propose-btn { width: 100%; background: #fff7e6; border: 1px solid #ffe0a3; border-radius: 6px; padding: 8px; cursor: pointer; font-size: 13px; }
 .proposal { background: #f3faf3; border: 1px solid #cce8cc; border-radius: 8px; padding: 10px 12px; margin: 6px 0; font-size: 13px; }
