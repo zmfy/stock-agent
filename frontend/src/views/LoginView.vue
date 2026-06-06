@@ -11,19 +11,19 @@
         <svg class="art" viewBox="0 0 320 160" fill="none" xmlns="http://www.w3.org/2000/svg">
           <!-- K 线 -->
           <!-- 一路上涨的红色 K 线 -->
-          <g opacity="0.97">
-            <line x1="36" y1="124" x2="36" y2="148" stroke="rgba(255,255,255,0.4)" stroke-width="2"/>
-            <rect x="28" y="126" width="16" height="18" rx="2" fill="#ff5a4f"/>
-            <line x1="84" y1="104" x2="84" y2="132" stroke="rgba(255,255,255,0.4)" stroke-width="2"/>
-            <rect x="76" y="106" width="16" height="22" rx="2" fill="#ff5a4f"/>
-            <line x1="132" y1="82" x2="132" y2="112" stroke="rgba(255,255,255,0.4)" stroke-width="2"/>
-            <rect x="124" y="84" width="16" height="24" rx="2" fill="#ff5a4f"/>
-            <line x1="180" y1="60" x2="180" y2="92" stroke="rgba(255,255,255,0.4)" stroke-width="2"/>
-            <rect x="172" y="62" width="16" height="26" rx="2" fill="#ff5a4f"/>
-            <line x1="228" y1="38" x2="228" y2="72" stroke="rgba(255,255,255,0.4)" stroke-width="2"/>
-            <rect x="220" y="40" width="16" height="28" rx="2" fill="#ff5a4f"/>
-            <polyline points="36,126 84,106 132,84 180,62 228,40 296,16" stroke="#ffd36b" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-            <circle cx="296" cy="16" r="4.5" fill="#ffd36b"/>
+          <g opacity="0.98">
+            <line x1="36" y1="124" x2="36" y2="148" stroke="rgba(74,59,42,0.3)" stroke-width="2"/>
+            <rect x="28" y="126" width="16" height="18" rx="2" fill="#e5484d"/>
+            <line x1="84" y1="104" x2="84" y2="132" stroke="rgba(74,59,42,0.3)" stroke-width="2"/>
+            <rect x="76" y="106" width="16" height="22" rx="2" fill="#e5484d"/>
+            <line x1="132" y1="82" x2="132" y2="112" stroke="rgba(74,59,42,0.3)" stroke-width="2"/>
+            <rect x="124" y="84" width="16" height="24" rx="2" fill="#e5484d"/>
+            <line x1="180" y1="60" x2="180" y2="92" stroke="rgba(74,59,42,0.3)" stroke-width="2"/>
+            <rect x="172" y="62" width="16" height="26" rx="2" fill="#e5484d"/>
+            <line x1="228" y1="38" x2="228" y2="72" stroke="rgba(74,59,42,0.3)" stroke-width="2"/>
+            <rect x="220" y="40" width="16" height="28" rx="2" fill="#e5484d"/>
+            <polyline points="36,126 84,106 132,84 180,62 228,40 296,16" stroke="#e07a2f" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+            <circle cx="296" cy="16" r="4.5" fill="#e07a2f"/>
           </g>
         </svg>
         <p class="tag-mini">—— 一根韭菜，也要做有计划的韭菜 🥬</p>
@@ -86,7 +86,7 @@ async function submit() {
 .login { display: flex; min-height: 100vh; }
 
 /* 左侧 hero */
-.hero { flex: 1.1; background: linear-gradient(150deg, #3a4a6b 0%, #273450 50%, #161e2b 100%); color: #fff; display: flex; align-items: center; justify-content: center; padding: 40px; }
+.hero { flex: 1.1; background: linear-gradient(150deg, #fdf5ea 0%, #f5e6cf 55%, #efd8ba 100%); color: #4a3b2a; display: flex; align-items: center; justify-content: center; padding: 40px; }
 .hero-in { max-width: 500px; }
 .logo { font-size: 22px; font-weight: 800; letter-spacing: 0.4px; }
 .slogan { font-size: 28px; line-height: 1.25; margin: 22px 0 12px; font-weight: 800; white-space: nowrap; }
@@ -95,7 +95,7 @@ async function submit() {
 .tag-mini { font-size: 13px; opacity: 0.85; margin-top: 4px; }
 
 /* 右侧表单 */
-.panel { flex: 1; display: flex; align-items: center; justify-content: center; padding: 40px; background: var(--bg); }
+.panel { flex: 1; display: flex; align-items: center; justify-content: center; padding: 40px; background: #fbf6ef; }
 .card { width: 100%; max-width: 360px; background: var(--surface); border-radius: 16px; box-shadow: var(--shadow-md); padding: 32px 28px; display: flex; flex-direction: column; gap: 14px; }
 .card h1 { margin: 0; font-size: 22px; }
 .hint { color: var(--muted); font-size: 13px; margin: 0 0 6px; }
