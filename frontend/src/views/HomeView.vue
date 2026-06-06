@@ -25,7 +25,7 @@
     <main class="main">
       <nav class="topnav">
         <div class="tnav-scroll">
-          <button class="tnav" :class="{ active: !settingsKey }" @click="goChat">💬 聊天</button>
+          <button class="tnav chat-tab" :class="{ active: !settingsKey }" @click="goChat">💬 聊天</button>
           <button v-for="s in SETTINGS" :key="s.key" class="tnav" :class="{ active: settingsKey === s.key }" @click="settingsKey = s.key">
             <span class="ticon">{{ s.icon }}</span>{{ s.label }}
           </button>
@@ -638,6 +638,9 @@ onMounted(async () => {
 .tnav { flex: none; white-space: nowrap; background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 6px 13px; font-size: 13px; cursor: pointer; color: var(--text-soft); display: inline-flex; align-items: center; gap: 5px; transition: all 0.15s; }
 .tnav:hover { border-color: var(--accent); color: var(--accent-600); }
 .tnav.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.tnav.chat-tab { background: #e5484d; color: #fff; border-color: #e5484d; }
+.tnav.chat-tab:hover { background: #d23b40; color: #fff; border-color: #d23b40; }
+.tnav.chat-tab.active { background: #d23b40; border-color: #d23b40; }
 .ticon { font-size: 14px; }
 .panelbox { flex: 1; overflow-y: auto; margin: 14px; padding: 16px 20px; background: var(--surface); border-radius: 14px; box-shadow: var(--shadow); min-height: 0; }
 .chat { flex: 1; display: flex; flex-direction: column; padding: 16px 20px; margin: 14px; background: var(--surface); border-radius: 14px; box-shadow: var(--shadow); min-width: 0; min-height: 0; }
