@@ -16,7 +16,20 @@
 
         <button class="pin-btn" :class="{ active: active?.kind === 'core_principle' }" @click="openCorePrinciple">📜 核心原则（对话）</button>
 
-        <div class="pin-card soon">🔍 按核心原则选股 <span class="soon-tag">即将开放</span></div>
+        <div class="screen-sect">
+          <button class="pin-btn" :disabled="screening" @click="runScreen">🔍 {{ screening ? '选股中…' : '按核心原则选股' }}</button>
+          <button v-if="screen" class="fold" @click="screenOpen = !screenOpen">
+            {{ screenOpen ? '▾' : '▸' }} 选股结果（{{ screen.results.length }}）
+          </button>
+          <div v-if="screen && screenOpen" class="screen-list">
+            <div class="snote muted">{{ screen.note }}</div>
+            <div v-for="r in screen.results" :key="r.code" class="srow" @click="openStockCode(r.code)">
+              <span class="badge2" :class="r.aPass ? 'a' : r.bPass ? 'b' : 'no'">{{ r.aPass ? 'A' : r.bPass ? 'B' : '—' }}</span>
+              {{ r.name || r.code }} <span class="muted">{{ r.code }} · {{ r.passed }}/{{ r.total }}</span>
+            </div>
+            <div v-if="!screen.results.length" class="muted">无符合条件的股票</div>
+          </div>
+        </div>
 
         <div class="freeq">
           <input v-model="queryCode" placeholder="自由查询：代码/名称" @keyup.enter="freeQuery" />
@@ -126,6 +139,7 @@ import { useAuthStore } from '../stores/auth';
 import { chatApi, type ChatSession, type ChatMessage, type ChatKind } from '../api/chat';
 import { rulebookApi, type ProposeResult } from '../api/rulebook';
 import { meetingsApi, type Meeting } from '../api/meetings';
+import { screenApi, type ScreenRun } from '../api/screen';
 
 const auth = useAuthStore();
 const router = useRouter();
@@ -142,6 +156,9 @@ const analyzing = ref(false);
 const msgsEl = ref<HTMLElement | null>(null);
 const meetings = ref<{ morning: Meeting | null; evening: Meeting | null }>({ morning: null, evening: null });
 const genning = ref<'' | 'morning' | 'evening'>('');
+const screen = ref<ScreenRun | null>(null);
+const screening = ref(false);
+const screenOpen = ref(true);
 const briefing = computed(() => {
   if (active.value?.kind === 'morning') return meetings.value.morning?.content || '';
   if (active.value?.kind === 'evening') return meetings.value.evening?.content || '';
@@ -270,14 +287,29 @@ async function openMeeting(kind: 'morning' | 'evening') {
   if (s) await open(s);
 }
 
-async function freeQuery() {
-  const code = queryCode.value.trim();
-  if (!code) return;
+async function openStockCode(code: string) {
   const id = (await chatApi.createSession('stock', code, `个股 ${code}`)).data.data.id;
-  queryCode.value = '';
   await loadSessions();
   const s = sessions.value.find((x) => x.id === id);
   if (s) await open(s);
+}
+async function freeQuery() {
+  const code = queryCode.value.trim();
+  if (!code) return;
+  queryCode.value = '';
+  await openStockCode(code);
+}
+async function runScreen() {
+  screening.value = true;
+  chatErr.value = '';
+  try {
+    screen.value = (await screenApi.run({})).data.data;
+    screenOpen.value = true;
+  } catch (e: any) {
+    chatErr.value = e.response?.data?.message || '选股失败';
+  } finally {
+    screening.value = false;
+  }
 }
 
 async function send() {
@@ -317,6 +349,11 @@ onMounted(async () => {
   await loadSessions();
   await loadMeetings();
   try {
+    screen.value = (await screenApi.latest()).data.data;
+  } catch {
+    /* ignore */
+  }
+  try {
     const rb = (await rulebookApi.getActive()).data.data;
     needsInit.value = !rb;
   } catch {
@@ -354,6 +391,16 @@ onMounted(async () => {
 .analyzing { color: #a76b00; font-size: 13px; padding: 8px 0; }
 .briefing { background: #f7faff; border: 1px solid #d6e4ff; border-radius: 8px; padding: 10px 12px; margin: 8px 0; white-space: pre-wrap; font-size: 13px; line-height: 1.6; }
 .pin-card.gen { background: #eef7ee; cursor: pointer; border: 1px dashed #b7d7b7; text-align: left; }
+.screen-sect { display: flex; flex-direction: column; gap: 4px; }
+.fold { text-align: left; background: none; border: none; color: #666; font-size: 12px; cursor: pointer; padding: 2px 4px; }
+.screen-list { max-height: 220px; overflow-y: auto; border: 1px solid #eee; border-radius: 6px; padding: 4px; }
+.snote { padding: 2px 4px; }
+.srow { padding: 4px 6px; border-radius: 4px; cursor: pointer; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.srow:hover { background: #f3f3f3; }
+.badge2 { display: inline-block; width: 16px; text-align: center; border-radius: 4px; font-size: 11px; margin-right: 4px; }
+.badge2.a { background: #d8e6ff; color: #34699a; }
+.badge2.b { background: #fde2e2; color: #c0392b; }
+.badge2.no { background: #eee; color: #aaa; }
 .msgs { flex: 1; overflow-y: auto; padding: 12px 0; display: flex; flex-direction: column; gap: 10px; }
 .msg { display: flex; }
 .msg.user { justify-content: flex-end; }

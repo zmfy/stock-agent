@@ -90,6 +90,30 @@ def quote(code: str, days: int = 120):
         return []
 
 
+@app.get("/sectors/hot")
+def sectors_hot(top: int = 5):
+    try:
+        df = ak.stock_board_industry_name_em()
+        col = "涨跌幅" if "涨跌幅" in df.columns else None
+        if col:
+            df = df.sort_values(col, ascending=False)
+        rows = []
+        for _, r in df.head(top).iterrows():
+            rows.append({"name": r.get("板块名称") or r.get("板块"), "change": _f(r.get("涨跌幅"))})
+        return [x for x in rows if x["name"]]
+    except Exception:
+        return []
+
+
+@app.get("/sectors/{name}/cons")
+def sector_cons(name: str):
+    try:
+        df = ak.stock_board_industry_cons_em(symbol=name)
+        return [{"code": str(r.get("代码")), "name": r.get("名称")} for _, r in df.iterrows()]
+    except Exception:
+        return []
+
+
 @app.get("/market/sentiment")
 def market_sentiment():
     out = {"limit_up_count": None, "limit_down_count": None, "sse_ma20_slope": None}

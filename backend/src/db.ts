@@ -206,7 +206,16 @@ function initSchema(): void {
     );
 
     CREATE INDEX IF NOT EXISTS idx_quote_daily_code ON quote_daily (code);
+    CREATE TABLE IF NOT EXISTS screenings (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      source_note TEXT,
+      results TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
     CREATE INDEX IF NOT EXISTS idx_reports_user ON reports (user_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_screenings_user ON screenings (user_id, created_at);
     CREATE TABLE IF NOT EXISTS meetings (
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL,
