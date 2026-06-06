@@ -31,10 +31,6 @@
           </div>
         </div>
 
-        <div class="freeq">
-          <StockPicker placeholder="自由查询：代码/名称/拼音" @pick="openStockCode" />
-        </div>
-
         <!-- 晚会 -->
         <button v-if="meetings.evening" class="pin-btn" :class="{ active: active?.kind === 'evening' }" @click="openMeeting('evening')">
           🌙 今日操作复盘（晚会）
@@ -89,7 +85,10 @@
 
       <div v-if="!active" class="empty">
         <h2>你好，我是你的操盘助手 🤝</h2>
-        <p class="muted">点左侧「核心原则」与我探讨规则，或「自由查询」一只股票，或开一个新对话。</p>
+        <p class="muted">输入股票代码 / 名称 / 拼音，直接开一个该股的分析对话；或在左侧选「核心原则」「早会」等。</p>
+        <div class="qbox">
+          <StockPicker placeholder="输入股票代码 / 名称 / 拼音，选中即开聊" @pick="openStockCode" />
+        </div>
       </div>
 
       <template v-else>
@@ -570,9 +569,6 @@ onMounted(async () => {
 .pin-btn { text-align: left; background: var(--rail-active); color: var(--rail-fg); border: none; border-radius: var(--radius-sm); padding: 9px 11px; font-size: 13px; cursor: pointer; transition: background 0.15s, color 0.15s; }
 .pin-btn:hover { background: rgba(255, 255, 255, 0.16); color: #fff; }
 .pin-btn.active { background: var(--accent); color: #fff; }
-.freeq { display: flex; gap: 4px; }
-.freeq input { flex: 1; padding: 7px 9px; background: rgba(255, 255, 255, 0.07); border: 1px solid rgba(255, 255, 255, 0.14); color: #fff; border-radius: var(--radius-sm); }
-.freeq input::placeholder { color: var(--rail-fg-dim); }
 .suggest { list-style: none; margin: 2px 0; padding: 0; max-height: 180px; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
 .suggest li { padding: 6px 9px; cursor: pointer; font-size: 13px; }
 .suggest li:hover { background: var(--accent-soft); }
@@ -632,7 +628,9 @@ onMounted(async () => {
 .cp-side { width: 300px; flex: none; overflow-y: auto; border-left: 1px solid #eee; padding-left: 14px; }
 .cp-side .tplswitch, .cp-side .propose-bar, .cp-side .proposal { margin: 0 0 12px; }
 .initbar { background: #fff7e6; border: 1px solid #ffe0a3; border-radius: 6px; padding: 8px 12px; font-size: 13px; margin-bottom: 8px; }
-.empty { margin: auto; text-align: center; color: #666; }
+.empty { margin: auto; text-align: center; color: var(--text-soft); max-width: 460px; }
+.empty h2 { font-size: 22px; margin-bottom: 8px; }
+.qbox { margin-top: 18px; text-align: left; }
 .title { font-weight: 600; font-size: 15px; padding-bottom: 10px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
 .stock-head { display: flex; gap: 8px; }
 .analyzing { color: #a76b00; font-size: 13px; padding: 8px 0; }
