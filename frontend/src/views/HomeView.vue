@@ -58,7 +58,6 @@
 
       <div class="menu">
         <button v-if="sessions.length" class="settings-entry clearall" @click="clearAllChats">🧹 清空所有对话</button>
-        <button class="settings-entry" :class="{ active: settingsMode }" @click="enterSettings">⚙ 系统设置</button>
       </div>
       <div class="foot">
         <span class="muted">{{ auth.user?.username }}</span>
@@ -66,28 +65,22 @@
       </div>
     </aside>
 
-    <!-- 右侧：系统设置 或 聊天区 -->
-    <main class="chat">
-      <!-- 系统设置（左栏不变，仅右侧切换） -->
-      <template v-if="settingsMode">
-        <div class="settings-top">
-          <button class="mini" @click="exitSettings">← 返回聊天</button>
-          <nav class="settings-nav">
-            <button v-for="s in SETTINGS" :key="s.key" :class="{ active: settingsKey === s.key }" @click="settingsKey = s.key">{{ s.label }}</button>
-          </nav>
-        </div>
-        <div class="settings-body">
-          <div v-if="!settingsKey" class="settings-menu">
-            <button v-for="s in SETTINGS" :key="s.key" class="scard" @click="settingsKey = s.key">
-              <span class="sicon">{{ s.icon }}</span>{{ s.label }}
-            </button>
-          </div>
-          <component v-else :is="currentSettingsComp" :key="settingsKey" />
-        </div>
-      </template>
+    <!-- 右侧：顶部功能栏（聊天框之外，常驻） + 聊天 或 功能面板 -->
+    <main class="main">
+      <nav class="topnav">
+        <button class="tnav" :class="{ active: !settingsKey }" @click="goChat">💬 聊天</button>
+        <button v-for="s in SETTINGS" :key="s.key" class="tnav" :class="{ active: settingsKey === s.key }" @click="settingsKey = s.key">
+          <span class="ticon">{{ s.icon }}</span>{{ s.label }}
+        </button>
+      </nav>
+
+      <!-- 功能面板 -->
+      <section v-if="settingsKey" class="panelbox">
+        <component :is="currentSettingsComp" :key="settingsKey" />
+      </section>
 
       <!-- 聊天 -->
-      <template v-else>
+      <section v-else class="chat">
       <div v-if="needsInit" class="initbar">
         还没设定核心原则？<router-link to="/onboarding">去完成初始化设定 →</router-link>
       </div>
@@ -187,7 +180,7 @@
           </aside>
         </div>
       </template>
-      </template>
+      </section>
     </main>
   </div>
 </template>
@@ -221,15 +214,10 @@ const SETTINGS = [
   { key: 'meetings', label: '早晚会历史', icon: '🗓', comp: MeetingsHistoryView },
   { key: 'account', label: '账号设置', icon: '👤', comp: SettingsView },
 ];
-const settingsMode = ref(false);
-const settingsKey = ref('');
+const settingsKey = ref(''); // '' = 聊天；否则为某个功能面板
 const currentSettingsComp = computed(() => SETTINGS.find((s) => s.key === settingsKey.value)?.comp);
-function enterSettings() {
-  settingsMode.value = true;
+function goChat() {
   settingsKey.value = '';
-}
-function exitSettings() {
-  settingsMode.value = false;
 }
 const router = useRouter();
 
@@ -379,7 +367,7 @@ async function loadSessions() {
   sessions.value = (await chatApi.listSessions()).data.data;
 }
 async function open(s: ChatSession) {
-  settingsMode.value = false;
+  settingsKey.value = ''; // 打开会话即回到聊天视图
   active.value = s;
   chatErr.value = '';
   proposal.value = null;
@@ -617,13 +605,21 @@ onMounted(async () => {
 .scard { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 22px; border: 1px solid var(--border); border-radius: var(--radius); cursor: pointer; font-size: 14px; background: var(--surface); transition: all 0.15s; }
 .scard:hover { border-color: var(--accent); box-shadow: var(--shadow-md); transform: translateY(-1px); }
 .sicon { font-size: 24px; }
-/* 内嵌设置页隐藏其自身的顶部标题/返回，避免与上方导航重复 */
-.settings-body :deep(.bar) { display: none; }
+/* 功能面板隐藏其自身的顶部标题/返回，避免与上方功能栏重复 */
+.panelbox :deep(.bar) { display: none; }
 .menu-old { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px 4px; border-top: 1px solid #eee; font-size: 12px; }
 .foot { display: flex; justify-content: space-between; align-items: center; padding-top: 6px; border-top: 1px solid #eee; }
 .mini { font-size: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 3px 9px; cursor: pointer; color: var(--text-soft); transition: all 0.15s; }
 .mini:hover { border-color: var(--accent); color: var(--accent-600); }
 .muted { color: var(--muted); font-size: 12px; }
+/* 右侧主区：顶部功能栏 + 内容卡片 */
+.main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.topnav { display: flex; gap: 6px; flex-wrap: wrap; padding: 12px 14px 0; }
+.tnav { background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 6px 13px; font-size: 13px; cursor: pointer; color: var(--text-soft); display: inline-flex; align-items: center; gap: 5px; transition: all 0.15s; }
+.tnav:hover { border-color: var(--accent); color: var(--accent-600); }
+.tnav.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.ticon { font-size: 14px; }
+.panelbox { flex: 1; overflow-y: auto; margin: 14px; padding: 16px 20px; background: var(--surface); border-radius: 14px; box-shadow: var(--shadow); min-height: 0; }
 .chat { flex: 1; display: flex; flex-direction: column; padding: 16px 20px; margin: 14px; background: var(--surface); border-radius: 14px; box-shadow: var(--shadow); min-width: 0; min-height: 0; }
 /* 对话区：默认单栏；核心原则时右侧加规则操作面板 */
 .convo { flex: 1; display: flex; min-height: 0; gap: 16px; }
