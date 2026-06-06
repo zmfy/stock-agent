@@ -109,6 +109,29 @@ def quote(code: str, days: int = 120):
         return []
 
 
+@app.get("/news")
+def news(limit: int = 20):
+    """热点财经快讯，best-effort across a few AkShare sources."""
+    for fn in ("stock_info_global_em", "stock_info_cjzc_em", "stock_info_global_cls"):
+        f = getattr(ak, fn, None)
+        if not f:
+            continue
+        try:
+            df = f()
+            rows = []
+            for _, r in df.head(limit).iterrows():
+                title = r.get("标题") or r.get("内容") or r.get("summary")
+                ts = r.get("发布时间") or r.get("时间") or r.get("datetime") or r.get("publish_time") or ""
+                summary = r.get("摘要") or r.get("内容") or ""
+                if title:
+                    rows.append({"title": str(title), "summary": str(summary)[:200], "published_at": str(ts)})
+            if rows:
+                return rows
+        except Exception:
+            continue
+    return []
+
+
 @app.get("/sectors/hot")
 def sectors_hot(top: int = 5):
     try:

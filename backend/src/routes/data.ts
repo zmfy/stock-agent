@@ -87,6 +87,17 @@ router.post('/refresh', async (req: Request, res: Response) => {
   successResponse(res, { marketRefreshed: marketOk, snapshot });
 });
 
+// GET /api/data/news — cached hot financial news
+router.get('/news', (_req: Request, res: Response) => {
+  successResponse(res, svc.listNews());
+});
+
+// POST /api/data/news/refresh — collect hot news now
+router.post('/news/refresh', async (req: Request, res: Response) => {
+  const n = await svc.refreshNews(req.user!.userId);
+  successResponse(res, { inserted: n, news: svc.listNews() }, n ? '已采集热点新闻' : '未取到新闻（数据源不可用或未启用 AkShare 插件）');
+});
+
 // GET /api/data/source — is the sidecar configured + healthy?
 router.get('/source', async (req: Request, res: Response) => {
   const base = resolveSidecarBase(req.user!.userId);

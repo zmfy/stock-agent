@@ -20,7 +20,16 @@ export interface StockSnapshot {
   _missing: string[];
 }
 
+export interface NewsItem {
+  title: string;
+  summary: string;
+  published_at: string;
+  fetched_at: string;
+}
+
 export const dataApi = {
+  getNews: () => api.get<{ data: NewsItem[] }>('/data/news'),
+  refreshNews: () => api.post<{ data: { inserted: number; news: NewsItem[] } }>('/data/news/refresh'),
   getSource: () => api.get<{ data: { sidecarConfigured: boolean; base: string | null; sidecarHealthy: boolean } }>('/data/source'),
   snapshot: (code: string) => api.get<{ data: StockSnapshot }>(`/data/snapshot/${code}`),
   refresh: (code?: string) => api.post<{ data: { marketRefreshed: boolean; snapshot: StockSnapshot | null } }>('/data/refresh', { code }),

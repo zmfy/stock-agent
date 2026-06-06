@@ -144,6 +144,16 @@ function initSchema(): void {
       PRIMARY KEY (code, date)
     );
 
+    CREATE TABLE IF NOT EXISTS news (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      summary TEXT,
+      published_at TEXT,
+      source TEXT,
+      fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(title, published_at)
+    );
+
     CREATE TABLE IF NOT EXISTS stock_names (
       code TEXT PRIMARY KEY,
       name TEXT,

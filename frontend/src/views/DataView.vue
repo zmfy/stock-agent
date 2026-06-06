@@ -14,6 +14,22 @@
     </section>
 
     <section class="card">
+      <h2>数据采集</h2>
+      <div class="row">
+        <button @click="refreshMarket" :disabled="busy">刷新大盘/情绪数据</button>
+        <button @click="collectNews" :disabled="busy">采集热点新闻</button>
+      </div>
+      <p v-if="collectMsg" :class="collectOk ? 'ok-msg' : 'err'">{{ collectMsg }}</p>
+      <div v-if="news.length" class="news">
+        <div v-for="(n, i) in news" :key="i" class="nitem">
+          <div class="ntitle">{{ n.title }}</div>
+          <div class="nmeta">{{ n.published_at || n.fetched_at }}</div>
+          <div v-if="n.summary" class="nsum">{{ n.summary }}</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
       <h2>上传行情 CSV（通达信导出）</h2>
       <p class="hint">支持中英文表头（代码/日期/开盘/最高/最低/收盘/成交量），日期可为 20260601 或 2026-06-01。无代码列时可在下方填写。</p>
       <input type="file" accept=".csv,.txt" @change="onFile" />
@@ -46,7 +62,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue';
-import { dataApi, type StockSnapshot } from '../api/data';
+import { dataApi, type StockSnapshot, type NewsItem } from '../api/data';
 
 const source = reactive({ sidecarConfigured: false, base: null as string | null, sidecarHealthy: false });
 const file = ref<File | null>(null);
@@ -123,7 +139,43 @@ async function loadSource() {
   } catch { /* ignore */ }
 }
 
-onMounted(loadSource);
+const news = ref<NewsItem[]>([]);
+const collectMsg = ref('');
+const collectOk = ref(false);
+
+async function refreshMarket() {
+  busy.value = true; collectMsg.value = '';
+  try {
+    await dataApi.refresh();
+    collectOk.value = true; collectMsg.value = '大盘/情绪数据已刷新';
+    await loadSource();
+  } catch (e: any) {
+    collectOk.value = false; collectMsg.value = e.response?.data?.message || '刷新失败';
+  } finally {
+    busy.value = false;
+  }
+}
+
+async function collectNews() {
+  busy.value = true; collectMsg.value = '';
+  try {
+    const res = await dataApi.refreshNews();
+    news.value = res.data.data.news;
+    collectOk.value = res.data.data.inserted > 0;
+    collectMsg.value = res.data.data.inserted > 0 ? `已采集 ${res.data.data.inserted} 条热点新闻` : '未取到新闻（数据源不可用或未启用 AkShare 插件）';
+  } catch (e: any) {
+    collectOk.value = false; collectMsg.value = e.response?.data?.message || '采集失败';
+  } finally {
+    busy.value = false;
+  }
+}
+
+onMounted(async () => {
+  await loadSource();
+  try {
+    news.value = (await dataApi.getNews()).data.data;
+  } catch { /* ignore */ }
+});
 </script>
 
 <style scoped>
@@ -142,5 +194,10 @@ input { padding: 5px; }
 .snap tr.miss td { color: #c08; }
 .err { color: #c00; }
 .ok-msg { color: #2a8a2a; }
+.news { margin-top: 10px; max-height: 320px; overflow-y: auto; }
+.nitem { border-top: 1px solid #eee; padding: 8px 0; }
+.ntitle { font-size: 14px; font-weight: 600; }
+.nmeta { font-size: 11px; color: #999; }
+.nsum { font-size: 13px; color: #555; margin-top: 2px; }
 button:disabled { opacity: 0.5; }
 </style>
