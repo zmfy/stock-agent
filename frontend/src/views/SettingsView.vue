@@ -25,6 +25,32 @@
       </div>
     </section>
 
+    <!-- ===== 数据备份与重置 ===== -->
+    <section class="card">
+      <h2>数据备份与重置</h2>
+      <div class="row">
+        <button @click="doBackup" :disabled="acctBusy">立即备份当前数据</button>
+        <button class="danger" @click="doReset" :disabled="acctBusy">重新运行设置向导（清空所有数据）</button>
+      </div>
+      <p class="warnline">⚠️ “重新运行设置向导”会<b>清空你当前的全部数据</b>：核心规则、AI 配置、能力插件、主/子 agent 及其记忆、所有对话与分析报告、早晚会、数据源等。系统会在清空前<b>自动备份一次</b>，可随时恢复。</p>
+      <p v-if="acctMsg" :class="acctOk ? 'ok-msg' : 'err'">{{ acctMsg }}</p>
+
+      <table v-if="backups.length" class="bk">
+        <thead><tr><th>备份</th><th>时间</th><th>大小</th><th>操作</th></tr></thead>
+        <tbody>
+          <tr v-for="b in backups" :key="b.id">
+            <td>{{ b.label }}</td>
+            <td class="muted">{{ b.created_at }}</td>
+            <td class="muted">{{ Math.round(b.size / 1024) }} KB</td>
+            <td class="ops">
+              <button @click="doRestore(b)" :disabled="acctBusy">恢复</button>
+              <button class="danger" @click="doDeleteBackup(b)" :disabled="acctBusy">删除</button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
     <!-- ===== 用户管理（仅管理员） ===== -->
     <section v-if="auth.isAdmin" class="card">
       <div class="card-head">
@@ -82,10 +108,52 @@
 
 <script setup lang="ts">
 import { reactive, ref, computed, onMounted } from 'vue';
+import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 import { settingsApi, type AdminUser } from '../api/settings';
+import { accountApi, type Backup } from '../api/account';
 
 const auth = useAuthStore();
+const router = useRouter();
+
+// ---- 数据备份与重置 ----
+const backups = ref<Backup[]>([]);
+const acctBusy = ref(false);
+const acctMsg = ref('');
+const acctOk = ref(false);
+
+async function loadBackups() {
+  try { backups.value = (await accountApi.listBackups()).data.data; } catch { /* ignore */ }
+}
+async function doBackup() {
+  acctBusy.value = true; acctMsg.value = '';
+  try { await accountApi.backup(); acctOk.value = true; acctMsg.value = '已备份'; await loadBackups(); }
+  catch (e: any) { acctOk.value = false; acctMsg.value = e.response?.data?.message || '备份失败'; }
+  finally { acctBusy.value = false; }
+}
+async function doReset() {
+  if (!confirm('确定要重新运行设置向导吗？这会清空你当前的全部数据（已自动备份，可恢复）。')) return;
+  if (!confirm('再次确认：所有核心规则、AI 配置、agent 及记忆、对话、报告都会被清空。继续？')) return;
+  acctBusy.value = true; acctMsg.value = '';
+  try {
+    await accountApi.reset();
+    router.push('/onboarding');
+  } catch (e: any) {
+    acctOk.value = false; acctMsg.value = e.response?.data?.message || '重置失败';
+  } finally { acctBusy.value = false; }
+}
+async function doRestore(b: Backup) {
+  if (!confirm(`从「${b.label}」恢复？当前数据会被该备份覆盖。`)) return;
+  acctBusy.value = true; acctMsg.value = '';
+  try { await accountApi.restore(b.id); acctOk.value = true; acctMsg.value = '已恢复，请刷新页面查看'; }
+  catch (e: any) { acctOk.value = false; acctMsg.value = e.response?.data?.message || '恢复失败'; }
+  finally { acctBusy.value = false; }
+}
+async function doDeleteBackup(b: Backup) {
+  if (!confirm(`删除备份「${b.label}」？`)) return;
+  await accountApi.deleteBackup(b.id);
+  await loadBackups();
+}
 
 // ---- shared password policy (mirrors backend strongPassword) ----
 function passwordRules(p: string) {
@@ -212,6 +280,7 @@ onMounted(async () => {
     try { await auth.fetchMe(); } catch { /* ignore */ }
   }
   if (auth.isAdmin) await loadUsers();
+  await loadBackups();
 });
 </script>
 
@@ -219,6 +288,12 @@ onMounted(async () => {
 .settings { max-width: 760px; margin: 32px auto; padding: 0 16px; }
 .bar { display: flex; justify-content: space-between; align-items: baseline; }
 .card { border: 1px solid #e5e5e5; border-radius: 8px; padding: 16px; margin-top: 16px; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; }
+.warnline { background: #fff7e6; border: 1px solid #ffe0a3; border-radius: 6px; padding: 8px 10px; font-size: 12px; color: #8a5a00; }
+.bk { width: 100%; border-collapse: collapse; margin-top: 8px; }
+.bk th, .bk td { text-align: left; padding: 5px 8px; border-bottom: 1px solid #eee; font-size: 13px; }
+.bk .ops { display: flex; gap: 6px; }
+.muted { color: #999; font-size: 12px; }
 .card-head { display: flex; justify-content: space-between; align-items: center; }
 .form { display: flex; flex-direction: column; gap: 8px; max-width: 320px; }
 .rules { list-style: none; padding: 0; margin: 4px 0; font-size: 12px; display: flex; flex-wrap: wrap; gap: 8px; }

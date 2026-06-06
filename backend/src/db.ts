@@ -144,6 +144,14 @@ function initSchema(): void {
       PRIMARY KEY (code, date)
     );
 
+    CREATE TABLE IF NOT EXISTS backups (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      label TEXT,
+      payload TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
     CREATE TABLE IF NOT EXISTS data_sources (
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL,

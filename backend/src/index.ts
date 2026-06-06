@@ -17,6 +17,7 @@ import agentRoutes from './routes/agent';
 import chatRoutes from './routes/chat';
 import meetingsRoutes from './routes/meetings';
 import screenRoutes from './routes/screen';
+import accountRoutes from './routes/account';
 
 export function createApp(): express.Express {
   const app = express();
@@ -63,6 +64,7 @@ export function createApp(): express.Express {
   app.use('/api/chat', chatRoutes);
   app.use('/api/meetings', meetingsRoutes);
   app.use('/api/screen', screenRoutes);
+  app.use('/api/account', accountRoutes);
 
   app.get('/health', (_req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });

@@ -63,6 +63,19 @@
     <section class="card">
       <h2>上传行情 CSV（通达信导出）</h2>
       <p class="hint">支持中英文表头（代码/日期/开盘/最高/最低/收盘/成交量），日期可为 20260601 或 2026-06-01。无代码列时可在下方填写。</p>
+      <button class="linklike" @click="showTdxHelp = !showTdxHelp">{{ showTdxHelp ? '▾' : '▸' }} 通达信数据怎么导入？（帮助说明）</button>
+      <div v-if="showTdxHelp" class="tdxhelp">
+        <ol>
+          <li>打开<b>通达信</b>客户端，进入要导出的个股 K 线图（日线）。</li>
+          <li>菜单 <b>系统 → 数据导出</b>（或在 K 线图上点右键 → 导出数据 / 复制数据）。</li>
+          <li>选择<b>当前股票</b>、周期<b>日线</b>、范围按需，格式选 <b>CSV / Excel / TXT（带表头）</b>，导出到本地。</li>
+          <li>确认文件含这些列（中文或英文均可）：<code>代码, 日期, 开盘, 最高, 最低, 收盘, 成交量</code>。
+            日期 <code>20260601</code> 或 <code>2026-06-01</code> 都行；代码可带 <code>sh/sz</code> 前缀。</li>
+          <li>回到本页，点下方「选择文件」上传即可。若文件没有“代码”列，在下面的输入框填上股票代码。</li>
+        </ol>
+        <p class="muted">说明：上传的数据会作为该股的<b>最高优先级数据源</b>（覆盖在线源），并参与校验。也可一次导出多只股票（含“代码”列）一起上传。</p>
+        <p class="muted">示例表头：<code>代码,日期,开盘,最高,最低,收盘,成交量</code></p>
+      </div>
       <input type="file" accept=".csv,.txt" @change="onFile" />
       <input v-model="uploadCode" placeholder="（可选）股票代码，CSV 无代码列时使用" />
       <button @click="doUpload" :disabled="!file || busy">上传</button>
@@ -180,6 +193,7 @@ async function loadSource() {
 const news = ref<NewsItem[]>([]);
 const collectMsg = ref('');
 const collectOk = ref(false);
+const showTdxHelp = ref(false);
 
 async function refreshMarket() {
   busy.value = true; collectMsg.value = '';
@@ -299,6 +313,9 @@ input { padding: 5px; }
 .srctable .pri { width: 60px; }
 .tag { font-size: 11px; background: #eef; color: #446; border-radius: 8px; padding: 1px 6px; }
 .addsrc input { flex: 1; }
+.linklike { background: none; border: none; color: #34699a; cursor: pointer; padding: 4px 0; font-size: 13px; }
+.tdxhelp { background: #f7f9fc; border: 1px solid #dfe7f2; border-radius: 6px; padding: 8px 14px; font-size: 13px; line-height: 1.7; }
+.tdxhelp code { background: #eef; padding: 0 4px; border-radius: 3px; }
 .catalog { background: #f7faf7; border: 1px solid #e0eee0; border-radius: 6px; padding: 8px 10px; margin: 8px 0; }
 .chint { font-size: 12px; color: #666; margin-bottom: 4px; }
 .crow { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 13px; padding: 3px 0; }
