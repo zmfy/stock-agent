@@ -101,4 +101,16 @@ describe('settings/users (admin)', () => {
     const list = await request(app).get('/api/settings/users').set('Authorization', `Bearer ${at}`);
     expect(list.body.data.some((u: { id: string }) => u.id === id)).toBe(false);
   });
+
+  it('login logs: records attempts; admin reads, non-admin 403', async () => {
+    const at = await adminToken();
+    await request(app).post('/api/auth/login').send({ username: 'stock-agent', password: 'WRONG', agreed: true }); // 失败一次
+    const logs = await request(app).get('/api/settings/login-logs').set('Authorization', `Bearer ${at}`);
+    expect(logs.status).toBe(200);
+    expect(logs.body.data.some((l: any) => l.success === 0)).toBe(true);
+    expect(logs.body.data.some((l: any) => l.success === 1)).toBe(true);
+    const { token } = await createUser('peeker');
+    const denied = await request(app).get('/api/settings/login-logs').set('Authorization', `Bearer ${token}`);
+    expect(denied.status).toBe(403);
+  });
 });

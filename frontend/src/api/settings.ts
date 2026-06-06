@@ -15,8 +15,18 @@ export interface InviteCode {
   expires_at: string | null;
 }
 
+export interface LoginLog {
+  id: string;
+  username: string | null;
+  ip: string | null;
+  success: number;
+  reason: string | null;
+  created_at: string;
+}
+
 export const settingsApi = {
   getUsers: () => api.get<{ data: AdminUser[] }>('/settings/users'),
+  loginLogs: () => api.get<{ data: LoginLog[] }>('/settings/login-logs'),
   createInvite: () => api.post<{ data: { code: string; expiresAt: string } }>('/settings/users/invite'),
   listInvites: () => api.get<{ data: InviteCode[] }>('/settings/users/invites'),
   updateRole: (id: string, role: 'admin' | 'user') => api.put(`/settings/users/${id}/role`, { role }),

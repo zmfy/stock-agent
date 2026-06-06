@@ -18,6 +18,17 @@ const LOGIN_LOCK_MS = (Number(process.env.LOGIN_LOCK_MINUTES) || 15) * 60 * 1000
 const loginFails = new Map<string, { fails: number; lockedUntil: number }>();
 const loginKey = (req: Request, username: string) => `${String(username || '').toLowerCase()}|${req.ip}`;
 
+// 记录每次登录尝试（成功/失败），供管理员审计。
+function logLogin(username: string, userId: string | null, ip: string | undefined, success: boolean, reason: string): void {
+  try {
+    getDb()
+      .prepare('INSERT INTO login_logs (id, username, user_id, ip, success, reason) VALUES (?, ?, ?, ?, ?, ?)')
+      .run(uuidv4(), String(username || '').slice(0, 50), userId, ip ?? null, success ? 1 : 0, reason);
+  } catch {
+    /* 日志失败不应影响登录 */
+  }
+}
+
 const loginSchema = z.object({
   username: z.string().min(1).max(50),
   password: z.string().min(1).max(100),
@@ -48,6 +59,7 @@ router.post('/login', (req: Request, res: Response) => {
   if (rec && rec.lockedUntil > now) {
     const secs = Math.ceil((rec.lockedUntil - now) / 1000);
     res.set('Retry-After', String(secs));
+    logLogin(username, null, req.ip, false, '账户锁定中（失败次数过多）');
     return errorResponse(res, 429, 'RATE_LIMIT', `登录失败次数过多，请 ${Math.ceil(secs / 60)} 分钟后再试`);
   }
 
@@ -62,9 +74,11 @@ router.post('/login', (req: Request, res: Response) => {
     }
     loginFails.set(key, r);
     const left = Math.max(0, LOGIN_MAX_FAILS - r.fails);
+    logLogin(username, user?.id ?? null, req.ip, false, user ? '密码错误' : '用户名不存在');
     return errorResponse(res, 401, 'AUTH_UNAUTHORIZED', `用户名或密码错误${r.lockedUntil > now ? '，已临时锁定' : left <= 2 ? `（再错 ${left} 次将锁定）` : ''}`);
   }
   loginFails.delete(key); // 成功即清零
+  logLogin(username, user.id, req.ip, true, '登录成功');
   const tokens = generateTokens(user.id, user.role);
   successResponse(res, { user: { id: user.id, username: user.username, role: user.role, nickname: (user as any).nickname ?? null }, ...tokens }, '登录成功');
 });

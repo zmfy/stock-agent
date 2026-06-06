@@ -18,6 +18,15 @@ router.get('/users', authMiddleware, adminMiddleware, (_req: Request, res: Respo
   successResponse(res, users);
 });
 
+// GET /api/settings/login-logs — recent login attempts (admin), newest first
+router.get('/login-logs', authMiddleware, adminMiddleware, (req: Request, res: Response) => {
+  const limit = Math.min(Number(req.query.limit) || 100, 500);
+  const logs = getDb()
+    .prepare('SELECT id, username, ip, success, reason, created_at FROM login_logs ORDER BY created_at DESC LIMIT ?')
+    .all(limit);
+  successResponse(res, logs);
+});
+
 // POST /api/settings/users/invite — mint an invite code (admin), 8-char, 7-day expiry
 router.post('/users/invite', authMiddleware, adminMiddleware, (req: Request, res: Response) => {
   const db = getDb();

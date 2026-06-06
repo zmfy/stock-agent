@@ -103,13 +103,35 @@
 
       <p v-if="adminError" class="err">{{ adminError }}</p>
     </section>
+
+    <!-- ===== 登录日志（仅管理员） ===== -->
+    <section v-if="auth.isAdmin" class="card">
+      <div class="row-head">
+        <h2>登录日志</h2>
+        <button class="mini" @click="loadLogs">刷新</button>
+      </div>
+      <p class="hint">记录每次登录尝试（成功 / 失败 / 锁定），最近 100 条。</p>
+      <table v-if="logs.length" class="logs">
+        <thead><tr><th>时间</th><th>用户名</th><th>结果</th><th>说明</th><th>IP</th></tr></thead>
+        <tbody>
+          <tr v-for="l in logs" :key="l.id">
+            <td class="nowrap">{{ l.created_at }}</td>
+            <td>{{ l.username || '—' }}</td>
+            <td><span :class="['tag', l.success ? 'ok' : 'fail']">{{ l.success ? '成功' : '失败' }}</span></td>
+            <td>{{ l.reason || '' }}</td>
+            <td class="muted">{{ l.ip || '' }}</td>
+          </tr>
+        </tbody>
+      </table>
+      <p v-else class="muted">暂无登录记录。</p>
+    </section>
   </div>
 </template>
 
 <script setup lang="ts">
 import { reactive, ref, computed, onMounted } from 'vue';
 import { useAuthStore } from '../stores/auth';
-import { settingsApi, type AdminUser } from '../api/settings';
+import { settingsApi, type AdminUser, type LoginLog } from '../api/settings';
 import { accountApi, type Backup } from '../api/account';
 
 const auth = useAuthStore();
@@ -183,6 +205,16 @@ async function submitChangePwd() {
   } catch (e: any) {
     pwd.ok = false;
     pwd.msg = e.response?.data?.message || '修改失败';
+  }
+}
+
+// ---- admin: login logs ----
+const logs = ref<LoginLog[]>([]);
+async function loadLogs() {
+  try {
+    logs.value = (await settingsApi.loginLogs()).data.data;
+  } catch {
+    /* ignore */
   }
 }
 
@@ -278,7 +310,10 @@ onMounted(async () => {
   if (!auth.user) {
     try { await auth.fetchMe(); } catch { /* ignore */ }
   }
-  if (auth.isAdmin) await loadUsers();
+  if (auth.isAdmin) {
+    await loadUsers();
+    await loadLogs();
+  }
   await loadBackups();
 });
 </script>
@@ -310,6 +345,12 @@ onMounted(async () => {
 .tag { padding: 1px 8px; border-radius: 10px; font-size: 12px; }
 .tag.admin { background: #fde2e2; color: #c0392b; }
 .tag.user { background: #e8eef7; color: #34699a; }
+.tag.ok { background: #e3f6ea; color: #1f9d57; }
+.tag.fail { background: #fde2e2; color: #c0392b; }
+.row-head { display: flex; justify-content: space-between; align-items: center; }
+.logs { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 6px; display: block; max-height: 360px; overflow-y: auto; }
+.logs th, .logs td { text-align: left; padding: 5px 8px; border-bottom: 1px solid #eee; }
+.nowrap { white-space: nowrap; }
 .danger { color: #c00; }
 .reset { margin-top: 12px; padding: 12px; border: 1px dashed #ccc; border-radius: 6px; max-width: 320px; }
 button:disabled { opacity: 0.5; cursor: not-allowed; }

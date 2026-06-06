@@ -48,6 +48,17 @@ function initSchema(): void {
       value TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS login_logs (
+      id TEXT PRIMARY KEY,
+      username TEXT,
+      user_id TEXT,
+      ip TEXT,
+      success INTEGER NOT NULL,
+      reason TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_login_logs_time ON login_logs (created_at);
+
     CREATE TABLE IF NOT EXISTS rulebook_versions (
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL,
