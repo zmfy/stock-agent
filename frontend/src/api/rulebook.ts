@@ -84,4 +84,21 @@ export const rulebookApi = {
   activate: (id: string) => api.post(`/rulebook/versions/${id}/activate`),
   diff: (id: string, against?: string) =>
     api.get<{ data: RulebookDiff }>(`/rulebook/versions/${id}/diff${against ? `?against=${against}` : ''}`),
+  propose: (body: { instruction?: string; sessionId?: string }) =>
+    api.post<{ data: ProposeResult }>('/rulebook/propose', body),
+  apply: (versionLabel: string, proposal: any) =>
+    api.post<{ data: FullRulebook }>('/rulebook/apply', { versionLabel, proposal }),
 };
+
+export interface ProposeResult {
+  proposal: any;
+  delta: {
+    personaChanged: boolean;
+    gates: { added: string[]; removed: string[]; changed: { gate_key: string; from: any; to: any }[] };
+    softRules: { added: string[]; removed: string[] };
+    positionRulesChangedKeys: string[];
+  };
+  magnitude: 'major' | 'minor';
+  currentLabel: string;
+  suggestedLabel: string;
+}

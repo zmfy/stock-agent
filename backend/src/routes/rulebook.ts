@@ -4,6 +4,8 @@ import { authMiddleware } from '../middleware/auth';
 import { successResponse, errorResponse } from '../utils/response';
 import * as svc from '../rulebook/service';
 import { TEMPLATES } from '../rulebook/templates';
+import { proposeChange, applyProposal } from '../rulebook/propose-service';
+import { getMessages } from '../chat/service';
 
 const router = Router();
 router.use(authMiddleware);
@@ -111,6 +113,50 @@ router.get('/versions/:id/diff', (req: Request, res: Response) => {
   const diff = svc.diffVersions(userId, against, req.params.id);
   if (!diff) return errorResponse(res, 404, 'RESOURCE_NOT_FOUND', '版本不存在');
   successResponse(res, diff);
+});
+
+// POST /api/rulebook/propose { instruction, sessionId? } — agent drafts a change (NOT saved)
+router.post('/propose', async (req: Request, res: Response) => {
+  const parsed = z.object({ instruction: z.string().max(2000).optional(), sessionId: z.string().optional() }).safeParse(req.body);
+  if (!parsed.success) return errorResponse(res, 422, 'VALIDATION_ERROR', '参数校验失败');
+  let context = '';
+  if (parsed.data.sessionId) {
+    try {
+      const msgs = getMessages(req.user!.userId, parsed.data.sessionId);
+      context = msgs.map((m) => `${m.role === 'user' ? '用户' : '助手'}：${m.content}`).join('\n');
+    } catch {
+      /* session not found -> no context */
+    }
+  }
+  try {
+    const result = await proposeChange(req.user!.userId, parsed.data.instruction || '', { context });
+    successResponse(res, result);
+  } catch (e: any) {
+    if (e.message === 'NO_RULEBOOK') return errorResponse(res, 400, 'BUSINESS_CONFLICT', '请先导入或设定规则版本');
+    if (e.message === 'NO_MODEL') return errorResponse(res, 400, 'BUSINESS_CONFLICT', '请先在「AI 模型」配置并启用一个可用模型');
+    if (e.message === 'PARSE_FAILED') return errorResponse(res, 502, 'UPSTREAM_ERROR', 'agent 提议解析失败，请把诉求说得更具体些再试');
+    return errorResponse(res, 502, 'UPSTREAM_ERROR', `提议失败：${e.message || '未知错误'}`);
+  }
+});
+
+const applySchema = z.object({
+  versionLabel: z.string().min(1).max(40),
+  proposal: z.object({
+    persona: z.string(),
+    note: z.string().optional(),
+    gates: z.array(gateSchema),
+    softRules: z.array(softRuleSchema),
+    positionRules: z.record(z.unknown()),
+  }),
+});
+
+// POST /api/rulebook/apply { versionLabel, proposal } — user confirms -> create + activate
+router.post('/apply', (req: Request, res: Response) => {
+  const parsed = applySchema.safeParse(req.body);
+  if (!parsed.success) return errorResponse(res, 422, 'VALIDATION_ERROR', parsed.error.errors[0]?.message || '参数校验失败');
+  const p = parsed.data.proposal;
+  const rb = applyProposal(req.user!.userId, { persona: p.persona, note: p.note ?? '规则调整', gates: p.gates as any, softRules: p.softRules as any, positionRules: p.positionRules }, parsed.data.versionLabel);
+  successResponse(res, rb, '已采纳并升级版本', 201);
 });
 
 export default router;

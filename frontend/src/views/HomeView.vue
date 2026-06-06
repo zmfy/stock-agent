@@ -64,6 +64,30 @@
           </div>
           <div v-if="sending" class="msg assistant"><div class="bubble typing">思考中…</div></div>
         </div>
+        <!-- 核心原则：让 agent 提议修改 -->
+        <div v-if="active.kind === 'core_principle'" class="propose-bar">
+          <button class="propose-btn" :disabled="proposing" @click="propose">
+            {{ proposing ? 'agent 拟定中…' : '🛠 根据本次讨论，让 agent 提议修改规则' }}
+          </button>
+        </div>
+
+        <div v-if="proposal" class="proposal">
+          <h4>修改提议（{{ proposal.magnitude === 'major' ? '较大改动' : '微调' }}）：{{ proposal.currentLabel }} → <b>{{ proposal.suggestedLabel }}</b></h4>
+          <p v-if="proposal.delta.personaChanged">· 人设有改动</p>
+          <p v-for="c in proposal.delta.gates.changed" :key="c.gate_key">· 门槛 <b>{{ c.gate_key }}</b>：{{ c.from.threshold }} → {{ c.to.threshold }}</p>
+          <p v-for="k in proposal.delta.gates.added" :key="'a'+k">· 新增门槛 {{ k }}</p>
+          <p v-for="k in proposal.delta.gates.removed" :key="'r'+k">· 删除门槛 {{ k }}</p>
+          <p v-if="proposal.delta.softRules.added.length || proposal.delta.softRules.removed.length">· 软判断 +{{ proposal.delta.softRules.added.length }} / -{{ proposal.delta.softRules.removed.length }}</p>
+          <p v-if="proposal.delta.positionRulesChangedKeys.length">· 仓位规则改动：{{ proposal.delta.positionRulesChangedKeys.join('、') }}</p>
+          <p v-if="noChange" class="muted">无实质改动</p>
+          <p v-if="proposal.proposal.note" class="muted">理由：{{ proposal.proposal.note }}</p>
+          <div class="ops">
+            <button :disabled="applying || noChange" @click="applyProposal">采纳并升级到 {{ proposal.suggestedLabel }}</button>
+            <button @click="proposal = null">放弃</button>
+          </div>
+          <p v-if="applyMsg" class="ok-msg">{{ applyMsg }}</p>
+        </div>
+
         <div class="composer">
           <textarea v-model="input" rows="2" placeholder="输入消息，Enter 发送" @keydown.enter.exact.prevent="send"></textarea>
           <button :disabled="sending || !input.trim()" @click="send">发送</button>
@@ -75,11 +99,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, nextTick, onMounted } from 'vue';
+import { ref, computed, nextTick, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 import { chatApi, type ChatSession, type ChatMessage, type ChatKind } from '../api/chat';
-import { rulebookApi } from '../api/rulebook';
+import { rulebookApi, type ProposeResult } from '../api/rulebook';
 
 const auth = useAuthStore();
 const router = useRouter();
@@ -93,6 +117,44 @@ const chatErr = ref('');
 const queryCode = ref('');
 const needsInit = ref(false);
 const msgsEl = ref<HTMLElement | null>(null);
+
+// 核心原则修改提议
+const proposal = ref<ProposeResult | null>(null);
+const proposing = ref(false);
+const applying = ref(false);
+const applyMsg = ref('');
+const noChange = computed(() => {
+  const d = proposal.value?.delta;
+  return !!d && !d.personaChanged && !d.gates.changed.length && !d.gates.added.length && !d.gates.removed.length && !d.softRules.added.length && !d.softRules.removed.length && !d.positionRulesChangedKeys.length;
+});
+
+async function propose() {
+  if (!active.value) return;
+  proposing.value = true;
+  applyMsg.value = '';
+  chatErr.value = '';
+  try {
+    proposal.value = (await rulebookApi.propose({ sessionId: active.value.id })).data.data;
+  } catch (e: any) {
+    chatErr.value = e.response?.data?.message || '提议失败';
+  } finally {
+    proposing.value = false;
+  }
+}
+
+async function applyProposal() {
+  if (!proposal.value) return;
+  applying.value = true;
+  try {
+    await rulebookApi.apply(proposal.value.suggestedLabel, proposal.value.proposal);
+    applyMsg.value = `已采纳，规则升级到 ${proposal.value.suggestedLabel}`;
+    proposal.value = null;
+  } catch (e: any) {
+    chatErr.value = e.response?.data?.message || '采纳失败';
+  } finally {
+    applying.value = false;
+  }
+}
 
 function kindIcon(k: ChatKind) {
   return { general: '💬', core_principle: '📜', stock: '📊', morning: '📈', evening: '🌙' }[k] || '💬';
@@ -109,6 +171,8 @@ async function loadSessions() {
 async function open(s: ChatSession) {
   active.value = s;
   chatErr.value = '';
+  proposal.value = null;
+  applyMsg.value = '';
   messages.value = (await chatApi.getMessages(s.id)).data.data;
   scrollDown();
 }
@@ -213,6 +277,13 @@ onMounted(async () => {
 .msg.user .bubble { background: #d8e6ff; }
 .msg.assistant .bubble { background: #f2f2f2; }
 .typing { color: #999; }
+.propose-bar { margin: 6px 0; }
+.propose-btn { width: 100%; background: #fff7e6; border: 1px solid #ffe0a3; border-radius: 6px; padding: 8px; cursor: pointer; font-size: 13px; }
+.proposal { background: #f3faf3; border: 1px solid #cce8cc; border-radius: 8px; padding: 10px 12px; margin: 6px 0; font-size: 13px; }
+.proposal h4 { margin: 0 0 6px; }
+.proposal p { margin: 2px 0; }
+.proposal .ops { display: flex; gap: 8px; margin-top: 8px; }
+.ok-msg { color: #2a8a2a; }
 .composer { display: flex; gap: 8px; border-top: 1px solid #eee; padding-top: 8px; }
 .composer textarea { flex: 1; padding: 8px; resize: none; }
 .err { color: #c00; }
