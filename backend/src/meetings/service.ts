@@ -7,6 +7,7 @@ import { getModelForRole } from '../ai/service';
 import { getProvider } from '../ai/providers';
 import { chat } from '../ai/manager';
 import { getCorePersona, listProfiles } from '../agent/profiles-service';
+import { skillDirectives } from '../plugins/service';
 
 export type MeetingKind = 'morning' | 'evening';
 
@@ -106,10 +107,11 @@ export function buildMorningSynthPrompt(
   rulebook: string,
   dataOut: string,
   analysisOut: string,
-  qualOut: string
+  qualOut: string,
+  directives?: string
 ): string {
   return `${persona}
-
+${directives ? `\n${directives}\n` : ''}
 你是主 agent「来财」，正在主持盘前【早会】。三位子助手已分别汇报：
 〖数据员〗${dataOut}
 〖分析师〗${analysisOut}
@@ -171,10 +173,11 @@ export function buildEveningSynthPrompt(
   morning: string | null,
   dataOut: string,
   analysisOut: string,
-  reviewOut: string
+  reviewOut: string,
+  directives?: string
 ): string {
   return `${persona}
-
+${directives ? `\n${directives}\n` : ''}
 你是主 agent「来财」，正在主持盘后【晚会】复盘。子助手已分别汇报：
 〖数据员·今日实际〗${dataOut}
 〖分析师·对错判断〗${analysisOut}
@@ -227,7 +230,7 @@ export async function generateMorning(userId: string, opts: GenOpts = {}): Promi
   const dataOut = (await aiCall(buildMorningDataPrompt(personaOf(userId, 'data'), mkt.text, sec.text, news), 'data')).trim();
   const analysisOut = (await aiCall(buildMorningAnalysisPrompt(personaOf(userId, 'analysis'), mkt.text, rbText, dataOut), 'analysis')).trim();
   const qualOut = (await aiCall(buildMorningQualPrompt(personaOf(userId, 'qualitative'), mkt.text, sec.text, news), 'qualitative')).trim();
-  const coreOut = (await aiCall(buildMorningSynthPrompt(persona, mkt.text, rbText, dataOut, analysisOut, qualOut), 'core')).trim();
+  const coreOut = (await aiCall(buildMorningSynthPrompt(persona, mkt.text, rbText, dataOut, analysisOut, qualOut, skillDirectives(userId)), 'core')).trim();
 
   const content = [
     `🗣 早会讨论 · ${today()}`,
@@ -262,7 +265,7 @@ export async function generateEvening(userId: string, opts: GenOpts = {}): Promi
   const dataOut = (await aiCall(buildEveningDataPrompt(personaOf(userId, 'data'), mkt.text, sec.text), 'data')).trim();
   const analysisOut = (await aiCall(buildEveningAnalysisPrompt(personaOf(userId, 'analysis'), morning, dataOut), 'analysis')).trim();
   const reviewOut = (await aiCall(buildEveningReviewPrompt(personaOf(userId, 'review'), rbText, analysisOut, ops), 'review')).trim();
-  const coreOut = (await aiCall(buildEveningSynthPrompt(persona, mkt.text, morning, dataOut, analysisOut, reviewOut), 'core')).trim();
+  const coreOut = (await aiCall(buildEveningSynthPrompt(persona, mkt.text, morning, dataOut, analysisOut, reviewOut, skillDirectives(userId)), 'core')).trim();
 
   const content = [
     `🗣 晚会复盘 · ${today()}`,

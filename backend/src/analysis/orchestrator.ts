@@ -8,6 +8,7 @@ import { chat } from '../ai/manager';
 import { saveReport, getReport } from './report-service';
 import { getCorePersona } from '../agent/profiles-service';
 import { validateStock } from '../validation/service';
+import { skillDirectives } from '../plugins/service';
 
 export interface ParsedAnalysis {
   a_conclusion: string;
@@ -39,11 +40,13 @@ export function buildAnalysisPrompt(
   gateResults: GateResult[],
   softRules: SoftRule[],
   positionRules: Record<string, unknown>,
-  snapshot: StockSnapshot
+  snapshot: StockSnapshot,
+  directives?: string
 ): string {
   const softA = softRules.filter((s) => s.system === 'A').map((s) => `- ${s.text}`).join('\n');
   const softB = softRules.filter((s) => s.system === 'B').map((s) => `- ${s.text}`).join('\n');
   return `${persona}
+${directives ? `\n${directives}\n` : ''}
 
 下面是对股票 ${snapshot.code}${snapshot.name ? '（' + snapshot.name + '）' : ''} 的硬门槛逐条计算结果（这些数字已由系统精确算出，你【不得】自己重算或质疑数值，只基于它们判断）：
 
@@ -131,7 +134,7 @@ export async function runAnalysis(userId: string, code: string, opts: RunOptions
   const ev = evaluateGates(snapshot, rb.gates);
   // Main-agent persona now lives in agent_profiles (decoupled from the rulebook); fall back to the version persona.
   const persona = getCorePersona(userId) || rb.version.persona;
-  const prompt = buildAnalysisPrompt(persona, ev.gateResults, rb.softRules, rb.positionRules, snapshot);
+  const prompt = buildAnalysisPrompt(persona, ev.gateResults, rb.softRules, rb.positionRules, snapshot, skillDirectives(userId));
 
   const aiCall = opts.aiCall || ((p: string) => defaultAiCall(userId, p));
   const { raw, provider, model } = await aiCall(prompt);
