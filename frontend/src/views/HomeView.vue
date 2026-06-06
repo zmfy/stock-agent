@@ -55,12 +55,7 @@
       </ul>
 
       <div class="menu">
-        <router-link to="/analysis">选股分析</router-link>
-        <router-link to="/rulebook">核心规则</router-link>
-        <router-link to="/ai">AI 模型</router-link>
-        <router-link to="/plugins">能力插件</router-link>
-        <router-link to="/data">数据</router-link>
-        <router-link to="/settings">设置</router-link>
+        <button class="settings-entry" :class="{ active: settingsMode }" @click="enterSettings">⚙ 系统设置</button>
       </div>
       <div class="foot">
         <span class="muted">{{ auth.user?.username }}</span>
@@ -68,8 +63,28 @@
       </div>
     </aside>
 
-    <!-- 右侧聊天区 -->
+    <!-- 右侧：系统设置 或 聊天区 -->
     <main class="chat">
+      <!-- 系统设置（左栏不变，仅右侧切换） -->
+      <template v-if="settingsMode">
+        <div class="settings-top">
+          <button class="mini" @click="exitSettings">← 返回聊天</button>
+          <nav class="settings-nav">
+            <button v-for="s in SETTINGS" :key="s.key" :class="{ active: settingsKey === s.key }" @click="settingsKey = s.key">{{ s.label }}</button>
+          </nav>
+        </div>
+        <div class="settings-body">
+          <div v-if="!settingsKey" class="settings-menu">
+            <button v-for="s in SETTINGS" :key="s.key" class="scard" @click="settingsKey = s.key">
+              <span class="sicon">{{ s.icon }}</span>{{ s.label }}
+            </button>
+          </div>
+          <component v-else :is="currentSettingsComp" :key="settingsKey" />
+        </div>
+      </template>
+
+      <!-- 聊天 -->
+      <template v-else>
       <div v-if="needsInit" class="initbar">
         还没设定核心原则？<router-link to="/onboarding">去完成初始化设定 →</router-link>
       </div>
@@ -128,6 +143,7 @@
         </div>
         <p v-if="chatErr" class="err">{{ chatErr }}</p>
       </template>
+      </template>
     </main>
   </div>
 </template>
@@ -140,8 +156,34 @@ import { chatApi, type ChatSession, type ChatMessage, type ChatKind } from '../a
 import { rulebookApi, type ProposeResult } from '../api/rulebook';
 import { meetingsApi, type Meeting } from '../api/meetings';
 import { screenApi, type ScreenRun } from '../api/screen';
+import AnalysisView from './AnalysisView.vue';
+import RulebookView from './RulebookView.vue';
+import AiSettingsView from './AiSettingsView.vue';
+import PluginsView from './PluginsView.vue';
+import DataView from './DataView.vue';
+import SettingsView from './SettingsView.vue';
 
 const auth = useAuthStore();
+
+// 系统设置：右侧内嵌这些页面，左栏不变
+const SETTINGS = [
+  { key: 'analysis', label: '选股分析', icon: '📊', comp: AnalysisView },
+  { key: 'rulebook', label: '核心规则', icon: '📜', comp: RulebookView },
+  { key: 'ai', label: 'AI 模型', icon: '🤖', comp: AiSettingsView },
+  { key: 'plugins', label: '能力插件', icon: '🧩', comp: PluginsView },
+  { key: 'data', label: '数据', icon: '📈', comp: DataView },
+  { key: 'account', label: '账号设置', icon: '👤', comp: SettingsView },
+];
+const settingsMode = ref(false);
+const settingsKey = ref('');
+const currentSettingsComp = computed(() => SETTINGS.find((s) => s.key === settingsKey.value)?.comp);
+function enterSettings() {
+  settingsMode.value = true;
+  settingsKey.value = '';
+}
+function exitSettings() {
+  settingsMode.value = false;
+}
 const router = useRouter();
 
 const sessions = ref<ChatSession[]>([]);
@@ -216,6 +258,7 @@ async function loadSessions() {
   sessions.value = (await chatApi.listSessions()).data.data;
 }
 async function open(s: ChatSession) {
+  settingsMode.value = false;
   active.value = s;
   chatErr.value = '';
   proposal.value = null;
@@ -379,7 +422,21 @@ onMounted(async () => {
 .sessions li { padding: 6px 8px; border-radius: 6px; cursor: pointer; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sessions li.active { background: #eef; }
 .kind { margin-right: 4px; }
-.menu { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px 4px; border-top: 1px solid #eee; font-size: 12px; }
+.menu { padding: 8px 4px; border-top: 1px solid #eee; }
+.settings-entry { width: 100%; text-align: left; background: #f2f2f2; border: 1px solid #e0e0e0; border-radius: 6px; padding: 8px 10px; font-size: 13px; cursor: pointer; }
+.settings-entry.active { background: #e6e6ff; border-color: #c9c9f0; }
+.settings-top { display: flex; align-items: center; gap: 12px; border-bottom: 1px solid #eee; padding-bottom: 8px; flex-wrap: wrap; }
+.settings-nav { display: flex; gap: 6px; flex-wrap: wrap; }
+.settings-nav button { background: none; border: 1px solid #ddd; border-radius: 14px; padding: 3px 10px; font-size: 12px; cursor: pointer; }
+.settings-nav button.active { background: #333; color: #fff; border-color: #333; }
+.settings-body { flex: 1; overflow-y: auto; }
+.settings-menu { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; padding: 20px; }
+.scard { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 20px; border: 1px solid #e5e5e5; border-radius: 10px; cursor: pointer; font-size: 14px; background: #fafafa; }
+.scard:hover { background: #f0f0ff; }
+.sicon { font-size: 24px; }
+/* 内嵌设置页隐藏其自身的顶部标题/返回，避免与上方导航重复 */
+.settings-body :deep(.bar) { display: none; }
+.menu-old { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px 4px; border-top: 1px solid #eee; font-size: 12px; }
 .foot { display: flex; justify-content: space-between; align-items: center; padding-top: 6px; border-top: 1px solid #eee; }
 .mini { font-size: 12px; background: none; border: 1px solid #ddd; border-radius: 6px; padding: 2px 6px; cursor: pointer; }
 .muted { color: #999; font-size: 12px; }
