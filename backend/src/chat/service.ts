@@ -5,7 +5,7 @@ import { getProvider } from '../ai/providers';
 import { chat } from '../ai/manager';
 import { getCorePersona } from '../agent/profiles-service';
 import { runAnalysis } from '../analysis/orchestrator';
-import { getLatestReportByCode } from '../analysis/report-service';
+import { getLatestReportByCode, deleteReportsByCode, deleteAllReports } from '../analysis/report-service';
 import { getTodayContent } from '../meetings/service';
 import { getActive } from '../rulebook/service';
 
@@ -61,6 +61,17 @@ export function deleteSession(userId: string, sessionId: string): void {
   const db = getDb();
   db.prepare('DELETE FROM chat_messages WHERE session_id = ?').run(sessionId);
   db.prepare('DELETE FROM chat_sessions WHERE id = ?').run(sessionId);
+  // Clearing a stock window also clears the agent's "memory" of that stock (its analysis reports).
+  if (s.kind === 'stock' && s.ref_id) deleteReportsByCode(userId, s.ref_id);
+}
+
+// Clear all chat windows and the agent's stock memory (reports) for this user.
+export function clearAll(userId: string): void {
+  const db = getDb();
+  const ids = (db.prepare('SELECT id FROM chat_sessions WHERE user_id = ?').all(userId) as { id: string }[]).map((r) => r.id);
+  for (const id of ids) db.prepare('DELETE FROM chat_messages WHERE session_id = ?').run(id);
+  db.prepare('DELETE FROM chat_sessions WHERE user_id = ?').run(userId);
+  deleteAllReports(userId);
 }
 
 function addMessage(sessionId: string, role: ChatMessage['role'], content: string): ChatMessage {
@@ -117,6 +128,10 @@ export async function analyzeStockSession(userId: string, sessionId: string): Pr
   if (!session) throw new Error('NOT_FOUND');
   if (session.kind !== 'stock' || !session.ref_id) throw new Error('NOT_STOCK');
   const report = await runAnalysis(userId, session.ref_id);
+  // Show name + code in the session title (rail) once we know the name.
+  if (report?.stock_name) {
+    getDb().prepare('UPDATE chat_sessions SET title = ? WHERE id = ?').run(`${report.stock_name} ${session.ref_id}`, sessionId);
+  }
   const summary = `${reportContext(report)}\n\n你可以继续追问这只股票（估值、买点、仓位、与同类比较等）。`;
   const message = addMessage(sessionId, 'assistant', summary);
   return { report, message };

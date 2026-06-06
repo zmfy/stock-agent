@@ -48,14 +48,16 @@
       <!-- 会话列表 -->
       <div class="sect-head">对话 <button class="mini" @click="newGeneral">＋新对话</button></div>
       <ul class="sessions">
-        <li v-for="s in sessions" :key="s.id" :class="{ active: active?.id === s.id }" @click="open(s)">
+        <li v-for="s in sessions" :key="s.id" :class="{ active: active?.id === s.id }"
+            @click="open(s)" @mouseenter="startHover(s.id)" @mouseleave="endHover">
           <span class="kind">{{ kindIcon(s.kind) }}</span>
           <span class="stitle">{{ s.title || sessionLabel(s) }}</span>
-          <button class="del" title="删除" @click.stop="removeSession(s)">×</button>
+          <button v-show="hoverDelId === s.id" class="del" title="删除（含清空该股记忆）" @click.stop="removeSession(s)">×</button>
         </li>
       </ul>
 
       <div class="menu">
+        <button v-if="sessions.length" class="settings-entry clearall" @click="clearAllChats">🧹 清空所有对话</button>
         <button class="settings-entry" :class="{ active: settingsMode }" @click="enterSettings">⚙ 系统设置</button>
       </div>
       <div class="foot">
@@ -163,6 +165,7 @@ import AiSettingsView from './AiSettingsView.vue';
 import PluginsView from './PluginsView.vue';
 import DataView from './DataView.vue';
 import SettingsView from './SettingsView.vue';
+import MeetingsHistoryView from './MeetingsHistoryView.vue';
 
 const auth = useAuthStore();
 
@@ -173,6 +176,7 @@ const SETTINGS = [
   { key: 'ai', label: 'AI 模型', icon: '🤖', comp: AiSettingsView },
   { key: 'plugins', label: '能力插件', icon: '🧩', comp: PluginsView },
   { key: 'data', label: '数据', icon: '📈', comp: DataView },
+  { key: 'meetings', label: '早晚会历史', icon: '🗓', comp: MeetingsHistoryView },
   { key: 'account', label: '账号设置', icon: '👤', comp: SettingsView },
 ];
 const settingsMode = ref(false);
@@ -301,6 +305,8 @@ async function doAnalyze(s: ChatSession) {
   try {
     await chatApi.analyze(s.id);
     messages.value = (await chatApi.getMessages(s.id)).data.data;
+    await loadSessions(); // refresh the rail title (now includes the stock name)
+    active.value = sessions.value.find((x) => x.id === s.id) || active.value;
     scrollDown();
   } catch (e: any) {
     chatErr.value = e.response?.data?.message || '分析失败';
@@ -308,13 +314,36 @@ async function doAnalyze(s: ChatSession) {
     analyzing.value = false;
   }
 }
+// delete button appears after hovering ~3s, hides on leave
+const hoverDelId = ref<string | null>(null);
+let hoverTimer: ReturnType<typeof setTimeout> | null = null;
+function startHover(id: string) {
+  if (hoverTimer) clearTimeout(hoverTimer);
+  hoverTimer = setTimeout(() => {
+    hoverDelId.value = id;
+  }, 3000);
+}
+function endHover() {
+  if (hoverTimer) clearTimeout(hoverTimer);
+  hoverDelId.value = null;
+}
+
 async function removeSession(s: ChatSession) {
-  if (!confirm(`删除「${s.title || sessionLabel(s)}」？`)) return;
+  if (!confirm(`删除「${s.title || sessionLabel(s)}」？${s.kind === 'stock' ? '（同时清空 agent 对该股的记忆/分析）' : ''}`)) return;
   await chatApi.deleteSession(s.id);
   if (active.value?.id === s.id) {
     active.value = null;
     messages.value = [];
   }
+  hoverDelId.value = null;
+  await loadSessions();
+}
+
+async function clearAllChats() {
+  if (!confirm('清空所有对话？同时会清空 agent 对这些股票的记忆（分析报告）。')) return;
+  await chatApi.clearAll();
+  active.value = null;
+  messages.value = [];
   await loadSessions();
 }
 
@@ -463,9 +492,9 @@ onMounted(async () => {
 .sessions li.active { background: #eef; }
 .kind { flex: none; }
 .stitle { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.del { flex: none; border: none; background: none; color: #bbb; cursor: pointer; font-size: 15px; line-height: 1; padding: 0 2px; visibility: hidden; }
-.sessions li:hover .del { visibility: visible; }
+.del { flex: none; border: none; background: none; color: #bbb; cursor: pointer; font-size: 15px; line-height: 1; padding: 0 2px; }
 .del:hover { color: #c00; }
+.clearall { background: #fff3f3; border-color: #f3d0d0; margin-bottom: 6px; }
 .menu { padding: 8px 4px; border-top: 1px solid #eee; }
 .settings-entry { width: 100%; text-align: left; background: #f2f2f2; border: 1px solid #e0e0e0; border-radius: 6px; padding: 8px 10px; font-size: 13px; cursor: pointer; }
 .settings-entry.active { background: #e6e6ff; border-color: #c9c9f0; }

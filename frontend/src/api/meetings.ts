@@ -11,4 +11,5 @@ export interface Meeting {
 export const meetingsApi = {
   today: () => api.get<{ data: { morning: Meeting | null; evening: Meeting | null } }>('/meetings/today'),
   generate: (kind: 'morning' | 'evening') => api.post<{ data: Meeting }>('/meetings/generate', { kind }),
+  list: () => api.get<{ data: Meeting[] }>('/meetings/list'),
 };

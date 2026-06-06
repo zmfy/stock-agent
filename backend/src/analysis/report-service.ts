@@ -71,6 +71,14 @@ export function getReport(userId: string, id: string): any | null {
   return hydrate(row);
 }
 
+export function deleteReportsByCode(userId: string, code: string): void {
+  getDb().prepare('DELETE FROM reports WHERE user_id = ? AND stock_code = ?').run(userId, code);
+}
+
+export function deleteAllReports(userId: string): void {
+  getDb().prepare('DELETE FROM reports WHERE user_id = ?').run(userId);
+}
+
 export function getLatestReportByCode(userId: string, code: string): any | null {
   const row = getDb()
     .prepare('SELECT * FROM reports WHERE user_id = ? AND stock_code = ? ORDER BY created_at DESC LIMIT 1')

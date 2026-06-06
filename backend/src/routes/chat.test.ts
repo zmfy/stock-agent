@@ -102,6 +102,16 @@ describe('chat routes', () => {
     jest.restoreAllMocks();
   });
 
+  it('clear-all deletes every session for the user', async () => {
+    await request(app).post('/api/chat/sessions').set(h(tok)).send({ kind: 'general' });
+    const before = await request(app).get('/api/chat/sessions').set(h(tok));
+    expect(before.body.data.length).toBeGreaterThan(0);
+    const del = await request(app).delete('/api/chat/sessions').set(h(tok));
+    expect(del.status).toBe(200);
+    const after = await request(app).get('/api/chat/sessions').set(h(tok));
+    expect(after.body.data).toHaveLength(0);
+  });
+
   it("cannot read another user's session", async () => {
     const s = await request(app).post('/api/chat/sessions').set(h(tok)).send({ kind: 'general' });
     const res = await request(app).get(`/api/chat/sessions/${s.body.data.id}/messages`).set(h(userTok));

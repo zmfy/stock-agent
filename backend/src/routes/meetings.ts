@@ -12,6 +12,11 @@ router.get('/today', (req: Request, res: Response) => {
   successResponse(res, svc.getToday(req.user!.userId));
 });
 
+// GET /api/meetings/list — past meetings (history)
+router.get('/list', (req: Request, res: Response) => {
+  successResponse(res, svc.listMeetings(req.user!.userId));
+});
+
 // POST /api/meetings/generate { kind } — manually run a meeting now
 router.post('/generate', async (req: Request, res: Response) => {
   const parsed = z.object({ kind: z.enum(['morning', 'evening']) }).safeParse(req.body);

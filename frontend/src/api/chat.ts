@@ -29,4 +29,5 @@ export const chatApi = {
     api.post<{ data: ChatMessage }>(`/chat/sessions/${id}/messages`, { content }),
   analyze: (id: string) => api.post<{ data: { report: any; message: ChatMessage } }>(`/chat/sessions/${id}/analyze`),
   deleteSession: (id: string) => api.delete(`/chat/sessions/${id}`),
+  clearAll: () => api.delete('/chat/sessions'),
 };

@@ -62,6 +62,12 @@ router.post('/sessions/:id/analyze', async (req: Request, res: Response) => {
   }
 });
 
+// DELETE /api/chat/sessions — clear ALL chats + stock memory
+router.delete('/sessions', (req: Request, res: Response) => {
+  chat.clearAll(req.user!.userId);
+  successResponse(res, null, '已清空全部对话');
+});
+
 // DELETE /api/chat/sessions/:id
 router.delete('/sessions/:id', (req: Request, res: Response) => {
   chat.deleteSession(req.user!.userId, req.params.id);

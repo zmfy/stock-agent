@@ -132,6 +132,12 @@ export function getToday(userId: string): { morning: any | null; evening: any | 
   return { morning: m ?? null, evening: e ?? null };
 }
 
+export function listMeetings(userId: string, limit = 30): any[] {
+  return getDb()
+    .prepare('SELECT id, kind, date, content, created_at FROM meetings WHERE user_id = ? ORDER BY date DESC, kind LIMIT ?')
+    .all(userId, limit);
+}
+
 export function getTodayContent(userId: string, kind: MeetingKind): string | null {
   const db = getDb();
   const row = db.prepare('SELECT content FROM meetings WHERE user_id = ? AND kind = ? AND date = ?').get(userId, kind, today()) as
