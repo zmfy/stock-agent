@@ -106,6 +106,11 @@ router.get('/sources', (req: Request, res: Response) => {
   successResponse(res, sources.listSources(req.user!.userId));
 });
 
+// GET /api/data/sources/catalog — recommended sources not yet added
+router.get('/sources/catalog', (req: Request, res: Response) => {
+  successResponse(res, sources.catalog(req.user!.userId));
+});
+
 // POST /api/data/sources { name, baseUrl, priority? }
 router.post('/sources', (req: Request, res: Response) => {
   const parsed = z.object({ name: z.string().min(1).max(60), baseUrl: z.string().url(), priority: z.number().int().optional() }).safeParse(req.body);

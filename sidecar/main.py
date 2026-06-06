@@ -156,6 +156,38 @@ def sector_cons(name: str):
         return []
 
 
+def _mkt_prefix(code: str) -> str:
+    code = code[-6:]
+    return ("sh" if code[0] == "6" else "sz") + code
+
+
+@app.get("/sina/quote/{code}")
+def sina_quote(code: str, days: int = 120):
+    """行情(收盘价)来自新浪，用于交叉验证。"""
+    try:
+        df = ak.stock_zh_a_daily(symbol=_mkt_prefix(code), adjust="qfq").tail(days)
+        return [{"date": str(r.get("date")), "open": _f(r.get("open")), "high": _f(r.get("high")), "low": _f(r.get("low")), "close": _f(r.get("close")), "volume": _f(r.get("volume"))} for _, r in df.iterrows()]
+    except Exception:
+        return []
+
+
+@app.get("/tx/quote/{code}")
+def tx_quote(code: str, days: int = 120):
+    """行情(收盘价)来自腾讯，用于交叉验证。"""
+    try:
+        df = ak.stock_zh_a_hist_tx(symbol=_mkt_prefix(code)).tail(days)
+        return [{"date": str(r.get("date")), "open": _f(r.get("open")), "high": _f(r.get("high")), "low": _f(r.get("low")), "close": _f(r.get("close")), "volume": _f(r.get("amount"))} for _, r in df.iterrows()]
+    except Exception:
+        return []
+
+
+# Provider-prefixed name/health so '/sina' and '/tx' bases also answer those calls.
+@app.get("/sina/name/{code}")
+@app.get("/tx/name/{code}")
+def provider_name(code: str):
+    return stock_name(code)
+
+
 @app.get("/market/sentiment")
 def market_sentiment():
     out = {"limit_up_count": None, "limit_down_count": None, "sse_ma20_slope": None}

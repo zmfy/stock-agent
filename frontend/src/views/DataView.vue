@@ -28,10 +28,18 @@
           </tr>
         </tbody>
       </table>
+      <div v-if="catalog.length" class="catalog">
+        <div class="chint">推荐数据源（一键添加）：</div>
+        <div v-for="c in catalog" :key="c.base_url" class="crow">
+          <span><b>{{ c.name }}</b> <span class="muted">— {{ c.note }}</span></span>
+          <button @click="addRecommended(c)" :disabled="busy">添加</button>
+        </div>
+      </div>
+
       <div class="row addsrc">
-        <input v-model="newSrc.name" placeholder="数据源名称" />
-        <input v-model="newSrc.url" placeholder="https://地址" />
-        <button @click="addSource" :disabled="busy">添加数据源</button>
+        <input v-model="newSrc.name" placeholder="自定义数据源名称" />
+        <input v-model="newSrc.url" placeholder="https://地址（同接口的服务）" />
+        <button @click="addSource" :disabled="busy">添加自定义</button>
       </div>
       <p v-if="srcMsg" :class="srcOk ? 'ok-msg' : 'err'">{{ srcMsg }}</p>
     </section>
@@ -202,6 +210,7 @@ async function collectNews() {
 
 // ---- data source management ----
 const dsources = ref<DataSource[]>([]);
+const catalog = ref<Array<{ name: string; base_url: string; note: string }>>([]);
 const newSrc = ref({ name: '', url: '' });
 const srcMsg = ref('');
 const srcOk = ref(false);
@@ -209,7 +218,18 @@ const srcOk = ref(false);
 async function loadSources() {
   try {
     dsources.value = (await dataApi.listSources()).data.data;
+    catalog.value = (await dataApi.catalog()).data.data;
   } catch { /* ignore */ }
+}
+async function addRecommended(c: { name: string; base_url: string }) {
+  busy.value = true; srcMsg.value = '';
+  try {
+    await dataApi.addSource(c.name, c.base_url);
+    srcOk.value = true; srcMsg.value = `已添加 ${c.name}`;
+    await loadSources(); await loadSource();
+  } catch (e: any) {
+    srcOk.value = false; srcMsg.value = e.response?.data?.message || '添加失败';
+  } finally { busy.value = false; }
 }
 async function addSource() {
   srcMsg.value = '';
@@ -279,5 +299,8 @@ input { padding: 5px; }
 .srctable .pri { width: 60px; }
 .tag { font-size: 11px; background: #eef; color: #446; border-radius: 8px; padding: 1px 6px; }
 .addsrc input { flex: 1; }
+.catalog { background: #f7faf7; border: 1px solid #e0eee0; border-radius: 6px; padding: 8px 10px; margin: 8px 0; }
+.chint { font-size: 12px; color: #666; margin-bottom: 4px; }
+.crow { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 13px; padding: 3px 0; }
 button:disabled { opacity: 0.5; }
 </style>

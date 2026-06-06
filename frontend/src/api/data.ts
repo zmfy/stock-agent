@@ -46,6 +46,7 @@ export const dataApi = {
   getNews: () => api.get<{ data: NewsItem[] }>('/data/news'),
   refreshNews: () => api.post<{ data: { inserted: number; news: NewsItem[] } }>('/data/news/refresh'),
   listSources: () => api.get<{ data: DataSource[] }>('/data/sources'),
+  catalog: () => api.get<{ data: Array<{ name: string; base_url: string; note: string }> }>('/data/sources/catalog'),
   addSource: (name: string, baseUrl: string) => api.post('/data/sources', { name, baseUrl }),
   updateSource: (id: string, body: { enabled?: boolean; priority?: number; name?: string; baseUrl?: string }) => api.put(`/data/sources/${id}`, body),
   deleteSource: (id: string) => api.delete(`/data/sources/${id}`),
