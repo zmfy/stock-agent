@@ -48,6 +48,8 @@ export const dataApi = {
   stockSearch: (q: string) => api.get<{ data: Array<{ code: string; name: string }> }>(`/data/stocks/search?q=${encodeURIComponent(q)}`),
   stockSyncStatus: () => api.get<{ data: { state: string; total: number; done: number; message: string; count: number; updated_at?: string } }>('/data/stocks/sync-status'),
   stockSync: () => api.post('/data/stocks/sync'),
+  eodStatus: () => api.get<{ data: { state: string; total: number; done: number; message: string; updated_at?: string } }>('/data/eod/status'),
+  eodIngest: (days?: number, codes?: string[]) => api.post('/data/eod/ingest', { days, codes }),
   listSources: () => api.get<{ data: DataSource[] }>('/data/sources'),
   catalog: () => api.get<{ data: Array<{ name: string; base_url: string; note: string }> }>('/data/sources/catalog'),
   addSource: (name: string, baseUrl: string) => api.post('/data/sources', { name, baseUrl }),

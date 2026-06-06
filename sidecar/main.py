@@ -211,25 +211,39 @@ def fundamentals(code: str):
     return out
 
 
+def _bs_quote(code: str, days: int):
+    if not _ensure_bs():
+        return None
+    try:
+        start = (datetime.now() - timedelta(days=days * 2 + 20)).strftime("%Y-%m-%d")
+        rs = bs.query_history_k_data_plus(_bs_code(code), "date,open,high,low,close,volume", start_date=start, frequency="d", adjustflag="2")
+        rows = []
+        while rs and rs.error_code == "0" and rs.next():
+            d = rs.get_row_data()
+            rows.append({"date": d[0], "open": _f(d[1]), "high": _f(d[2]), "low": _f(d[3]), "close": _f(d[4]), "volume": _f(d[5])})
+        return rows[-days:] if rows else []
+    except Exception:
+        return None
+
+
+def _ak_quote(code: str, days: int):
+    try:
+        hist = ak.stock_zh_a_hist(symbol=code, period="daily", adjust="qfq").tail(days)
+        return [
+            {"date": str(r.get("日期")), "open": _f(r.get("开盘")), "high": _f(r.get("最高")), "low": _f(r.get("最低")), "close": _f(r.get("收盘")), "volume": _f(r.get("成交量"))}
+            for _, r in hist.iterrows()
+        ]
+    except Exception:
+        return None
+
+
 @app.get("/quote/{code}")
 def quote(code: str, days: int = 120):
     code = code[-6:]
-    try:
-        hist = ak.stock_zh_a_hist(symbol=code, period="daily", adjust="qfq")
-        hist = hist.tail(days)
-        rows = []
-        for _, r in hist.iterrows():
-            rows.append({
-                "date": str(r.get("日期")),
-                "open": _f(r.get("开盘")),
-                "high": _f(r.get("最高")),
-                "low": _f(r.get("最低")),
-                "close": _f(r.get("收盘")),
-                "volume": _f(r.get("成交量")),
-            })
+    rows = _timed(lambda: _bs_quote(code, days), 10)  # BaoStock primary (reliable EOD)
+    if rows:
         return rows
-    except Exception:
-        return []
+    return _timed(lambda: _ak_quote(code, days), 10) or []  # AkShare fallback
 
 
 @app.get("/news")

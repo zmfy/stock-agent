@@ -4,8 +4,9 @@ dist/
 .env
 .env.*
 !.env.example
-data/
-**/data/
+# runtime SQLite data dir (NOT the source dir backend/src/data)
+/data/
+/backend/data/
 *.db
 *.sqlite
 *.db-shm

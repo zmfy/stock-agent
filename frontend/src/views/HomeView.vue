@@ -578,10 +578,10 @@ onMounted(async () => {
 .suggest li:hover { background: #eef; }
 .sect-head { display: flex; justify-content: space-between; align-items: center; margin: 12px 0 4px; font-size: 12px; color: #999; }
 .sessions { list-style: none; padding: 0; margin: 0; flex: 1; }
-.sessions li { display: flex; align-items: center; gap: 4px; padding: 6px 8px; border-radius: 6px; cursor: pointer; font-size: 13px; }
+.sessions li { display: flex; flex-wrap: nowrap; align-items: center; gap: 4px; padding: 6px 8px; border-radius: 6px; cursor: pointer; font-size: 13px; }
 .sessions li.active { background: #eef; }
 .kind { flex: none; }
-.stitle { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stitle { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .del { flex: none; border: none; background: none; color: #bbb; cursor: pointer; font-size: 15px; line-height: 1; padding: 0 2px; }
 .del:hover { color: #c00; }
 .pin { flex: none; border: none; background: none; cursor: pointer; font-size: 12px; line-height: 1; padding: 0 1px; opacity: 0.25; filter: grayscale(1); }

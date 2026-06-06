@@ -56,6 +56,21 @@
     </section>
 
     <section class="card">
+      <h2>行情数据（本地）</h2>
+      <p class="hint">后台批量把全量 A 股的日线行情拉到本地缓存，分析时直接读本地、不再实时联网。每天晚上自动增量更新；漏取或没取下来的可手动补漏。</p>
+      <div class="row">
+        <span>状态：{{ eodStateCn }}</span>
+        <button @click="doEod(250)" :disabled="eod.state === 'running'">首次拉取历史（约一年）</button>
+        <button @click="doEod(10)" :disabled="eod.state === 'running'">更新最近 / 补漏</button>
+      </div>
+      <div v-if="eod.state === 'running'" class="muted">
+        {{ eod.message }}（{{ eod.done }}/{{ eod.total }}）
+        <div class="pbar"><i :style="{ width: eodPct + '%' }"></i></div>
+      </div>
+      <div v-else-if="eod.message" class="muted">{{ eod.message }}</div>
+    </section>
+
+    <section class="card">
       <h2>数据采集</h2>
       <div class="row">
         <button @click="refreshMarket" :disabled="busy">刷新大盘/情绪数据</button>
@@ -307,12 +322,32 @@ async function doStockSync() {
     if (sync.state !== 'running' && syncPoll) { clearInterval(syncPoll); syncPoll = null; }
   }, 1500);
 }
-onUnmounted(() => { if (syncPoll) clearInterval(syncPoll); });
+// ---- EOD (local quote) ingestion ----
+const eod = reactive({ state: 'idle', total: 0, done: 0, message: '' });
+let eodPoll: ReturnType<typeof setInterval> | null = null;
+const eodStateCn = computed(() => ({ idle: '未拉取', running: '拉取中', done: '已完成', error: '出错' }[eod.state] || eod.state));
+const eodPct = computed(() => (eod.total ? Math.round((eod.done / eod.total) * 100) : 0));
+async function loadEodStatus() {
+  try { Object.assign(eod, (await dataApi.eodStatus()).data.data); } catch { /* ignore */ }
+}
+async function doEod(days: number) {
+  if (days >= 200 && !confirm(`将为本地全量 A 股拉取约一年的历史行情，可能耗时较久（数千只股票）。确定开始？`)) return;
+  await dataApi.eodIngest(days);
+  eod.state = 'running';
+  if (eodPoll) clearInterval(eodPoll);
+  eodPoll = setInterval(async () => {
+    await loadEodStatus();
+    if (eod.state !== 'running' && eodPoll) { clearInterval(eodPoll); eodPoll = null; }
+  }, 2000);
+}
+
+onUnmounted(() => { if (syncPoll) clearInterval(syncPoll); if (eodPoll) clearInterval(eodPoll); });
 
 onMounted(async () => {
   await loadSource();
   await loadSources();
   await loadSyncStatus();
+  await loadEodStatus();
   try {
     news.value = (await dataApi.getNews()).data.data;
   } catch { /* ignore */ }
@@ -327,7 +362,10 @@ onMounted(async () => {
 .banner.warn { background: #fff7e6; border: 1px solid #ffe0a3; }
 .card { border: 1px solid #e5e5e5; border-radius: 8px; padding: 16px; margin-top: 16px; }
 .hint { color: #777; font-size: 12px; }
-.row { display: flex; gap: 8px; }
+.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.muted { color: #777; font-size: 12px; margin-top: 8px; }
+.pbar { height: 6px; background: #eee; border-radius: 3px; margin-top: 6px; overflow: hidden; }
+.pbar i { display: block; height: 100%; background: #2a8a2a; transition: width .3s; }
 input { padding: 5px; }
 .snap { width: 100%; border-collapse: collapse; margin-top: 10px; }
 .snap th, .snap td { text-align: left; padding: 5px 8px; border-bottom: 1px solid #eee; font-size: 13px; }

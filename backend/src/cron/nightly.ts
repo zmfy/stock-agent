@@ -20,6 +20,9 @@ async function runNightly(): Promise<void> {
     for (const code of codes) {
       await data.refreshStock(userId, code).catch(() => {});
     }
+    // Pull the previous day's quotes for the whole local universe into the local cache.
+    // Incremental (days=10) so gaps from a missed night get filled; full backfill is manual.
+    await data.ingestEod(userId, { days: 10 }).catch(() => {});
     console.log(`[cron] nightly refresh done — market=${market}, codes=${codes.length}`);
   } catch (e) {
     console.error('[cron] nightly refresh failed', e);

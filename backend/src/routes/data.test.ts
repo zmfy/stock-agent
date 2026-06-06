@@ -53,6 +53,25 @@ describe('data routes', () => {
     expect(snap.body.data._missing).toEqual(expect.arrayContaining(['roe_ttm', 'pe']));
   });
 
+  it('eod status starts idle and ingest with an empty universe reports an error', async () => {
+    const st0 = await request(app).get('/api/data/eod/status').set(h());
+    expect(st0.status).toBe(200);
+    expect(st0.body.data.state).toBe('idle');
+
+    // No stock_names seeded in this test DB -> ingestEod short-circuits to an error state.
+    const ing = await request(app).post('/api/data/eod/ingest').set(h()).send({ days: 5 });
+    expect(ing.status).toBe(200);
+    await new Promise((r) => setTimeout(r, 50));
+    const st1 = await request(app).get('/api/data/eod/status').set(h());
+    expect(st1.body.data.state).toBe('error');
+    expect(st1.body.data.message).toContain('股票库');
+  });
+
+  it('eod ingest rejects an out-of-range days value', async () => {
+    const res = await request(app).post('/api/data/eod/ingest').set(h()).send({ days: 99999 });
+    expect(res.status).toBe(422);
+  });
+
   it('source endpoint reports the built-in data source as configured', async () => {
     (global as any).fetch = jest.fn(() => Promise.reject(new Error('no-net')));
     const res = await request(app).get('/api/data/source').set(h());

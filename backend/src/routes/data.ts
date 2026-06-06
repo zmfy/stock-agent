@@ -161,6 +161,22 @@ router.post('/stocks/sync', (req: Request, res: Response) => {
   successResponse(res, null, '已在后台开始同步股票库');
 });
 
+// ---- EOD batch ingestion (本地行情库) ----
+// GET /api/data/eod/status — progress of the daily-quote ingestion job
+router.get('/eod/status', (_req: Request, res: Response) => {
+  successResponse(res, svc.getSyncStatus('eod') || { state: 'idle' });
+});
+
+// POST /api/data/eod/ingest { days?, codes? } — start a background pull (returns immediately)
+router.post('/eod/ingest', (req: Request, res: Response) => {
+  const parsed = z
+    .object({ days: z.number().int().min(1).max(2000).optional(), codes: z.array(z.string()).optional() })
+    .safeParse(req.body ?? {});
+  if (!parsed.success) return errorResponse(res, 422, 'VALIDATION_ERROR', '参数校验失败');
+  void svc.ingestEod(req.user!.userId, parsed.data); // fire-and-forget
+  successResponse(res, null, '已在后台开始拉取行情数据');
+});
+
 // GET /api/data/source — is the sidecar configured + healthy?
 router.get('/source', async (req: Request, res: Response) => {
   const base = resolveSidecarBase(req.user!.userId);
