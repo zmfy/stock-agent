@@ -14,7 +14,7 @@
           <span class="kind">{{ kindIcon(s.kind) }}</span>
           <span class="stitle">{{ s.title || sessionLabel(s) }}</span>
           <button class="pin" :class="{ on: s.pinned === 1 }" :title="s.pinned === 1 ? '取消置顶' : '置顶'" @click.stop="togglePin(s)">📌</button>
-          <button v-show="hoverDelId === s.id" class="del" title="删除（含清空该股记忆）" @click.stop="removeSession(s)">×</button>
+          <button v-show="hoverDelId === s.id" class="del" title="删除会话（分析历史保留）" @click.stop="removeSession(s)">×</button>
         </li>
       </ul>
 
@@ -426,7 +426,7 @@ async function togglePin(s: ChatSession) {
 }
 
 async function removeSession(s: ChatSession) {
-  if (!confirm(`删除「${s.title || sessionLabel(s)}」？${s.kind === 'stock' ? '（同时清空 agent 对该股的记忆/分析）' : ''}`)) return;
+  if (!confirm(`删除会话「${s.title || sessionLabel(s)}」？（分析历史保留，可在「选股分析」查看）`)) return;
   await chatApi.deleteSession(s.id);
   if (active.value?.id === s.id) {
     active.value = null;
@@ -437,7 +437,7 @@ async function removeSession(s: ChatSession) {
 }
 
 async function clearAllChats() {
-  if (!confirm('清空所有对话？同时会清空 agent 对这些股票的记忆（分析报告）。')) return;
+  if (!confirm('清空所有对话？只清左侧会话列表，分析历史保留（可在「选股分析」查看）。')) return;
   await chatApi.clearAll();
   active.value = null;
   messages.value = [];

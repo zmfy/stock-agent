@@ -7,7 +7,7 @@ import { getCorePersona } from '../agent/profiles-service';
 import { runAnalysis } from '../analysis/orchestrator';
 import { getStockName, getCachedName } from '../data/service';
 import { skillDirectives } from '../plugins/service';
-import { getLatestReportByCode, deleteReportsByCode, deleteAllReports } from '../analysis/report-service';
+import { getLatestReportByCode } from '../analysis/report-service';
 import { getTodayContent } from '../meetings/service';
 import { getActive } from '../rulebook/service';
 
@@ -80,17 +80,15 @@ export function deleteSession(userId: string, sessionId: string): void {
   const db = getDb();
   db.prepare('DELETE FROM chat_messages WHERE session_id = ?').run(sessionId);
   db.prepare('DELETE FROM chat_sessions WHERE id = ?').run(sessionId);
-  // Clearing a stock window also clears the agent's "memory" of that stock (its analysis reports).
-  if (s.kind === 'stock' && s.ref_id) deleteReportsByCode(userId, s.ref_id);
+  // 注意：分析报告(历史)独立于会话，删除会话不删报告——选股分析里仍可查看历史。
 }
 
-// Clear all chat windows and the agent's stock memory (reports) for this user.
+// Clear all chat windows for this user. 分析历史(reports)保留，仅清空左侧会话列表。
 export function clearAll(userId: string): void {
   const db = getDb();
   const ids = (db.prepare('SELECT id FROM chat_sessions WHERE user_id = ?').all(userId) as { id: string }[]).map((r) => r.id);
   for (const id of ids) db.prepare('DELETE FROM chat_messages WHERE session_id = ?').run(id);
   db.prepare('DELETE FROM chat_sessions WHERE user_id = ?').run(userId);
-  deleteAllReports(userId);
 }
 
 function addMessage(sessionId: string, role: ChatMessage['role'], content: string): ChatMessage {

@@ -5,14 +5,9 @@
       <router-link to="/">返回</router-link>
     </header>
 
-    <section v-if="!focusCode" class="card run">
-      <StockPicker placeholder="代码 / 名称 / 拼音，选中即分析" @pick="onPick" />
-      <button @click="run" :disabled="busy || !code">{{ busy ? '分析中…' : '分析' }}</button>
-      <p v-if="err" class="err">{{ err }}</p>
-      <p class="hint">分析会：代码算硬门槛 → AI 写软判断与结论 → 生成报告并存档（可在下方历史里回看）。</p>
-    </section>
-    <p v-else-if="err" class="err card">{{ err }}</p>
-    <p v-else-if="busy" class="card hint">正在加载 {{ focusCode }} 的报告…</p>
+    <p v-if="!focusCode" class="hint card">这里汇总你所有个股的分析历史（在个股讨论里分析后自动存档）。点下方任意一条查看完整报告。清空对话不会删除这里的历史。</p>
+    <p v-if="err" class="err card">{{ err }}</p>
+    <p v-else-if="busy && focusCode" class="card hint">正在加载 {{ focusCode }} 的报告…</p>
 
     <section v-if="report" class="card report">
       <div class="rhead">
@@ -71,7 +66,6 @@
 import { ref, computed, onMounted, defineComponent, h } from 'vue';
 import { useRoute } from 'vue-router';
 import { analysisApi, type AnalysisReport, type ReportSummary, type GateResult } from '../api/analysis';
-import StockPicker from '../components/StockPicker.vue';
 
 const route = useRoute();
 const focusCode = ref<string>(typeof route.query.code === 'string' ? route.query.code : '');
@@ -99,7 +93,6 @@ const GateTable = defineComponent({
   },
 });
 
-const code = ref('');
 const busy = ref(false);
 const err = ref('');
 const report = ref<AnalysisReport | null>(null);
@@ -116,22 +109,6 @@ function authorityCn(a: string) {
   return { uploaded: '以上传数据为准', cross: '交叉验证', internal: '合理性检查', none: '无来源' }[a] || a;
 }
 
-function onPick(c: string) {
-  code.value = c;
-  run();
-}
-async function run() {
-  if (!code.value.trim()) return;
-  err.value = ''; busy.value = true;
-  try {
-    report.value = (await analysisApi.run(code.value.trim())).data.data;
-    await loadList();
-  } catch (e: any) {
-    err.value = e.response?.data?.message || '分析失败';
-  } finally {
-    busy.value = false;
-  }
-}
 async function view(id: string) {
   report.value = (await analysisApi.getReport(id)).data.data;
   window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -147,7 +124,6 @@ onMounted(async () => {
     try {
       report.value = (await analysisApi.getLatestByCode(focusCode.value)).data.data;
     } catch {
-      code.value = focusCode.value;
       try {
         report.value = (await analysisApi.run(focusCode.value)).data.data;
       } catch (e: any) {
