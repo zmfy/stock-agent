@@ -1,7 +1,7 @@
 <template>
   <div class="analysis">
     <header class="bar">
-      <h1>{{ focusCode ? '完整报告' : '选股分析' }}</h1>
+      <h1>{{ focusCode ? '完整报告' : '分析历史' }}</h1>
       <router-link to="/">返回</router-link>
     </header>
 

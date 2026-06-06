@@ -204,7 +204,7 @@ const auth = useAuthStore();
 
 // 系统设置：右侧内嵌这些页面，左栏不变
 const SETTINGS = [
-  { key: 'analysis', label: '选股分析', icon: '📊', comp: AnalysisView },
+  { key: 'analysis', label: '分析历史', icon: '📊', comp: AnalysisView },
   { key: 'rulebook', label: '核心规则', icon: '📜', comp: RulebookView },
   { key: 'ai', label: 'AI 模型', icon: '🤖', comp: AiSettingsView },
   { key: 'plugins', label: '能力插件', icon: '🧩', comp: PluginsView },
@@ -426,7 +426,7 @@ async function togglePin(s: ChatSession) {
 }
 
 async function removeSession(s: ChatSession) {
-  if (!confirm(`删除会话「${s.title || sessionLabel(s)}」？（分析历史保留，可在「选股分析」查看）`)) return;
+  if (!confirm(`删除会话「${s.title || sessionLabel(s)}」？（分析历史保留，可在「分析历史」查看）`)) return;
   await chatApi.deleteSession(s.id);
   if (active.value?.id === s.id) {
     active.value = null;
@@ -437,7 +437,7 @@ async function removeSession(s: ChatSession) {
 }
 
 async function clearAllChats() {
-  if (!confirm('清空所有对话？只清左侧会话列表，分析历史保留（可在「选股分析」查看）。')) return;
+  if (!confirm('清空所有对话？只清左侧会话列表，分析历史保留（可在「分析历史」查看）。')) return;
   await chatApi.clearAll();
   active.value = null;
   messages.value = [];
