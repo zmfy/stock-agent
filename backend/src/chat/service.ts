@@ -98,9 +98,13 @@ function addMessage(sessionId: string, role: ChatMessage['role'], content: strin
   return getDb().prepare('SELECT * FROM chat_messages WHERE id = ?').get(id) as ChatMessage;
 }
 
+// 主 agent 的名字。用户在系统里说「来财」即指主 agent。
+export const AGENT_NAME = '来财';
+
 function buildPrompt(persona: string, kind: ChatKind, history: ChatMessage[], extraContext?: string): string {
   const convo = history.map((m) => `${m.role === 'user' ? '用户' : '助手'}：${m.content}`).join('\n');
-  return `${persona}
+  return `你的名字叫「${AGENT_NAME}」，是用户的操盘主助手；当用户称呼「${AGENT_NAME}」时就是在叫你。
+${persona}
 
 当前场景：${KIND_FRAMING[kind]}${extraContext ? `\n背景资料：\n${extraContext}` : ''}
 

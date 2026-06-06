@@ -84,10 +84,10 @@
       </div>
 
       <div v-if="!active" class="empty">
-        <h2>你好，我是你的操盘助手 🤝</h2>
-        <p class="muted">输入股票代码 / 名称 / 拼音，直接开一个该股的分析对话；或在左侧选「核心原则」「早会」等。</p>
+        <h2>你好，我是股票小作手，来财。🤝</h2>
+        <p class="muted">输入股票代码 / 名称 / 拼音，直接开一个该股的分析对话；输入「来财」可直接呼叫主 agent 对话；或在左侧选「核心原则」「早会」等。</p>
         <div class="qbox">
-          <StockPicker placeholder="输入股票代码 / 名称 / 拼音，选中即开聊" @pick="openStockCode" />
+          <StockPicker placeholder="输入股票代码 / 名称 / 拼音；或输入「来财」呼叫主 agent" @pick="onDefaultPick" />
         </div>
       </div>
 
@@ -475,6 +475,24 @@ async function openMeeting(kind: 'morning' | 'evening') {
   let s = sessions.value.find((x) => x.kind === kind);
   if (!s) {
     const id = (await chatApi.createSession(kind, null, kind === 'morning' ? '早会讨论' : '晚会讨论')).data.data.id;
+    await loadSessions();
+    s = sessions.value.find((x) => x.id === id);
+  }
+  if (s) await open(s);
+}
+
+const AGENT_NAME = '来财'; // 主 agent 的名字
+
+// 默认页查询框：输入「来财」呼叫主 agent，否则按股票开个股会话
+function onDefaultPick(val: string) {
+  if (val.trim() === AGENT_NAME) return summonMainAgent();
+  return openStockCode(val);
+}
+// 打开（复用）与主 agent 的通用对话
+async function summonMainAgent() {
+  let s = sessions.value.find((x) => x.kind === 'general' && x.title === AGENT_NAME);
+  if (!s) {
+    const id = (await chatApi.createSession('general', null, AGENT_NAME)).data.data.id;
     await loadSessions();
     s = sessions.value.find((x) => x.id === id);
   }
