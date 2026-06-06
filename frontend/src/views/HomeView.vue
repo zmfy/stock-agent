@@ -110,74 +110,82 @@
         <!-- 早会/晚会简报 -->
         <div v-if="briefing" class="briefing">{{ briefing }}</div>
 
-        <div class="msgs" ref="msgsEl">
-          <div v-for="m in messages" :key="m.id" class="msg" :class="m.role">
-            <div class="bubble">{{ m.content }}</div>
-            <div v-if="m.created_at" class="mtime">{{ fmtTime(m.created_at) }}</div>
-          </div>
-          <div v-if="sending" class="msg assistant"><div class="bubble typing">思考中…</div></div>
-        </div>
-        <!-- 核心原则：更换/组合模板（多选） -->
-        <div v-if="active.kind === 'core_principle'" class="tplswitch">
-          <div class="tpl-head">
-            <span>更换 / 组合模板（可多选）</span>
-            <button class="mini" @click="tplOpen = !tplOpen">{{ tplOpen ? '收起' : '展开' }}</button>
-          </div>
-          <div v-if="tplOpen">
-            <div class="tplgrid">
-              <label v-for="t in templates" :key="t.key" class="tplcheck">
-                <input type="checkbox" :value="t.key" v-model="tplSelected" /> {{ t.label }}
-              </label>
+        <div class="convo" :class="{ 'with-side': active.kind === 'core_principle' }">
+          <div class="convo-main">
+            <div class="msgs" ref="msgsEl">
+              <div v-for="m in messages" :key="m.id" class="msg" :class="m.role">
+                <div class="bubble">{{ m.content }}</div>
+                <div v-if="m.created_at" class="mtime">{{ fmtTime(m.created_at) }}</div>
+              </div>
+              <div v-if="sending" class="msg assistant"><div class="bubble typing">思考中…</div></div>
             </div>
-            <button :disabled="!tplSelected.length" @click="previewCompose">预览组合（{{ tplSelected.length }}）</button>
 
-            <div v-if="composeRes" class="composeprev">
-              <p v-if="!composeRes.conflict" class="ok-msg">✅ 无冲突，将合并为一套：{{ composeRes.versionLabel }}</p>
-              <template v-else>
-                <p class="warn">⚠️ 存在冲突（字段：{{ composeRes.conflictFields.join('、') }}），将拆为多套系统，请排优先级（上=优先）：</p>
-                <div v-for="(k, i) in orderedKeys" :key="k" class="sysrow">
-                  <span><b>{{ String.fromCharCode(65 + i) }}</b>：{{ labelOfKey(k) }}</span>
-                  <span class="ord">
-                    <button class="mini" :disabled="i === 0" @click="moveKey(i, -1)">↑</button>
-                    <button class="mini" :disabled="i === orderedKeys.length - 1" @click="moveKey(i, 1)">↓</button>
-                  </span>
+            <div class="composer">
+              <textarea v-model="input" rows="2" placeholder="输入消息，Enter 发送" @keydown.enter.exact.prevent="send"></textarea>
+              <button :disabled="sending || !input.trim()" @click="send">发送</button>
+            </div>
+            <p v-if="chatErr" class="err">{{ chatErr }}</p>
+          </div>
+
+          <!-- 核心原则：规则操作面板（右侧，将来还会显示大盘/个股事实信息） -->
+          <aside v-if="active.kind === 'core_principle'" class="cp-side">
+            <!-- 更换/组合模板（多选） -->
+            <div class="tplswitch">
+              <div class="tpl-head">
+                <span>更换 / 组合模板（可多选）</span>
+                <button class="mini" @click="tplOpen = !tplOpen">{{ tplOpen ? '收起' : '展开' }}</button>
+              </div>
+              <div v-if="tplOpen">
+                <div class="tplgrid">
+                  <label v-for="t in templates" :key="t.key" class="tplcheck">
+                    <input type="checkbox" :value="t.key" v-model="tplSelected" /> {{ t.label }}
+                  </label>
                 </div>
-              </template>
-              <button @click="applyCompose">换入为当前核心原则</button>
+                <button :disabled="!tplSelected.length" @click="previewCompose">预览组合（{{ tplSelected.length }}）</button>
+
+                <div v-if="composeRes" class="composeprev">
+                  <p v-if="!composeRes.conflict" class="ok-msg">✅ 无冲突，将合并为一套：{{ composeRes.versionLabel }}</p>
+                  <template v-else>
+                    <p class="warn">⚠️ 存在冲突（字段：{{ composeRes.conflictFields.join('、') }}），将拆为多套系统，请排优先级（上=优先）：</p>
+                    <div v-for="(k, i) in orderedKeys" :key="k" class="sysrow">
+                      <span><b>{{ String.fromCharCode(65 + i) }}</b>：{{ labelOfKey(k) }}</span>
+                      <span class="ord">
+                        <button class="mini" :disabled="i === 0" @click="moveKey(i, -1)">↑</button>
+                        <button class="mini" :disabled="i === orderedKeys.length - 1" @click="moveKey(i, 1)">↓</button>
+                      </span>
+                    </div>
+                  </template>
+                  <button @click="applyCompose">换入为当前核心原则</button>
+                </div>
+                <span v-if="tplMsg" class="ok-msg">{{ tplMsg }}</span>
+              </div>
             </div>
-            <span v-if="tplMsg" class="ok-msg">{{ tplMsg }}</span>
-          </div>
-        </div>
 
-        <!-- 核心原则：让 agent 提议修改 -->
-        <div v-if="active.kind === 'core_principle'" class="propose-bar">
-          <button class="propose-btn" :disabled="proposing" @click="propose">
-            {{ proposing ? 'agent 拟定中…' : '🛠 根据本次讨论，让 agent 提议修改规则' }}
-          </button>
-        </div>
+            <!-- 让 agent 提议修改 -->
+            <div class="propose-bar">
+              <button class="propose-btn" :disabled="proposing" @click="propose">
+                {{ proposing ? 'agent 拟定中…' : '🛠 根据本次讨论，让 agent 提议修改规则' }}
+              </button>
+            </div>
 
-        <div v-if="proposal" class="proposal">
-          <h4>修改提议（{{ proposal.magnitude === 'major' ? '较大改动' : '微调' }}）：{{ proposal.currentLabel }} → <b>{{ proposal.suggestedLabel }}</b></h4>
-          <p v-if="proposal.delta.personaChanged">· 人设有改动</p>
-          <p v-for="c in proposal.delta.gates.changed" :key="c.gate_key">· 门槛 <b>{{ c.gate_key }}</b>：{{ c.from.threshold }} → {{ c.to.threshold }}</p>
-          <p v-for="k in proposal.delta.gates.added" :key="'a'+k">· 新增门槛 {{ k }}</p>
-          <p v-for="k in proposal.delta.gates.removed" :key="'r'+k">· 删除门槛 {{ k }}</p>
-          <p v-if="proposal.delta.softRules.added.length || proposal.delta.softRules.removed.length">· 软判断 +{{ proposal.delta.softRules.added.length }} / -{{ proposal.delta.softRules.removed.length }}</p>
-          <p v-if="proposal.delta.positionRulesChangedKeys.length">· 仓位规则改动：{{ proposal.delta.positionRulesChangedKeys.join('、') }}</p>
-          <p v-if="noChange" class="muted">无实质改动</p>
-          <p v-if="proposal.proposal.note" class="muted">理由：{{ proposal.proposal.note }}</p>
-          <div class="ops">
-            <button :disabled="applying || noChange" @click="applyProposal">采纳并升级到 {{ proposal.suggestedLabel }}</button>
-            <button @click="proposal = null">放弃</button>
-          </div>
-          <p v-if="applyMsg" class="ok-msg">{{ applyMsg }}</p>
+            <div v-if="proposal" class="proposal">
+              <h4>修改提议（{{ proposal.magnitude === 'major' ? '较大改动' : '微调' }}）：{{ proposal.currentLabel }} → <b>{{ proposal.suggestedLabel }}</b></h4>
+              <p v-if="proposal.delta.personaChanged">· 人设有改动</p>
+              <p v-for="c in proposal.delta.gates.changed" :key="c.gate_key">· 门槛 <b>{{ c.gate_key }}</b>：{{ c.from.threshold }} → {{ c.to.threshold }}</p>
+              <p v-for="k in proposal.delta.gates.added" :key="'a'+k">· 新增门槛 {{ k }}</p>
+              <p v-for="k in proposal.delta.gates.removed" :key="'r'+k">· 删除门槛 {{ k }}</p>
+              <p v-if="proposal.delta.softRules.added.length || proposal.delta.softRules.removed.length">· 软判断 +{{ proposal.delta.softRules.added.length }} / -{{ proposal.delta.softRules.removed.length }}</p>
+              <p v-if="proposal.delta.positionRulesChangedKeys.length">· 仓位规则改动：{{ proposal.delta.positionRulesChangedKeys.join('、') }}</p>
+              <p v-if="noChange" class="muted">无实质改动</p>
+              <p v-if="proposal.proposal.note" class="muted">理由：{{ proposal.proposal.note }}</p>
+              <div class="ops">
+                <button :disabled="applying || noChange" @click="applyProposal">采纳并升级到 {{ proposal.suggestedLabel }}</button>
+                <button @click="proposal = null">放弃</button>
+              </div>
+              <p v-if="applyMsg" class="ok-msg">{{ applyMsg }}</p>
+            </div>
+          </aside>
         </div>
-
-        <div class="composer">
-          <textarea v-model="input" rows="2" placeholder="输入消息，Enter 发送" @keydown.enter.exact.prevent="send"></textarea>
-          <button :disabled="sending || !input.trim()" @click="send">发送</button>
-        </div>
-        <p v-if="chatErr" class="err">{{ chatErr }}</p>
       </template>
       </template>
     </main>
@@ -611,6 +619,11 @@ onMounted(async () => {
 .mini { font-size: 12px; background: none; border: 1px solid #ddd; border-radius: 6px; padding: 2px 6px; cursor: pointer; }
 .muted { color: #999; font-size: 12px; }
 .chat { flex: 1; display: flex; flex-direction: column; padding: 12px 16px; }
+/* 对话区：默认单栏；核心原则时右侧加规则操作面板 */
+.convo { flex: 1; display: flex; min-height: 0; gap: 16px; }
+.convo-main { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.cp-side { width: 300px; flex: none; overflow-y: auto; border-left: 1px solid #eee; padding-left: 14px; }
+.cp-side .tplswitch, .cp-side .propose-bar, .cp-side .proposal { margin: 0 0 12px; }
 .initbar { background: #fff7e6; border: 1px solid #ffe0a3; border-radius: 6px; padding: 8px 12px; font-size: 13px; margin-bottom: 8px; }
 .empty { margin: auto; text-align: center; color: #666; }
 .title { font-weight: 600; padding-bottom: 8px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; }
