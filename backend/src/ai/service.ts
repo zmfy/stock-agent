@@ -89,6 +89,22 @@ export function saveConfig(
       'INSERT INTO ai_configs (id, user_id, provider, api_key_enc, base_url, model, is_active) VALUES (?, ?, ?, ?, ?, ?, 0)'
     ).run(uuidv4(), userId, provider, apiKeyEnc, input.baseUrl, input.model);
   }
+  ensureCoreDefault(userId);
+}
+
+// The main agent (core) model is user-selected; default it to the FIRST-added usable
+// config if the user hasn't pinned one. Never auto-changed by auto-assign.
+export function ensureCoreDefault(userId: string): void {
+  const a = getRoleAssignment(userId, 'core');
+  if (a && a.mode === 'manual' && a.provider) return; // user already chose
+  const rows = getDb()
+    .prepare('SELECT provider, api_key_enc FROM ai_configs WHERE user_id = ? AND enabled = 1 ORDER BY rowid')
+    .all(userId) as { provider: string; api_key_enc: string | null }[];
+  const first = rows.find((r) => {
+    const def = getProvider(r.provider);
+    return def && (!def.needsApiKey || !!r.api_key_enc);
+  });
+  if (first) setRoleAssignment(userId, 'core', { mode: 'manual', provider: first.provider });
 }
 
 export function deleteConfig(userId: string, provider: string): void {
@@ -213,9 +229,11 @@ export async function autoAssignRoles(
   const pool = enabledConfigs(userId);
   if (!pool.length) throw new Error('NO_MODEL');
 
+  // Only sub-agents — the main (core) model is user-selected and must not be changed here.
+  const subRoles = ROLES.filter((r) => r.key !== 'core');
   const models = pool.map((c) => `${c.provider}(模型 ${c.model}，定位 ${tierOf(c.model)})`).join('；');
-  const rolesList = ROLES.map((r) => `${r.key}（${r.label}，偏好 ${r.prefer}）`).join('；');
-  const prompt = `你是主操盘 agent，请把现有可用模型分配给各任务：数据类用快/省的，分析/复盘/核心用强的，软料用均衡。\n可用模型：${models}。\n任务：${rolesList}。\n只输出 JSON：{${ROLES.map((r) => `"${r.key}":"provider名"`).join(',')}}`;
+  const rolesList = subRoles.map((r) => `${r.key}（${r.label}，偏好 ${r.prefer}）`).join('；');
+  const prompt = `你是主操盘 agent，请把现有可用模型分配给各【子 agent】任务：数据/校验类用快/省的，分析/复盘用强的，软料用均衡。\n可用模型：${models}。\n任务：${rolesList}。\n只输出 JSON：{${subRoles.map((r) => `"${r.key}":"provider名"`).join(',')}}`;
 
   let mapping: Record<string, string> = {};
   try {
@@ -230,7 +248,7 @@ export async function autoAssignRoles(
     mapping = {};
   }
 
-  for (const r of ROLES) {
+  for (const r of subRoles) {
     let provider = mapping[r.key];
     if (!provider || !pool.find((c) => c.provider === provider)) provider = pickProviderByTier(pool, getRole(r.key))!;
     if (provider) setRoleAssignment(userId, r.key, { mode: 'manual', provider });

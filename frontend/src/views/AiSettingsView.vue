@@ -70,19 +70,21 @@
         <h2>任务分工</h2>
         <button @click="autoAssign" :disabled="assigning">🤖 {{ assigning ? '主 agent 分配中…' : '让主 agent 分配' }}</button>
       </div>
-      <p class="hint">「让主 agent 分配」由主 agent 按各任务需要从已启用模型里指派；也可在下方<b>每行手动改</b>（选「自动」则由系统按任务自动挑）。</p>
+      <p class="hint"><b>主 agent</b> 的模型由你指定（默认是初始化向导里配的那个，不参与「让主 agent 分配」）。「让主 agent 分配」只为<b>子 agent</b> 指派；子 agent 也可每行手动改（选「自动」=系统按任务自动挑）。</p>
       <table>
         <thead><tr><th>任务</th><th>分配（可手动改）</th><th>实际使用</th></tr></thead>
         <tbody>
           <tr v-for="r in roles" :key="r.role">
             <td>{{ r.label }}<div class="muted">{{ r.hint }}</div></td>
             <td>
-              <select :value="r.mode === 'manual' ? r.pinnedProvider : '__auto__'" @change="onRoleChange(r, $event)">
-                <option value="__auto__">自动（由 agent 挑）</option>
+              <select :value="r.mode === 'manual' ? r.pinnedProvider || '' : '__auto__'" @change="onRoleChange(r, $event)">
+                <option v-if="r.role === 'core'" value="" disabled>选择主 agent 模型</option>
+                <option v-else value="__auto__">自动（由 agent 挑）</option>
                 <option v-for="c in enabledConfigs" :key="c.provider" :value="c.provider">
                   {{ providerLabel(c.provider) }} · {{ c.model }}
                 </option>
               </select>
+              <span v-if="r.role === 'core'" class="coretag">主 agent · 仅你可定</span>
             </td>
             <td :class="r.resolvedProvider ? 'ok-msg' : 'err'">
               {{ r.resolvedProvider ? `${providerLabel(r.resolvedProvider)} · ${r.resolvedModel}` : '无可用模型' }}
@@ -232,6 +234,7 @@ onMounted(async () => {
 .hint { color: #777; font-size: 13px; }
 .card { border: 1px solid #e5e5e5; border-radius: 8px; padding: 16px; margin-top: 16px; }
 .card-head { display: flex; justify-content: space-between; align-items: center; }
+.coretag { font-size: 11px; color: #a76b00; margin-left: 6px; }
 label { display: block; margin-top: 10px; font-size: 13px; }
 input, select { width: 100%; box-sizing: border-box; padding: 5px; }
 td input[type="checkbox"] { width: auto; }
