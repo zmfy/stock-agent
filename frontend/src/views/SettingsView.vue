@@ -108,13 +108,11 @@
 
 <script setup lang="ts">
 import { reactive, ref, computed, onMounted } from 'vue';
-import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 import { settingsApi, type AdminUser } from '../api/settings';
 import { accountApi, type Backup } from '../api/account';
 
 const auth = useAuthStore();
-const router = useRouter();
 
 // ---- 数据备份与重置 ----
 const backups = ref<Backup[]>([]);
@@ -137,17 +135,18 @@ async function doReset() {
   acctBusy.value = true; acctMsg.value = '';
   try {
     await accountApi.reset();
-    router.push('/onboarding');
+    // hard navigation guarantees the wizard loads fresh from a clean state
+    window.location.href = '/onboarding';
   } catch (e: any) {
     acctOk.value = false; acctMsg.value = e.response?.data?.message || '重置失败';
-  } finally { acctBusy.value = false; }
+    acctBusy.value = false;
+  }
 }
 async function doRestore(b: Backup) {
   if (!confirm(`从「${b.label}」恢复？当前数据会被该备份覆盖。`)) return;
   acctBusy.value = true; acctMsg.value = '';
-  try { await accountApi.restore(b.id); acctOk.value = true; acctMsg.value = '已恢复，请刷新页面查看'; }
-  catch (e: any) { acctOk.value = false; acctMsg.value = e.response?.data?.message || '恢复失败'; }
-  finally { acctBusy.value = false; }
+  try { await accountApi.restore(b.id); window.location.href = '/'; }
+  catch (e: any) { acctOk.value = false; acctMsg.value = e.response?.data?.message || '恢复失败'; acctBusy.value = false; }
 }
 async function doDeleteBackup(b: Backup) {
   if (!confirm(`删除备份「${b.label}」？`)) return;
