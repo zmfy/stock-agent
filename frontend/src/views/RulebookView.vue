@@ -27,15 +27,14 @@
         <p class="persona">{{ shown.version.persona }}</p>
         <p v-if="shown.version.note" class="muted">说明：{{ shown.version.note }}</p>
 
-        <h3>A 系统 · 中线业绩仓（硬门槛）</h3>
-        <GateTable :gates="gatesOf('A')" />
-        <h4>A 系统 · 软判断</h4>
-        <ul class="soft"><li v-for="r in softOf('A')" :key="r.id">{{ r.text }} <span class="muted">— {{ r.teach }}</span></li></ul>
-
-        <h3>B 系统 · 短线题材仓（情绪闸门 + 质量）</h3>
-        <GateTable :gates="gatesOf('B')" />
-        <h4>B 系统 · 软判断</h4>
-        <ul class="soft"><li v-for="r in softOf('B')" :key="r.id">{{ r.text }} <span class="muted">— {{ r.teach }}</span></li></ul>
+        <template v-for="sys in systemsOf" :key="sys">
+          <h3>{{ sys }} 系统 · 硬门槛</h3>
+          <GateTable :gates="gatesOf(sys)" />
+          <template v-if="softOf(sys).length">
+            <h4>{{ sys }} 系统 · 软判断</h4>
+            <ul class="soft"><li v-for="r in softOf(sys)" :key="r.id">{{ r.text }} <span class="muted">— {{ r.teach }}</span></li></ul>
+          </template>
+        </template>
 
         <h3>仓位 / 出场 / 熔断</h3>
         <pre class="pr">{{ prettyPR(shown.positionRules) }}</pre>
@@ -159,10 +158,11 @@ const noChange = computed(
     !diff.value.positionRulesChangedKeys.length
 );
 
-function gatesOf(sys: 'A' | 'B') {
+const systemsOf = computed(() => [...new Set(shown.value.gates.map((g) => g.system))].sort());
+function gatesOf(sys: string) {
   return shown.value.gates.filter((g) => g.system === sys);
 }
-function softOf(sys: 'A' | 'B') {
+function softOf(sys: string) {
   return shown.value.softRules.filter((r) => r.system === sys);
 }
 function prettyPR(pr: Record<string, any>) {

@@ -61,7 +61,7 @@ export interface StockSnapshot {
 export interface GateResult {
   gate_key: string;
   label: string;
-  system: 'A' | 'B';
+  system: string;
   field: string;
   op: string;
   threshold: number | null;
@@ -74,8 +74,15 @@ export interface GateResult {
   teach: string;
 }
 
+export interface SystemVerdict {
+  system: string;
+  passed: boolean;
+  failed: string[];
+}
+
 export interface GateEvaluation {
   gateResults: GateResult[];
+  systems: SystemVerdict[]; // per-system veto verdict (A/B/C…)
   aVeto: { passed: boolean; failed: string[] };
   bEmotion: { passed: boolean; failed: string[] };
 }
@@ -85,7 +92,7 @@ export type GateOp = '>=' | '>' | '<=' | '<' | 'between' | 'gt_field';
 export interface Gate {
   id: string;
   version_id: string;
-  system: 'A' | 'B';
+  system: string; // 'A' | 'B' | 'C' ... (multi-system rulebooks)
   gate_key: string;
   label: string;
   field: string;
@@ -103,7 +110,7 @@ export interface Gate {
 export interface SoftRule {
   id: string;
   version_id: string;
-  system: 'A' | 'B';
+  system: string;
   text: string;
   teach: string;
   sort_order: number;

@@ -2,7 +2,7 @@ import { GateOp } from '../types';
 
 // A gate as authored in the baseline (no id/version_id yet — assigned on instantiate).
 export interface SeedGate {
-  system: 'A' | 'B';
+  system: string;
   gate_key: string;
   label: string;
   field: string;
@@ -16,7 +16,7 @@ export interface SeedGate {
 }
 
 export interface SeedSoftRule {
-  system: 'A' | 'B';
+  system: string;
   text: string;
   teach: string;
 }

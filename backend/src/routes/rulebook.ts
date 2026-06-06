@@ -5,6 +5,7 @@ import { successResponse, errorResponse } from '../utils/response';
 import * as svc from '../rulebook/service';
 import { TEMPLATES } from '../rulebook/templates';
 import { proposeChange, applyProposal } from '../rulebook/propose-service';
+import { composeTemplates } from '../rulebook/compose';
 import { getMessages } from '../chat/service';
 
 const router = Router();
@@ -113,6 +114,31 @@ router.get('/versions/:id/diff', (req: Request, res: Response) => {
   const diff = svc.diffVersions(userId, against, req.params.id);
   if (!diff) return errorResponse(res, 404, 'RESOURCE_NOT_FOUND', '版本不存在');
   successResponse(res, diff);
+});
+
+// POST /api/rulebook/compose-preview { keys } — preview merge/conflict (NOT saved)
+router.post('/compose-preview', (req: Request, res: Response) => {
+  const parsed = z.object({ keys: z.array(z.string()).min(1) }).safeParse(req.body);
+  if (!parsed.success) return errorResponse(res, 422, 'VALIDATION_ERROR', '请选择至少一个模板');
+  try {
+    const r = composeTemplates(parsed.data.keys);
+    successResponse(res, { conflict: r.conflict, conflictFields: r.conflictFields, systems: r.systems, versionLabel: r.baseline.versionLabel });
+  } catch (e: any) {
+    if (e.message === 'NO_TEMPLATES') return errorResponse(res, 422, 'VALIDATION_ERROR', '未找到所选模板');
+    return errorResponse(res, 400, 'BUSINESS_CONFLICT', e.message || '预览失败');
+  }
+});
+
+// POST /api/rulebook/apply-compose { keys } — keys order = priority; switch to the composed rulebook
+router.post('/apply-compose', (req: Request, res: Response) => {
+  const parsed = z.object({ keys: z.array(z.string()).min(1) }).safeParse(req.body);
+  if (!parsed.success) return errorResponse(res, 422, 'VALIDATION_ERROR', '请选择至少一个模板');
+  try {
+    const rb = svc.applyComposedTemplates(req.user!.userId, parsed.data.keys);
+    successResponse(res, rb, '已换入组合模板为当前核心原则', 201);
+  } catch (e: any) {
+    return errorResponse(res, 400, 'BUSINESS_CONFLICT', e.message || '换入失败');
+  }
 });
 
 // POST /api/rulebook/apply-template { template } — switch active rulebook to a template (new version)

@@ -118,15 +118,36 @@
           </div>
           <div v-if="sending" class="msg assistant"><div class="bubble typing">思考中…</div></div>
         </div>
-        <!-- 核心原则：更换模板 -->
+        <!-- 核心原则：更换/组合模板（多选） -->
         <div v-if="active.kind === 'core_principle'" class="tplswitch">
-          更换模板：
-          <select v-model="tplChoice">
-            <option value="">选择常用模板…</option>
-            <option v-for="t in templates" :key="t.key" :value="t.key">{{ t.label }}</option>
-          </select>
-          <button :disabled="!tplChoice" @click="switchTemplate">换入为当前核心原则</button>
-          <span v-if="tplMsg" class="ok-msg">{{ tplMsg }}</span>
+          <div class="tpl-head">
+            <span>更换 / 组合模板（可多选）</span>
+            <button class="mini" @click="tplOpen = !tplOpen">{{ tplOpen ? '收起' : '展开' }}</button>
+          </div>
+          <div v-if="tplOpen">
+            <div class="tplgrid">
+              <label v-for="t in templates" :key="t.key" class="tplcheck">
+                <input type="checkbox" :value="t.key" v-model="tplSelected" /> {{ t.label }}
+              </label>
+            </div>
+            <button :disabled="!tplSelected.length" @click="previewCompose">预览组合（{{ tplSelected.length }}）</button>
+
+            <div v-if="composeRes" class="composeprev">
+              <p v-if="!composeRes.conflict" class="ok-msg">✅ 无冲突，将合并为一套：{{ composeRes.versionLabel }}</p>
+              <template v-else>
+                <p class="warn">⚠️ 存在冲突（字段：{{ composeRes.conflictFields.join('、') }}），将拆为多套系统，请排优先级（上=优先）：</p>
+                <div v-for="(k, i) in orderedKeys" :key="k" class="sysrow">
+                  <span><b>{{ String.fromCharCode(65 + i) }}</b>：{{ labelOfKey(k) }}</span>
+                  <span class="ord">
+                    <button class="mini" :disabled="i === 0" @click="moveKey(i, -1)">↑</button>
+                    <button class="mini" :disabled="i === orderedKeys.length - 1" @click="moveKey(i, 1)">↓</button>
+                  </span>
+                </div>
+              </template>
+              <button @click="applyCompose">换入为当前核心原则</button>
+            </div>
+            <span v-if="tplMsg" class="ok-msg">{{ tplMsg }}</span>
+          </div>
         </div>
 
         <!-- 核心原则：让 agent 提议修改 -->
@@ -221,17 +242,38 @@ const screening = ref(false);
 const screenOpen = ref(true);
 const activeRulebook = ref<FullRulebook | null>(null);
 const templates = ref<TemplateMeta[]>([]);
-const tplChoice = ref('');
+const tplOpen = ref(false);
+const tplSelected = ref<string[]>([]);
+const orderedKeys = ref<string[]>([]);
+const composeRes = ref<{ conflict: boolean; conflictFields: string[]; systems: any[]; versionLabel: string } | null>(null);
 const tplMsg = ref('');
-async function switchTemplate() {
-  if (!tplChoice.value) return;
-  const t = templates.value.find((x) => x.key === tplChoice.value);
-  if (!confirm(`将「${t?.label}」换入为当前核心原则？会新建一个版本并设为当前使用（旧版本保留可回滚）。`)) return;
+function labelOfKey(k: string) {
+  return templates.value.find((t) => t.key === k)?.label || k;
+}
+async function previewCompose() {
+  tplMsg.value = '';
   try {
-    await rulebookApi.applyTemplate(tplChoice.value);
+    composeRes.value = (await rulebookApi.composePreview(tplSelected.value)).data.data;
+    orderedKeys.value = [...tplSelected.value];
+  } catch (e: any) {
+    chatErr.value = e.response?.data?.message || '预览失败';
+  }
+}
+function moveKey(i: number, dir: number) {
+  const j = i + dir;
+  const arr = orderedKeys.value;
+  if (j < 0 || j >= arr.length) return;
+  [arr[i], arr[j]] = [arr[j], arr[i]];
+}
+async function applyCompose() {
+  if (!orderedKeys.value.length) return;
+  if (!confirm('换入为当前核心原则？会新建一个版本并设为当前使用（旧版本保留可回滚）。')) return;
+  try {
+    await rulebookApi.applyCompose(orderedKeys.value);
     activeRulebook.value = (await rulebookApi.getActive()).data.data;
-    tplMsg.value = `已换入「${t?.label}」`;
-    tplChoice.value = '';
+    tplMsg.value = '已换入组合模板';
+    composeRes.value = null;
+    tplSelected.value = [];
   } catch (e: any) {
     chatErr.value = e.response?.data?.message || '换入失败';
   }
@@ -243,13 +285,19 @@ function gateCond(g: Gate) {
 }
 function buildCpBriefing(rb: FullRulebook | null): string {
   if (!rb) return '你还没有核心原则。请到「系统设置 → 核心规则」导入一个模板后，再来这里和我探讨优化。';
-  const list = (sys: 'A' | 'B') =>
-    rb.gates.filter((g) => g.system === sys).map((g) => `· ${g.label}：${gateCond(g)}${g.veto ? '（一票否决）' : ''}`).join('\n') || '（无）';
+  const systems = [...new Set(rb.gates.map((g) => g.system))].sort();
+  const blocks = systems
+    .map((sys) => {
+      const lines = rb.gates.filter((g) => g.system === sys).map((g) => `· ${g.label}：${gateCond(g)}${g.veto ? '（一票否决）' : ''}`).join('\n');
+      return `${sys} 系统硬门槛：\n${lines || '（无）'}`;
+    })
+    .join('\n\n');
+  const prio = (rb.positionRules as any)?.system_priority;
+  const prioLine = Array.isArray(prio) && prio.length > 1 ? `\n系统优先级：${prio.join(' > ')}\n` : '';
   return (
     `【当前使用的核心原则 ${rb.version.version_label}】\n` +
-    `人设：${rb.version.persona}\n\n` +
-    `A 系统硬门槛：\n${list('A')}\n\n` +
-    `B 系统硬门槛：\n${list('B')}\n\n` +
+    `人设：${rb.version.persona}\n${prioLine}\n` +
+    `${blocks}\n\n` +
     `———\n你想优化哪一方面？例如：放宽/收紧某条门槛、增删条件、调整仓位或止损、修改人设。\n` +
     `说出你的想法，我们讨论后，点下方「🛠 让 agent 提议修改规则」，我会给出带版本号的修改方案供你确认。`
   );
@@ -587,8 +635,14 @@ onMounted(async () => {
 .mtime { font-size: 10px; color: #bbb; margin-top: 2px; }
 .msg.user .mtime { text-align: right; }
 .typing { color: #999; }
-.tplswitch { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 13px; background: #f7f9fc; border: 1px solid #dfe7f2; border-radius: 6px; padding: 6px 10px; margin: 6px 0; }
-.tplswitch select { padding: 4px; }
+.tplswitch { font-size: 13px; background: #f7f9fc; border: 1px solid #dfe7f2; border-radius: 6px; padding: 6px 10px; margin: 6px 0; }
+.tpl-head { display: flex; justify-content: space-between; align-items: center; }
+.tplgrid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 2px 12px; margin: 6px 0; }
+.tplcheck { font-size: 12px; }
+.composeprev { margin-top: 8px; border-top: 1px dashed #cdd; padding-top: 6px; }
+.composeprev .warn { color: #a76b00; }
+.sysrow { display: flex; justify-content: space-between; align-items: center; padding: 2px 0; }
+.sysrow .ord { display: flex; gap: 4px; }
 .propose-bar { margin: 6px 0; }
 .propose-btn { width: 100%; background: #fff7e6; border: 1px solid #ffe0a3; border-radius: 6px; padding: 8px; cursor: pointer; font-size: 13px; }
 .proposal { background: #f3faf3; border: 1px solid #cce8cc; border-radius: 8px; padding: 10px 12px; margin: 6px 0; font-size: 13px; }

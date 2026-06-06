@@ -44,13 +44,20 @@ export function evaluateGates(snapshot: StockSnapshot, gates: Gate[]): GateEvalu
     teach: g.teach,
   }));
 
-  // A veto fails if any A-system veto gate is an outright 'fail' (unknown is surfaced, not a veto fail).
-  const aFailed = gateResults.filter((r) => r.system === 'A' && r.veto === 1 && r.status === 'fail').map((r) => r.gate_key);
-  const bFailed = gateResults.filter((r) => r.system === 'B' && r.veto === 1 && r.status === 'fail').map((r) => r.gate_key);
+  // Per-system veto verdict for every distinct system (A/B/C…). A veto gate that is an
+  // outright 'fail' sinks its system; 'unknown' is surfaced but does not veto.
+  const letters = [...new Set(gateResults.map((r) => r.system))];
+  const systems = letters.map((sys) => {
+    const failed = gateResults.filter((r) => r.system === sys && r.veto === 1 && r.status === 'fail').map((r) => r.gate_key);
+    return { system: sys, passed: failed.length === 0, failed };
+  });
+  const a = systems.find((s) => s.system === 'A');
+  const b = systems.find((s) => s.system === 'B');
 
   return {
     gateResults,
-    aVeto: { passed: aFailed.length === 0, failed: aFailed },
-    bEmotion: { passed: bFailed.length === 0, failed: bFailed },
+    systems,
+    aVeto: { passed: a ? a.passed : true, failed: a?.failed ?? [] },
+    bEmotion: { passed: b ? b.passed : true, failed: b?.failed ?? [] },
   };
 }

@@ -32,13 +32,12 @@
 
       <p class="oneliner">👉 {{ report.one_liner }}</p>
 
-      <h3>A 系统 · 中线业绩仓</h3>
-      <GateTable :rows="gatesA" />
-      <p class="concl"><b>A 结论：</b>{{ report.a_conclusion }}</p>
-
-      <h3>B 系统 · 短线题材仓</h3>
-      <GateTable :rows="gatesB" />
-      <p class="concl"><b>B 结论：</b>{{ report.b_conclusion }}</p>
+      <template v-for="sys in systemsOf" :key="sys">
+        <h3>{{ sys }} 系统</h3>
+        <GateTable :rows="gatesOf(sys)" />
+        <p v-if="sys === 'A' && report.a_conclusion" class="concl"><b>A 结论：</b>{{ report.a_conclusion }}</p>
+        <p v-if="sys === 'B' && report.b_conclusion" class="concl"><b>B 结论：</b>{{ report.b_conclusion }}</p>
+      </template>
 
       <p v-if="report.exception_channel" class="concl"><b>例外通道：</b>{{ report.exception_channel }}</p>
       <p class="concl"><b>仓位建议：</b>{{ report.position_suggestion }}</p>
@@ -99,8 +98,10 @@ const err = ref('');
 const report = ref<AnalysisReport | null>(null);
 const reports = ref<ReportSummary[]>([]);
 
-const gatesA = computed(() => report.value?.gate_results.filter((g) => g.system === 'A') || []);
-const gatesB = computed(() => report.value?.gate_results.filter((g) => g.system === 'B') || []);
+const systemsOf = computed(() => [...new Set((report.value?.gate_results || []).map((g) => g.system))].sort());
+function gatesOf(sys: string) {
+  return report.value?.gate_results.filter((g) => g.system === sys) || [];
+}
 function labelOf(key: string) {
   return report.value?.gate_results.find((g) => g.gate_key === key)?.label || key;
 }

@@ -2,6 +2,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { getDb } from '../db';
 import { BASELINE_V3, Baseline, SeedGate, SeedSoftRule } from './baseline-v3';
 import { getTemplate } from './templates';
+import { composeTemplates } from './compose';
 import { FullRulebook, Gate, RulebookVersion, SoftRule } from '../types';
 
 interface VersionPayload {
@@ -122,6 +123,24 @@ export function instantiateBaseline(userId: string): FullRulebook {
 export function instantiateTemplate(userId: string, templateKey?: string): FullRulebook {
   const tpl = (templateKey && getTemplate(templateKey)) || getTemplate('v3-dual-system')!;
   return instantiateFrom(userId, tpl.baseline, `导入模板：${tpl.label}`);
+}
+
+// Compose multiple templates (keys order = priority) and switch to the result.
+export function applyComposedTemplates(userId: string, keys: string[]): FullRulebook {
+  const composed = composeTemplates(keys);
+  const active = getActive(userId);
+  const created = createVersion(userId, {
+    versionLabel: composed.baseline.versionLabel,
+    persona: composed.baseline.persona,
+    note: composed.conflict ? `组合多套系统（${composed.systems.map((s) => s.letter + '=' + s.label).join('、')}）` : `合并模板：${composed.systems[0]?.label}`,
+    parentVersionId: active?.version.id ?? null,
+    author: 'user',
+    gates: composed.baseline.gates,
+    softRules: composed.baseline.softRules,
+    positionRules: composed.baseline.positionRules,
+  });
+  activateVersion(userId, created.version.id);
+  return { ...created, version: { ...created.version, is_active: 1 } };
 }
 
 // Switch the active rulebook to a template: create a NEW version from it and activate.
