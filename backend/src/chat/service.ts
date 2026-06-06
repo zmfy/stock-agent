@@ -45,6 +45,12 @@ export function listSessions(userId: string, kind?: ChatKind): any[] {
   return getDb().prepare('SELECT * FROM chat_sessions WHERE user_id = ? ORDER BY pinned DESC, created_at DESC').all(userId);
 }
 
+// Clear a session's messages (keep the session) — e.g. restart the core-principle discussion.
+export function clearMessages(userId: string, sessionId: string): void {
+  if (!ownSession(userId, sessionId)) return;
+  getDb().prepare('DELETE FROM chat_messages WHERE session_id = ?').run(sessionId);
+}
+
 export function setPinned(userId: string, sessionId: string, pinned: boolean): void {
   getDb().prepare('UPDATE chat_sessions SET pinned = ? WHERE id = ? AND user_id = ?').run(pinned ? 1 : 0, sessionId, userId);
 }

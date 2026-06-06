@@ -12,23 +12,9 @@ beforeAll(() => {
   rb.instantiateBaseline(USER); // V3.0
 });
 
-// Build an AI response = the active rulebook serialized with a mutation applied.
-function aiReturning(mutate: (cur: any) => void) {
-  return async () => {
-    const active = rb.getActive(USER);
-    const cur = {
-      persona: active.version.persona,
-      note: 'test change',
-      gates: active.gates.map((g: any) => ({
-        gate_key: g.gate_key, system: g.system, label: g.label, field: g.field, op: g.op,
-        threshold: g.threshold, threshold2: g.threshold2, ref_field: g.ref_field, unit: g.unit, veto: g.veto, teach: g.teach,
-      })),
-      softRules: active.softRules.map((r: any) => ({ system: r.system, text: r.text, teach: r.teach })),
-      positionRules: active.positionRules,
-    };
-    mutate(cur);
-    return JSON.stringify(cur);
-  };
+// Build an AI response = a CHANGE PATCH (new robust format).
+function aiPatch(patch: any) {
+  return async () => JSON.stringify(patch);
 }
 
 describe('nextLabel', () => {
@@ -45,9 +31,7 @@ describe('nextLabel', () => {
 describe('proposeChange', () => {
   it('threshold tweak => minor, suggested V3.1, diff shows roe change', async () => {
     const r = await ps.proposeChange(USER, '把 ROE 放宽到 8', {
-      aiCall: aiReturning((cur) => {
-        cur.gates.find((g: any) => g.gate_key === 'roe_ttm').threshold = 8;
-      }),
+      aiCall: aiPatch({ note: '放宽ROE', gate_updates: [{ gate_key: 'roe_ttm', threshold: 8 }] }),
     });
     expect(r.magnitude).toBe('minor');
     expect(r.suggestedLabel).toBe('V3.1');
@@ -58,9 +42,7 @@ describe('proposeChange', () => {
 
   it('removing a gate => major, suggested V4.0', async () => {
     const r = await ps.proposeChange(USER, '去掉市销率门槛', {
-      aiCall: aiReturning((cur) => {
-        cur.gates = cur.gates.filter((g: any) => g.gate_key !== 'ps');
-      }),
+      aiCall: aiPatch({ note: '去掉PS', gates_remove: ['ps'] }),
     });
     expect(r.magnitude).toBe('major');
     expect(r.suggestedLabel).toBe('V4.0');
@@ -75,9 +57,7 @@ describe('proposeChange', () => {
 describe('applyProposal', () => {
   it('creates + activates a new agent-authored version with the bumped label', async () => {
     const r = await ps.proposeChange(USER, '把 ROE 放宽到 8', {
-      aiCall: aiReturning((cur) => {
-        cur.gates.find((g: any) => g.gate_key === 'roe_ttm').threshold = 8;
-      }),
+      aiCall: aiPatch({ note: '放宽ROE', gate_updates: [{ gate_key: 'roe_ttm', threshold: 8 }] }),
     });
     const applied = ps.applyProposal(USER, r.proposal, r.suggestedLabel);
     expect(applied.version.version_label).toBe('V3.1');

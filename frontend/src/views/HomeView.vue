@@ -271,7 +271,12 @@ async function applyCompose() {
   try {
     await rulebookApi.applyCompose(orderedKeys.value);
     activeRulebook.value = (await rulebookApi.getActive()).data.data;
-    tplMsg.value = '已换入组合模板';
+    // 换模板后清空本会话记忆，重新开始讨论
+    if (active.value) {
+      await chatApi.clearMessages(active.value.id);
+      messages.value = [];
+    }
+    tplMsg.value = '已换入组合模板，已清空本次讨论记忆，重新开始';
     composeRes.value = null;
     tplSelected.value = [];
   } catch (e: any) {

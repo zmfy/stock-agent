@@ -31,5 +31,6 @@ export const chatApi = {
   analyze: (id: string) => api.post<{ data: { report: any; message: ChatMessage } }>(`/chat/sessions/${id}/analyze`),
   deleteSession: (id: string) => api.delete(`/chat/sessions/${id}`),
   setPinned: (id: string, pinned: boolean) => api.put(`/chat/sessions/${id}/pin`, { pinned }),
+  clearMessages: (id: string) => api.delete(`/chat/sessions/${id}/messages`),
   clearAll: () => api.delete('/chat/sessions'),
 };

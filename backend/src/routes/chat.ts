@@ -67,6 +67,12 @@ router.post('/sessions/:id/analyze', async (req: Request, res: Response) => {
   }
 });
 
+// DELETE /api/chat/sessions/:id/messages — clear this session's messages (keep session)
+router.delete('/sessions/:id/messages', (req: Request, res: Response) => {
+  chat.clearMessages(req.user!.userId, req.params.id);
+  successResponse(res, null, '已清空本会话记忆');
+});
+
 // PUT /api/chat/sessions/:id/pin { pinned }
 router.put('/sessions/:id/pin', (req: Request, res: Response) => {
   const parsed = z.object({ pinned: z.boolean() }).safeParse(req.body);
