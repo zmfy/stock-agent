@@ -77,12 +77,10 @@
           <tr v-for="r in roles" :key="r.role">
             <td>{{ r.label }}<div class="muted">{{ r.hint }}</div></td>
             <td>
-              <select :value="r.mode === 'manual' ? r.pinnedProvider || '' : '__auto__'" @change="onRoleChange(r, $event)">
+              <select :value="roleValue(r)" @change="onRoleChange(r, $event)">
                 <option v-if="r.role === 'core'" value="" disabled>选择主 agent 模型</option>
                 <option v-else value="__auto__">自动（由 agent 挑）</option>
-                <option v-for="c in enabledConfigs" :key="c.provider" :value="c.provider">
-                  {{ providerLabel(c.provider) }} · {{ c.model }}
-                </option>
+                <option v-for="o in modelOptions" :key="o.key" :value="o.key">{{ o.label }}</option>
               </select>
               <span v-if="r.role === 'core'" class="coretag">主 agent · 仅你可定</span>
             </td>
@@ -206,12 +204,32 @@ async function autoAssign() {
   }
 }
 
+// Every (enabled provider × each of its models) is a selectable option, so e.g.
+// deepseek-chat and deepseek-reasoner are two distinct choices.
+const modelOptions = computed(() => {
+  const out: Array<{ key: string; provider: string; model: string; label: string }> = [];
+  for (const c of enabledConfigs.value) {
+    const def = providers.value.find((p) => p.name === c.provider);
+    const models = Array.from(new Set([c.model, ...(def?.models || [])])).filter(Boolean);
+    for (const m of models) out.push({ key: `${c.provider}|${m}`, provider: c.provider, model: m, label: `${providerLabel(c.provider)} · ${m}` });
+  }
+  return out;
+});
+function roleValue(r: RoleAssignment) {
+  if (r.mode !== 'manual') return '__auto__';
+  return `${r.pinnedProvider}|${r.pinnedModel || r.resolvedModel || ''}`;
+}
+
 async function onRoleChange(r: RoleAssignment, ev: Event) {
   const val = (ev.target as HTMLSelectElement).value;
   roleMsg.value = '';
   try {
-    if (val === '__auto__') await aiApi.setRole(r.role, { mode: 'auto' });
-    else await aiApi.setRole(r.role, { mode: 'manual', provider: val });
+    if (val === '__auto__') {
+      await aiApi.setRole(r.role, { mode: 'auto' });
+    } else {
+      const [provider, model] = val.split('|');
+      await aiApi.setRole(r.role, { mode: 'manual', provider, model });
+    }
     roleOk.value = true; roleMsg.value = '分工已更新';
     await reload();
   } catch (e: any) {
