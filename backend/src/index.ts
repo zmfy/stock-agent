@@ -13,6 +13,8 @@ import aiRoutes from './routes/ai';
 import pluginRoutes from './routes/plugins';
 import dataRoutes from './routes/data';
 import analysisRoutes from './routes/analysis';
+import agentRoutes from './routes/agent';
+import chatRoutes from './routes/chat';
 
 export function createApp(): express.Express {
   const app = express();
@@ -55,6 +57,8 @@ export function createApp(): express.Express {
   app.use('/api/plugins', pluginRoutes);
   app.use('/api/data', dataRoutes);
   app.use('/api/analysis', analysisRoutes);
+  app.use('/api/agent', agentRoutes);
+  app.use('/api/chat', chatRoutes);
 
   app.get('/health', (_req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });

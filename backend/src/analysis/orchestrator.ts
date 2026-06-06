@@ -6,6 +6,7 @@ import { getModelForRole } from '../ai/service';
 import { getProvider } from '../ai/providers';
 import { chat } from '../ai/manager';
 import { saveReport, getReport } from './report-service';
+import { getCorePersona } from '../agent/profiles-service';
 
 export interface ParsedAnalysis {
   a_conclusion: string;
@@ -117,7 +118,9 @@ export async function runAnalysis(userId: string, code: string, opts: RunOptions
 
   const snapshot = await getStockSnapshot(userId, code);
   const ev = evaluateGates(snapshot, rb.gates);
-  const prompt = buildAnalysisPrompt(rb.version.persona, ev.gateResults, rb.softRules, rb.positionRules, snapshot);
+  // Main-agent persona now lives in agent_profiles (decoupled from the rulebook); fall back to the version persona.
+  const persona = getCorePersona(userId) || rb.version.persona;
+  const prompt = buildAnalysisPrompt(persona, ev.gateResults, rb.softRules, rb.positionRules, snapshot);
 
   const aiCall = opts.aiCall || ((p: string) => defaultAiCall(userId, p));
   const { raw, provider, model } = await aiCall(prompt);

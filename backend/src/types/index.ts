@@ -40,6 +40,8 @@ export interface StockSnapshot {
   ps: number | null;
   net_profit: number | null;
   turnover_rate: number | null;
+  ma5: number | null;
+  ma10: number | null;
   ma20: number | null;
   ma60: number | null;
   year_high: number | null;

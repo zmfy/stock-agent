@@ -1,6 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { getDb } from '../db';
-import { BASELINE_V3, SeedGate, SeedSoftRule } from './baseline-v3';
+import { BASELINE_V3, Baseline, SeedGate, SeedSoftRule } from './baseline-v3';
+import { getTemplate } from './templates';
 import { FullRulebook, Gate, RulebookVersion, SoftRule } from '../types';
 
 interface VersionPayload {
@@ -95,22 +96,32 @@ function writeVersion(
   return versionId;
 }
 
-export function instantiateBaseline(userId: string): FullRulebook {
+function instantiateFrom(userId: string, b: Baseline, note: string): FullRulebook {
   const versionId = writeVersion(
     userId,
     {
-      versionLabel: BASELINE_V3.versionLabel,
-      persona: BASELINE_V3.persona,
-      note: '导入 V3.0 双系统基线',
+      versionLabel: b.versionLabel,
+      persona: b.persona,
+      note,
       parentVersionId: null,
       author: 'user',
-      gates: BASELINE_V3.gates,
-      softRules: BASELINE_V3.softRules,
-      positionRules: BASELINE_V3.positionRules,
+      gates: b.gates,
+      softRules: b.softRules,
+      positionRules: b.positionRules,
     },
     1
   );
   return getVersionRaw(userId, versionId)!;
+}
+
+export function instantiateBaseline(userId: string): FullRulebook {
+  return instantiateFrom(userId, BASELINE_V3, '导入 V3.0 双系统基线');
+}
+
+// Instantiate from a named template (defaults to the V3 dual-system template).
+export function instantiateTemplate(userId: string, templateKey?: string): FullRulebook {
+  const tpl = (templateKey && getTemplate(templateKey)) || getTemplate('v3-dual-system')!;
+  return instantiateFrom(userId, tpl.baseline, `导入模板：${tpl.label}`);
 }
 
 export function getActive(userId: string): FullRulebook | null {

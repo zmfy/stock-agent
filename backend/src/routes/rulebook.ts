@@ -3,9 +3,24 @@ import { z } from 'zod';
 import { authMiddleware } from '../middleware/auth';
 import { successResponse, errorResponse } from '../utils/response';
 import * as svc from '../rulebook/service';
+import { TEMPLATES } from '../rulebook/templates';
 
 const router = Router();
 router.use(authMiddleware);
+
+// GET /api/rulebook/templates — built-in starter templates (no gates payload, just meta)
+router.get('/templates', (_req: Request, res: Response) => {
+  successResponse(
+    res,
+    TEMPLATES.map((t) => ({
+      key: t.key,
+      label: t.label,
+      description: t.description,
+      versionLabel: t.baseline.versionLabel,
+      gateCount: t.baseline.gates.length,
+    }))
+  );
+});
 
 const gateSchema = z.object({
   system: z.enum(['A', 'B']),
@@ -42,13 +57,14 @@ router.get('/active', (req: Request, res: Response) => {
   successResponse(res, svc.getActive(req.user!.userId));
 });
 
-// POST /api/rulebook/init — import the V3.0 baseline (only if the user has none)
+// POST /api/rulebook/init { template? } — import a starter template (only if the user has none)
 router.post('/init', (req: Request, res: Response) => {
   const userId = req.user!.userId;
   if (svc.hasAnyVersion(userId)) {
     return errorResponse(res, 409, 'BUSINESS_CONFLICT', '已存在规则版本，无需重复导入');
   }
-  successResponse(res, svc.instantiateBaseline(userId), '已导入 V3.0 基线', 201);
+  const template = typeof req.body?.template === 'string' ? req.body.template : undefined;
+  successResponse(res, svc.instantiateTemplate(userId, template), '已导入规则模板', 201);
 });
 
 // GET /api/rulebook/versions
