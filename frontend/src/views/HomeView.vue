@@ -50,7 +50,8 @@
       <ul class="sessions">
         <li v-for="s in sessions" :key="s.id" :class="{ active: active?.id === s.id }" @click="open(s)">
           <span class="kind">{{ kindIcon(s.kind) }}</span>
-          {{ s.title || sessionLabel(s) }}
+          <span class="stitle">{{ s.title || sessionLabel(s) }}</span>
+          <button class="del" title="删除" @click.stop="removeSession(s)">×</button>
         </li>
       </ul>
 
@@ -307,6 +308,16 @@ async function doAnalyze(s: ChatSession) {
     analyzing.value = false;
   }
 }
+async function removeSession(s: ChatSession) {
+  if (!confirm(`删除「${s.title || sessionLabel(s)}」？`)) return;
+  await chatApi.deleteSession(s.id);
+  if (active.value?.id === s.id) {
+    active.value = null;
+    messages.value = [];
+  }
+  await loadSessions();
+}
+
 async function newGeneral() {
   const id = (await chatApi.createSession('general')).data.data.id;
   await loadSessions();
@@ -448,9 +459,13 @@ onMounted(async () => {
 .freeq input { flex: 1; padding: 6px; }
 .sect-head { display: flex; justify-content: space-between; align-items: center; margin: 12px 0 4px; font-size: 12px; color: #999; }
 .sessions { list-style: none; padding: 0; margin: 0; flex: 1; }
-.sessions li { padding: 6px 8px; border-radius: 6px; cursor: pointer; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sessions li { display: flex; align-items: center; gap: 4px; padding: 6px 8px; border-radius: 6px; cursor: pointer; font-size: 13px; }
 .sessions li.active { background: #eef; }
-.kind { margin-right: 4px; }
+.kind { flex: none; }
+.stitle { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.del { flex: none; border: none; background: none; color: #bbb; cursor: pointer; font-size: 15px; line-height: 1; padding: 0 2px; visibility: hidden; }
+.sessions li:hover .del { visibility: visible; }
+.del:hover { color: #c00; }
 .menu { padding: 8px 4px; border-top: 1px solid #eee; }
 .settings-entry { width: 100%; text-align: left; background: #f2f2f2; border: 1px solid #e0e0e0; border-radius: 6px; padding: 8px 10px; font-size: 13px; cursor: pointer; }
 .settings-entry.active { background: #e6e6ff; border-color: #c9c9f0; }
