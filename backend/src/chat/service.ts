@@ -7,6 +7,7 @@ import { getCorePersona } from '../agent/profiles-service';
 import { runAnalysis } from '../analysis/orchestrator';
 import { getLatestReportByCode } from '../analysis/report-service';
 import { getTodayContent } from '../meetings/service';
+import { getActive } from '../rulebook/service';
 
 export type ChatKind = 'general' | 'core_principle' | 'stock' | 'morning' | 'evening';
 
@@ -135,6 +136,15 @@ export async function postMessage(userId: string, sessionId: string, content: st
   if (!extra && (session.kind === 'morning' || session.kind === 'evening')) {
     const mc = getTodayContent(userId, session.kind);
     if (mc) extra = `今日${session.kind === 'morning' ? '早会' : '晚会'}内容：\n${mc}`;
+  }
+  if (!extra && session.kind === 'core_principle') {
+    const rb = getActive(userId);
+    if (rb) {
+      const g = rb.gates
+        .map((x) => `${x.system}:${x.label} ${x.op}${x.threshold ?? ''}${x.unit}${x.veto ? '(否决)' : ''}`)
+        .join('；');
+      extra = `当前核心原则【${rb.version.version_label}】人设：${rb.version.persona}\n硬门槛：${g}`;
+    }
   }
   const prompt = buildPrompt(persona, session.kind, history, extra);
   const aiCall = opts.aiCall || ((p: string) => defaultAiCall(userId, p));

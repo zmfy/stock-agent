@@ -153,7 +153,7 @@ import { ref, computed, nextTick, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 import { chatApi, type ChatSession, type ChatMessage, type ChatKind } from '../api/chat';
-import { rulebookApi, type ProposeResult } from '../api/rulebook';
+import { rulebookApi, type ProposeResult, type FullRulebook, type Gate } from '../api/rulebook';
 import { meetingsApi, type Meeting } from '../api/meetings';
 import { screenApi, type ScreenRun } from '../api/screen';
 import AnalysisView from './AnalysisView.vue';
@@ -201,9 +201,29 @@ const genning = ref<'' | 'morning' | 'evening'>('');
 const screen = ref<ScreenRun | null>(null);
 const screening = ref(false);
 const screenOpen = ref(true);
+const activeRulebook = ref<FullRulebook | null>(null);
+function gateCond(g: Gate) {
+  if (g.op === 'gt_field') return `${g.field} > ${g.ref_field}`;
+  if (g.op === 'between') return `${g.threshold} < 值 < ${g.threshold2} ${g.unit}`;
+  return `${g.op} ${g.threshold}${g.unit}`;
+}
+function buildCpBriefing(rb: FullRulebook | null): string {
+  if (!rb) return '你还没有核心原则。请到「系统设置 → 核心规则」导入一个模板后，再来这里和我探讨优化。';
+  const list = (sys: 'A' | 'B') =>
+    rb.gates.filter((g) => g.system === sys).map((g) => `· ${g.label}：${gateCond(g)}${g.veto ? '（一票否决）' : ''}`).join('\n') || '（无）';
+  return (
+    `【当前使用的核心原则 ${rb.version.version_label}】\n` +
+    `人设：${rb.version.persona}\n\n` +
+    `A 系统硬门槛：\n${list('A')}\n\n` +
+    `B 系统硬门槛：\n${list('B')}\n\n` +
+    `———\n你想优化哪一方面？例如：放宽/收紧某条门槛、增删条件、调整仓位或止损、修改人设。\n` +
+    `说出你的想法，我们讨论后，点下方「🛠 让 agent 提议修改规则」，我会给出带版本号的修改方案供你确认。`
+  );
+}
 const briefing = computed(() => {
   if (active.value?.kind === 'morning') return meetings.value.morning?.content || '';
   if (active.value?.kind === 'evening') return meetings.value.evening?.content || '';
+  if (active.value?.kind === 'core_principle') return buildCpBriefing(activeRulebook.value);
   return '';
 });
 
@@ -238,6 +258,8 @@ async function applyProposal() {
     await rulebookApi.apply(proposal.value.suggestedLabel, proposal.value.proposal);
     applyMsg.value = `已采纳，规则升级到 ${proposal.value.suggestedLabel}`;
     proposal.value = null;
+    // refresh the in-pane current-rulebook banner
+    activeRulebook.value = (await rulebookApi.getActive()).data.data;
   } catch (e: any) {
     chatErr.value = e.response?.data?.message || '采纳失败';
   } finally {
@@ -331,9 +353,15 @@ async function openMeeting(kind: 'morning' | 'evening') {
 }
 
 async function openStockCode(code: string) {
-  const id = (await chatApi.createSession('stock', code, `个股 ${code}`)).data.data.id;
-  await loadSessions();
-  const s = sessions.value.find((x) => x.id === id);
+  const c = code.trim();
+  if (!c) return;
+  // One window per stock: reuse an existing stock session for this code.
+  let s = sessions.value.find((x) => x.kind === 'stock' && x.ref_id === c);
+  if (!s) {
+    const id = (await chatApi.createSession('stock', c, `个股 ${c}`)).data.data.id;
+    await loadSessions();
+    s = sessions.value.find((x) => x.id === id);
+  }
   if (s) await open(s);
 }
 async function freeQuery() {
@@ -398,6 +426,7 @@ onMounted(async () => {
   }
   try {
     const rb = (await rulebookApi.getActive()).data.data;
+    activeRulebook.value = rb;
     needsInit.value = !rb;
   } catch {
     /* ignore */
