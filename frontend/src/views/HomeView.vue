@@ -4,42 +4,6 @@
     <aside class="rail">
       <div class="brand">股票小作手</div>
 
-      <!-- 置顶 -->
-      <div class="pinned">
-        <!-- 早会 -->
-        <button v-if="meetings.morning" class="pin-btn" :class="{ active: active?.kind === 'morning' }" @click="openMeeting('morning')">
-          📈 今日操作方向（早会）
-        </button>
-        <button v-else class="pin-card gen" :disabled="genning === 'morning'" @click="genMeeting('morning')">
-          📈 生成今日早会{{ genning === 'morning' ? '…' : '' }}
-        </button>
-
-        <button class="pin-btn" :class="{ active: active?.kind === 'core_principle' }" @click="openCorePrinciple">📜 核心原则（对话）</button>
-
-        <div class="screen-sect">
-          <button class="pin-btn" :disabled="screening" @click="runScreen">🔍 {{ screening ? '选股中…' : '按核心原则选股' }}</button>
-          <button v-if="screen" class="fold" @click="screenOpen = !screenOpen">
-            {{ screenOpen ? '▾' : '▸' }} 选股结果（{{ screen.results.length }}）
-          </button>
-          <div v-if="screen && screenOpen" class="screen-list">
-            <div class="snote muted">{{ screen.note }}</div>
-            <div v-for="r in screen.results" :key="r.code" class="srow" @click="openStockCode(r.code)">
-              <span class="badge2" :class="r.aPass ? 'a' : r.bPass ? 'b' : 'no'">{{ r.aPass ? 'A' : r.bPass ? 'B' : '—' }}</span>
-              {{ r.name || r.code }} <span class="muted">{{ r.code }} · {{ r.passed }}/{{ r.total }}</span>
-            </div>
-            <div v-if="!screen.results.length" class="muted">无符合条件的股票</div>
-          </div>
-        </div>
-
-        <!-- 晚会 -->
-        <button v-if="meetings.evening" class="pin-btn" :class="{ active: active?.kind === 'evening' }" @click="openMeeting('evening')">
-          🌙 今日操作复盘（晚会）
-        </button>
-        <button v-else class="pin-card gen" :disabled="genning === 'evening'" @click="genMeeting('evening')">
-          🌙 生成今日晚会{{ genning === 'evening' ? '…' : '' }}
-        </button>
-      </div>
-
       <!-- 会话列表 -->
       <div class="sect-head">对话 <button class="mini" @click="newGeneral">＋新对话</button></div>
       <ul class="sessions">
@@ -79,108 +43,136 @@
 
       <!-- 聊天 -->
       <section v-else class="chat">
-      <div v-if="needsInit" class="initbar">
-        还没设定核心原则？<router-link to="/onboarding">去完成初始化设定 →</router-link>
-      </div>
+        <div class="chat-row">
+          <!-- 左：对话主体 -->
+          <div class="chat-main">
+            <div v-if="needsInit" class="initbar">
+              还没设定核心原则？<router-link to="/onboarding">去完成初始化设定 →</router-link>
+            </div>
 
-      <div v-if="!active" class="empty">
-        <h2>你好，我是股票小作手，来财。🤝</h2>
-        <p class="muted">输入股票代码 / 名称 / 拼音，直接开一个该股的分析对话；输入「来财」可直接呼叫主 agent 对话；或在左侧选「核心原则」「早会」等。</p>
-        <div class="qbox">
-          <StockPicker placeholder="输入股票代码 / 名称 / 拼音；或输入「来财」呼叫主 agent" @pick="onDefaultPick" />
-        </div>
-      </div>
-
-      <template v-else>
-        <div class="title">
-          {{ active.title || sessionLabel(active) }}
-          <span v-if="active.kind === 'stock'" class="stock-head">
-            <button class="mini" :disabled="analyzing" @click="doAnalyze(active)">{{ analyzing ? '按原则分析中…' : '🔄 重新按核心原则分析' }}</button>
-            <router-link class="mini" :to="{ path: '/analysis', query: { code: active.ref_id } }">完整报告</router-link>
-          </span>
-        </div>
-        <div v-if="analyzing" class="analyzing">正在按你的核心原则分析 {{ active.ref_id }} …</div>
-
-        <!-- 早会/晚会简报 -->
-        <div v-if="briefing" class="briefing">{{ briefing }}</div>
-
-        <div class="convo" :class="{ 'with-side': active.kind === 'core_principle' }">
-          <div class="convo-main">
-            <div class="msgs" ref="msgsEl">
-              <div v-for="m in messages" :key="m.id" class="msg" :class="m.role">
-                <div class="bubble">{{ m.content }}</div>
-                <div v-if="m.created_at" class="mtime">{{ fmtTime(m.created_at) }}</div>
+            <div v-if="!active" class="empty">
+              <h2>你好，我是股票小作手，来财。🤝</h2>
+              <p class="muted">输入股票代码 / 名称 / 拼音，直接开一个该股的分析对话；输入「来财」可直接呼叫主 agent 对话；或在右侧操作框选「早会」「核心原则」等。</p>
+              <div class="qbox">
+                <StockPicker placeholder="输入股票代码 / 名称 / 拼音；或输入「来财」呼叫主 agent" @pick="onDefaultPick" />
               </div>
-              <div v-if="sending" class="msg assistant"><div class="bubble typing">思考中…</div></div>
             </div>
 
-            <div class="composer">
-              <textarea v-model="input" rows="2" placeholder="输入消息，Enter 发送" @keydown.enter.exact.prevent="send"></textarea>
-              <button :disabled="sending || !input.trim()" @click="send">发送</button>
-            </div>
-            <p v-if="chatErr" class="err">{{ chatErr }}</p>
+            <template v-else>
+              <div class="title">
+                {{ active.title || sessionLabel(active) }}
+                <span v-if="active.kind === 'stock'" class="stock-head">
+                  <button class="mini" :disabled="analyzing" @click="doAnalyze(active)">{{ analyzing ? '按原则分析中…' : '🔄 重新按核心原则分析' }}</button>
+                  <router-link class="mini" :to="{ path: '/analysis', query: { code: active.ref_id } }">完整报告</router-link>
+                </span>
+              </div>
+              <div v-if="analyzing" class="analyzing">正在按你的核心原则分析 {{ active.ref_id }} …</div>
+              <div v-if="briefing" class="briefing">{{ briefing }}</div>
+
+              <div class="msgs" ref="msgsEl">
+                <div v-for="m in messages" :key="m.id" class="msg" :class="m.role">
+                  <div class="bubble">{{ m.content }}</div>
+                  <div v-if="m.created_at" class="mtime">{{ fmtTime(m.created_at) }}</div>
+                </div>
+                <div v-if="sending" class="msg assistant"><div class="bubble typing">思考中…</div></div>
+              </div>
+
+              <div class="composer">
+                <textarea v-model="input" rows="2" placeholder="输入消息，Enter 发送" @keydown.enter.exact.prevent="send"></textarea>
+                <button :disabled="sending || !input.trim()" @click="send">发送</button>
+              </div>
+              <p v-if="chatErr" class="err">{{ chatErr }}</p>
+            </template>
           </div>
 
-          <!-- 核心原则：规则操作面板（右侧，将来还会显示大盘/个股事实信息） -->
-          <aside v-if="active.kind === 'core_principle'" class="cp-side">
-            <!-- 更换/组合模板（多选） -->
-            <div class="tplswitch">
+          <!-- 右：操作框（所有聊天通用，可隐藏） -->
+          <aside v-if="opsOpen" class="ops-side">
+            <div class="ops-head"><span>操作面板</span><button class="mini" @click="opsOpen = false">收起 ›</button></div>
+
+            <!-- 早会 -->
+            <button v-if="meetings.morning" class="ops-btn" :class="{ active: active?.kind === 'morning' }" @click="openMeeting('morning')">📈 今日操作方向（早会）</button>
+            <button v-else class="ops-btn dashed" :disabled="genning === 'morning'" @click="genMeeting('morning')">📈 生成今日早会{{ genning === 'morning' ? '…' : '' }}</button>
+
+            <!-- 晚会 -->
+            <button v-if="meetings.evening" class="ops-btn" :class="{ active: active?.kind === 'evening' }" @click="openMeeting('evening')">🌙 今日操作复盘（晚会）</button>
+            <button v-else class="ops-btn dashed" :disabled="genning === 'evening'" @click="genMeeting('evening')">🌙 生成今日晚会{{ genning === 'evening' ? '…' : '' }}</button>
+
+            <!-- 选股 -->
+            <div class="screen-sect">
+              <button class="ops-btn" :disabled="screening" @click="runScreen">🔍 {{ screening ? '选股中…' : '按核心原则选股' }}</button>
+              <button v-if="screen" class="fold" @click="screenOpen = !screenOpen">{{ screenOpen ? '▾' : '▸' }} 选股结果（{{ screen.results.length }}）</button>
+              <div v-if="screen && screenOpen" class="screen-list">
+                <div class="snote muted">{{ screen.note }}</div>
+                <div v-for="r in screen.results" :key="r.code" class="srow" @click="openStockCode(r.code)">
+                  <span class="badge2" :class="r.aPass ? 'a' : r.bPass ? 'b' : 'no'">{{ r.aPass ? 'A' : r.bPass ? 'B' : '—' }}</span>
+                  {{ r.name || r.code }} <span class="muted">{{ r.code }} · {{ r.passed }}/{{ r.total }}</span>
+                </div>
+                <div v-if="!screen.results.length" class="muted">无符合条件的股票</div>
+              </div>
+            </div>
+
+            <!-- 核心原则讨论 / 更换模板（合并入口） -->
+            <button class="ops-btn" :class="{ active: active?.kind === 'core_principle' }" @click="openPrincipleAndTemplates">📜 核心原则讨论 / 更换模板</button>
+
+            <div v-if="tplOpen" class="tplswitch">
               <div class="tpl-head">
                 <span>更换 / 组合模板（可多选）</span>
-                <button class="mini" @click="tplOpen = !tplOpen">{{ tplOpen ? '收起' : '展开' }}</button>
+                <button class="mini" @click="tplOpen = false">收起</button>
               </div>
-              <div v-if="tplOpen">
-                <div class="tplgrid">
-                  <label v-for="t in templates" :key="t.key" class="tplcheck">
-                    <input type="checkbox" :value="t.key" v-model="tplSelected" /> {{ t.label }}
-                  </label>
+              <div class="tplgrid">
+                <label v-for="t in templates" :key="t.key" class="tplcheck">
+                  <input type="checkbox" :value="t.key" v-model="tplSelected" /> {{ t.label }}
+                </label>
+              </div>
+              <button :disabled="!tplSelected.length" @click="previewCompose">预览组合（{{ tplSelected.length }}）</button>
+
+              <div v-if="composeRes" class="composeprev">
+                <p v-if="!composeRes.conflict" class="ok-msg">✅ 无冲突，将合并为一套：{{ composeRes.versionLabel }}</p>
+                <template v-else>
+                  <p class="warn">⚠️ 存在冲突（字段：{{ composeRes.conflictFields.join('、') }}），将拆为多套系统，请排优先级（上=优先）：</p>
+                  <div v-for="(k, i) in orderedKeys" :key="k" class="sysrow">
+                    <span><b>{{ String.fromCharCode(65 + i) }}</b>：{{ labelOfKey(k) }}</span>
+                    <span class="ord">
+                      <button class="mini" :disabled="i === 0" @click="moveKey(i, -1)">↑</button>
+                      <button class="mini" :disabled="i === orderedKeys.length - 1" @click="moveKey(i, 1)">↓</button>
+                    </span>
+                  </div>
+                </template>
+                <button @click="applyCompose">换入为当前核心原则</button>
+              </div>
+              <span v-if="tplMsg" class="ok-msg">{{ tplMsg }}</span>
+            </div>
+
+            <!-- 让 agent 提议修改（进入核心原则讨论后显示，在换模板按钮下边） -->
+            <template v-if="active?.kind === 'core_principle'">
+              <div class="propose-bar">
+                <button class="propose-btn" :disabled="proposing" @click="propose">
+                  {{ proposing ? 'agent 拟定中…' : '🛠 根据本次讨论，让 agent 提议修改规则' }}
+                </button>
+              </div>
+
+              <div v-if="proposal" class="proposal">
+                <h4>修改提议（{{ proposal.magnitude === 'major' ? '较大改动' : '微调' }}）：{{ proposal.currentLabel }} → <b>{{ proposal.suggestedLabel }}</b></h4>
+                <p v-if="proposal.delta.personaChanged">· 人设有改动</p>
+                <p v-for="c in proposal.delta.gates.changed" :key="c.gate_key">· 门槛 <b>{{ c.gate_key }}</b>：{{ c.from.threshold }} → {{ c.to.threshold }}</p>
+                <p v-for="k in proposal.delta.gates.added" :key="'a'+k">· 新增门槛 {{ k }}</p>
+                <p v-for="k in proposal.delta.gates.removed" :key="'r'+k">· 删除门槛 {{ k }}</p>
+                <p v-if="proposal.delta.softRules.added.length || proposal.delta.softRules.removed.length">· 软判断 +{{ proposal.delta.softRules.added.length }} / -{{ proposal.delta.softRules.removed.length }}</p>
+                <p v-if="proposal.delta.positionRulesChangedKeys.length">· 仓位规则改动：{{ proposal.delta.positionRulesChangedKeys.join('、') }}</p>
+                <p v-if="noChange" class="muted">无实质改动</p>
+                <p v-if="proposal.proposal.note" class="muted">理由：{{ proposal.proposal.note }}</p>
+                <div class="ops">
+                  <button :disabled="applying || noChange" @click="applyProposal">采纳并升级到 {{ proposal.suggestedLabel }}</button>
+                  <button @click="proposal = null">放弃</button>
                 </div>
-                <button :disabled="!tplSelected.length" @click="previewCompose">预览组合（{{ tplSelected.length }}）</button>
-
-                <div v-if="composeRes" class="composeprev">
-                  <p v-if="!composeRes.conflict" class="ok-msg">✅ 无冲突，将合并为一套：{{ composeRes.versionLabel }}</p>
-                  <template v-else>
-                    <p class="warn">⚠️ 存在冲突（字段：{{ composeRes.conflictFields.join('、') }}），将拆为多套系统，请排优先级（上=优先）：</p>
-                    <div v-for="(k, i) in orderedKeys" :key="k" class="sysrow">
-                      <span><b>{{ String.fromCharCode(65 + i) }}</b>：{{ labelOfKey(k) }}</span>
-                      <span class="ord">
-                        <button class="mini" :disabled="i === 0" @click="moveKey(i, -1)">↑</button>
-                        <button class="mini" :disabled="i === orderedKeys.length - 1" @click="moveKey(i, 1)">↓</button>
-                      </span>
-                    </div>
-                  </template>
-                  <button @click="applyCompose">换入为当前核心原则</button>
-                </div>
-                <span v-if="tplMsg" class="ok-msg">{{ tplMsg }}</span>
+                <p v-if="applyMsg" class="ok-msg">{{ applyMsg }}</p>
               </div>
-            </div>
-
-            <!-- 让 agent 提议修改 -->
-            <div class="propose-bar">
-              <button class="propose-btn" :disabled="proposing" @click="propose">
-                {{ proposing ? 'agent 拟定中…' : '🛠 根据本次讨论，让 agent 提议修改规则' }}
-              </button>
-            </div>
-
-            <div v-if="proposal" class="proposal">
-              <h4>修改提议（{{ proposal.magnitude === 'major' ? '较大改动' : '微调' }}）：{{ proposal.currentLabel }} → <b>{{ proposal.suggestedLabel }}</b></h4>
-              <p v-if="proposal.delta.personaChanged">· 人设有改动</p>
-              <p v-for="c in proposal.delta.gates.changed" :key="c.gate_key">· 门槛 <b>{{ c.gate_key }}</b>：{{ c.from.threshold }} → {{ c.to.threshold }}</p>
-              <p v-for="k in proposal.delta.gates.added" :key="'a'+k">· 新增门槛 {{ k }}</p>
-              <p v-for="k in proposal.delta.gates.removed" :key="'r'+k">· 删除门槛 {{ k }}</p>
-              <p v-if="proposal.delta.softRules.added.length || proposal.delta.softRules.removed.length">· 软判断 +{{ proposal.delta.softRules.added.length }} / -{{ proposal.delta.softRules.removed.length }}</p>
-              <p v-if="proposal.delta.positionRulesChangedKeys.length">· 仓位规则改动：{{ proposal.delta.positionRulesChangedKeys.join('、') }}</p>
-              <p v-if="noChange" class="muted">无实质改动</p>
-              <p v-if="proposal.proposal.note" class="muted">理由：{{ proposal.proposal.note }}</p>
-              <div class="ops">
-                <button :disabled="applying || noChange" @click="applyProposal">采纳并升级到 {{ proposal.suggestedLabel }}</button>
-                <button @click="proposal = null">放弃</button>
-              </div>
-              <p v-if="applyMsg" class="ok-msg">{{ applyMsg }}</p>
-            </div>
+            </template>
           </aside>
         </div>
-      </template>
+
+        <!-- 操作框隐藏后，右下角悬浮重开按钮 -->
+        <button v-if="!opsOpen" class="ops-fab" @click="opsOpen = true" title="显示操作框">⚙ 操作</button>
       </section>
     </main>
   </div>
@@ -236,6 +228,7 @@ const genning = ref<'' | 'morning' | 'evening'>('');
 const screen = ref<ScreenRun | null>(null);
 const screening = ref(false);
 const screenOpen = ref(true);
+const opsOpen = ref(true); // 右侧操作框是否展开
 const activeRulebook = ref<FullRulebook | null>(null);
 const templates = ref<TemplateMeta[]>([]);
 const tplOpen = ref(false);
@@ -246,11 +239,18 @@ const tplMsg = ref('');
 function labelOfKey(k: string) {
   return templates.value.find((t) => t.key === k)?.label || k;
 }
+// 合并入口：进入核心原则讨论 + 展开模板区
+async function openPrincipleAndTemplates() {
+  tplOpen.value = true;
+  await openCorePrinciple();
+}
 async function previewCompose() {
   tplMsg.value = '';
   try {
     composeRes.value = (await rulebookApi.composePreview(tplSelected.value)).data.data;
     orderedKeys.value = [...tplSelected.value];
+    // 预览组合后直接进入核心原则讨论（随后右侧会显示「让 agent 提议修改规则」）
+    await openCorePrinciple();
   } catch (e: any) {
     chatErr.value = e.response?.data?.message || '预览失败';
   }
@@ -653,10 +653,19 @@ onMounted(async () => {
 .panelbox { flex: 1; overflow-y: auto; margin: 14px; padding: 16px 20px; background: var(--surface); border-radius: 14px; box-shadow: var(--shadow); min-height: 0; }
 .chat { flex: 1; display: flex; flex-direction: column; padding: 16px 20px; margin: 14px; background: var(--surface); border-radius: 14px; box-shadow: var(--shadow); min-width: 0; min-height: 0; }
 /* 对话区：默认单栏；核心原则时右侧加规则操作面板 */
-.convo { flex: 1; display: flex; min-height: 0; gap: 16px; }
-.convo-main { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
-.cp-side { width: 300px; flex: none; overflow-y: auto; border-left: 1px solid #eee; padding-left: 14px; }
-.cp-side .tplswitch, .cp-side .propose-bar, .cp-side .proposal { margin: 0 0 12px; }
+/* 聊天区：左对话主体 + 右操作框 */
+.chat-row { flex: 1; display: flex; min-height: 0; gap: 16px; }
+.chat-main { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.ops-side { width: 286px; flex: none; overflow-y: auto; border-left: 1px solid var(--border); padding-left: 14px; display: flex; flex-direction: column; gap: 8px; }
+.ops-head { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--muted); padding-bottom: 2px; }
+.ops-btn { width: 100%; text-align: left; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 9px 11px; font-size: 13px; cursor: pointer; color: var(--text); transition: all 0.15s; }
+.ops-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent-600); }
+.ops-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.ops-btn.dashed { border-style: dashed; background: #f0f7f2; }
+.ops-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+.ops-side .tplswitch, .ops-side .propose-bar, .ops-side .proposal { margin: 0; }
+.ops-fab { position: fixed; right: 22px; bottom: 22px; z-index: 50; background: var(--accent); color: #fff; border: none; border-radius: 22px; padding: 10px 16px; box-shadow: var(--shadow-md); cursor: pointer; font-size: 13px; font-weight: 600; }
+.ops-fab:hover { background: var(--accent-600); }
 .initbar { background: #fff7e6; border: 1px solid #ffe0a3; border-radius: 6px; padding: 8px 12px; font-size: 13px; margin-bottom: 8px; }
 .empty { margin: auto; text-align: center; color: var(--text-soft); max-width: 460px; }
 .empty h2 { font-size: 22px; margin-bottom: 8px; }
