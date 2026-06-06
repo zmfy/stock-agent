@@ -53,11 +53,11 @@ describe('data routes', () => {
     expect(snap.body.data._missing).toEqual(expect.arrayContaining(['roe_ttm', 'pe']));
   });
 
-  it('source endpoint reports sidecar not configured when plugin disabled', async () => {
-    // disable akshare-data for this user
-    await request(app).post('/api/plugins/akshare-data/enable').set(h()).send({ enabled: false });
+  it('source endpoint reports the built-in data source as configured', async () => {
+    (global as any).fetch = jest.fn(() => Promise.reject(new Error('no-net')));
     const res = await request(app).get('/api/data/source').set(h());
     expect(res.status).toBe(200);
-    expect(res.body.data.sidecarConfigured).toBe(false);
+    expect(res.body.data.sidecarConfigured).toBe(true); // built-in data source is seeded
+    expect(res.body.data.sidecarHealthy).toBe(false);
   });
 });

@@ -1,9 +1,11 @@
 import { Router, Request, Response } from 'express';
+import { z } from 'zod';
 import multer from 'multer';
 import { authMiddleware } from '../middleware/auth';
 import { successResponse, errorResponse } from '../utils/response';
 import { QuoteRow } from '../types';
 import * as svc from '../data/service';
+import * as sources from '../data/sources-service';
 import { resolveSidecarBase, pingHealth } from '../data/sidecar';
 
 const router = Router();
@@ -96,6 +98,45 @@ router.get('/news', (_req: Request, res: Response) => {
 router.post('/news/refresh', async (req: Request, res: Response) => {
   const n = await svc.refreshNews(req.user!.userId);
   successResponse(res, { inserted: n, news: svc.listNews() }, n ? '已采集热点新闻' : '未取到新闻（数据源不可用或未启用 AkShare 插件）');
+});
+
+// ---- data source management ----
+// GET /api/data/sources — recommended (built-in) + custom sources, priority order
+router.get('/sources', (req: Request, res: Response) => {
+  successResponse(res, sources.listSources(req.user!.userId));
+});
+
+// POST /api/data/sources { name, baseUrl, priority? }
+router.post('/sources', (req: Request, res: Response) => {
+  const parsed = z.object({ name: z.string().min(1).max(60), baseUrl: z.string().url(), priority: z.number().int().optional() }).safeParse(req.body);
+  if (!parsed.success) return errorResponse(res, 422, 'VALIDATION_ERROR', '请填写名称和合法的地址(http/https)');
+  sources.addSource(req.user!.userId, parsed.data);
+  successResponse(res, null, '已添加数据源', 201);
+});
+
+// PUT /api/data/sources/:id
+router.put('/sources/:id', (req: Request, res: Response) => {
+  const parsed = z
+    .object({ name: z.string().optional(), baseUrl: z.string().url().optional(), enabled: z.boolean().optional(), priority: z.number().int().optional() })
+    .safeParse(req.body);
+  if (!parsed.success) return errorResponse(res, 422, 'VALIDATION_ERROR', '参数校验失败');
+  try {
+    sources.updateSource(req.user!.userId, req.params.id, parsed.data);
+    successResponse(res, null, '已更新');
+  } catch {
+    errorResponse(res, 404, 'RESOURCE_NOT_FOUND', '数据源不存在');
+  }
+});
+
+// DELETE /api/data/sources/:id
+router.delete('/sources/:id', (req: Request, res: Response) => {
+  try {
+    sources.deleteSource(req.user!.userId, req.params.id);
+    successResponse(res, null, '已删除');
+  } catch (e: any) {
+    if (e.message === 'BUILTIN') return errorResponse(res, 400, 'BUSINESS_CONFLICT', '内置数据源不可删除（可停用）');
+    errorResponse(res, 400, 'BUSINESS_CONFLICT', '删除失败');
+  }
 });
 
 // GET /api/data/source — is the sidecar configured + healthy?

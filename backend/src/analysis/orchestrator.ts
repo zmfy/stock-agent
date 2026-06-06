@@ -120,7 +120,7 @@ export async function runAnalysis(userId: string, code: string, opts: RunOptions
   const snapshot = await getStockSnapshot(userId, code);
 
   // Data-validation gate: the main agent only analyzes data it can trust.
-  const validation = validateStock(userId, snapshot);
+  const validation = await validateStock(userId, snapshot);
   if (!validation.trusted) {
     const err = new Error('DATA_UNTRUSTED');
     (err as any).validation = validation;

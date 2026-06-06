@@ -14,6 +14,29 @@
     </section>
 
     <section class="card">
+      <h2>数据源管理</h2>
+      <p class="hint">推荐用内置源；也可添加你自己的数据服务（同接口的 HTTP 地址）。优先级数字越小越优先；多个源会用于交叉验证。</p>
+      <table class="srctable">
+        <thead><tr><th>启用</th><th>名称</th><th>地址</th><th>优先级</th><th>操作</th></tr></thead>
+        <tbody>
+          <tr v-for="s in dsources" :key="s.id">
+            <td><input type="checkbox" :checked="s.enabled === 1" @change="toggleSource(s)" /></td>
+            <td>{{ s.name }} <span v-if="s.builtin" class="tag">内置</span></td>
+            <td class="url">{{ s.base_url }}</td>
+            <td><input class="pri" type="number" :value="s.priority" @change="setPriority(s, $event)" /></td>
+            <td><button v-if="!s.builtin" class="del" @click="removeSource(s)">删除</button></td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="row addsrc">
+        <input v-model="newSrc.name" placeholder="数据源名称" />
+        <input v-model="newSrc.url" placeholder="https://地址" />
+        <button @click="addSource" :disabled="busy">添加数据源</button>
+      </div>
+      <p v-if="srcMsg" :class="srcOk ? 'ok-msg' : 'err'">{{ srcMsg }}</p>
+    </section>
+
+    <section class="card">
       <h2>数据采集</h2>
       <div class="row">
         <button @click="refreshMarket" :disabled="busy">刷新大盘/情绪数据</button>
@@ -23,7 +46,7 @@
       <div v-if="news.length" class="news">
         <div v-for="(n, i) in news" :key="i" class="nitem">
           <div class="ntitle">{{ n.title }}</div>
-          <div class="nmeta">{{ n.published_at || n.fetched_at }}</div>
+          <div class="nmeta">来源 AkShare · {{ n.published_at || n.fetched_at }}</div>
           <div v-if="n.summary" class="nsum">{{ n.summary }}</div>
         </div>
       </div>
@@ -54,6 +77,13 @@
           </tr>
         </tbody>
       </table>
+      <div v-if="snap?.sources" class="prov">
+        数据来源：
+        <span v-if="snap.sources.quote">行情 {{ snap.sources.quote.source }}@{{ snap.sources.quote.date }}（取于 {{ snap.sources.quote.fetched_at }}）</span>
+        <span v-if="snap.sources.fundamentals">· 基本面 {{ snap.sources.fundamentals.source }}@{{ snap.sources.fundamentals.date }}</span>
+        <span v-if="snap.sources.market">· 情绪 {{ snap.sources.market.source }}@{{ snap.sources.market.date }}</span>
+        <span v-if="snap.sources.sidecarBase">· 主源 {{ snap.sources.sidecarBase }}</span>
+      </div>
       <p v-if="snap && snap._missing.length" class="hint">缺失字段：{{ snap._missing.join('、') }}（上传 CSV 或启用数据源后可补全）。</p>
       <p v-if="lookupMsg" class="err">{{ lookupMsg }}</p>
     </section>
@@ -62,7 +92,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue';
-import { dataApi, type StockSnapshot, type NewsItem } from '../api/data';
+import { dataApi, type StockSnapshot, type NewsItem, type DataSource } from '../api/data';
 
 const source = reactive({ sidecarConfigured: false, base: null as string | null, sidecarHealthy: false });
 const file = ref<File | null>(null);
@@ -170,8 +200,51 @@ async function collectNews() {
   }
 }
 
+// ---- data source management ----
+const dsources = ref<DataSource[]>([]);
+const newSrc = ref({ name: '', url: '' });
+const srcMsg = ref('');
+const srcOk = ref(false);
+
+async function loadSources() {
+  try {
+    dsources.value = (await dataApi.listSources()).data.data;
+  } catch { /* ignore */ }
+}
+async function addSource() {
+  srcMsg.value = '';
+  if (!newSrc.value.name.trim() || !newSrc.value.url.trim()) { srcOk.value = false; srcMsg.value = '请填写名称和地址'; return; }
+  busy.value = true;
+  try {
+    await dataApi.addSource(newSrc.value.name.trim(), newSrc.value.url.trim());
+    newSrc.value = { name: '', url: '' };
+    srcOk.value = true; srcMsg.value = '已添加';
+    await loadSources(); await loadSource();
+  } catch (e: any) {
+    srcOk.value = false; srcMsg.value = e.response?.data?.message || '添加失败';
+  } finally { busy.value = false; }
+}
+async function toggleSource(s: DataSource) {
+  await dataApi.updateSource(s.id, { enabled: s.enabled !== 1 });
+  await loadSources(); await loadSource();
+}
+async function setPriority(s: DataSource, ev: Event) {
+  const v = parseInt((ev.target as HTMLInputElement).value, 10);
+  if (!isNaN(v)) { await dataApi.updateSource(s.id, { priority: v }); await loadSources(); await loadSource(); }
+}
+async function removeSource(s: DataSource) {
+  if (!confirm(`删除数据源「${s.name}」？`)) return;
+  try {
+    await dataApi.deleteSource(s.id);
+    await loadSources(); await loadSource();
+  } catch (e: any) {
+    srcOk.value = false; srcMsg.value = e.response?.data?.message || '删除失败';
+  }
+}
+
 onMounted(async () => {
   await loadSource();
+  await loadSources();
   try {
     news.value = (await dataApi.getNews()).data.data;
   } catch { /* ignore */ }
@@ -199,5 +272,12 @@ input { padding: 5px; }
 .ntitle { font-size: 14px; font-weight: 600; }
 .nmeta { font-size: 11px; color: #999; }
 .nsum { font-size: 13px; color: #555; margin-top: 2px; }
+.prov { font-size: 12px; color: #888; margin-top: 8px; }
+.srctable { width: 100%; border-collapse: collapse; margin: 8px 0; }
+.srctable th, .srctable td { text-align: left; padding: 5px 8px; border-bottom: 1px solid #eee; font-size: 13px; }
+.srctable .url { color: #777; font-size: 12px; }
+.srctable .pri { width: 60px; }
+.tag { font-size: 11px; background: #eef; color: #446; border-radius: 8px; padding: 1px 6px; }
+.addsrc input { flex: 1; }
 button:disabled { opacity: 0.5; }
 </style>

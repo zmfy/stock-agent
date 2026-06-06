@@ -1,5 +1,7 @@
 import { getActive } from '../rulebook/service';
 import { Gate, StockSnapshot } from '../types';
+import { secondaryBases } from '../data/sources-service';
+import { fetchQuotes } from '../data/sidecar';
 
 export interface ValidationCheck {
   name: string;
@@ -30,8 +32,8 @@ function isRecent(dateStr: string | undefined | null, days = 10): boolean {
   return Date.now() - d <= days * 24 * 60 * 60 * 1000 + 5 * 24 * 60 * 60 * 1000; // generous (weekends/holidays)
 }
 
-// Deterministic data validation: uploaded-authority -> (cross-source slot) -> internal sanity.
-export function validateStock(userId: string, snapshot: StockSnapshot): ValidationResult {
+// Data validation: uploaded-authority -> cross-source -> internal sanity.
+export async function validateStock(userId: string, snapshot: StockSnapshot): Promise<ValidationResult> {
   const rb = getActive(userId);
   const checks: ValidationCheck[] = [];
   const snap = snapshot as unknown as Record<string, any>;
@@ -62,12 +64,36 @@ export function validateStock(userId: string, snapshot: StockSnapshot): Validati
   if (snap.close !== null && snap.close !== undefined && snap.close <= 0) rangeIssues.push('收盘价非正');
   checks.push({ name: '数值合理性', ok: rangeIssues.length === 0, detail: rangeIssues.length ? rangeIssues.join('、') : '数值在合理范围' });
 
-  // cross-source: reserved (quote_daily stores one row per code/date; needs a 2nd source wired)
-  checks.push({ name: '交叉验证', ok: true, detail: '（暂未接入第二在线源，跳过；上传数据已作最高优先基准）' });
+  // cross-source: live-compare the primary close against each secondary data source
+  let crossMismatch = false;
+  const secs = secondaryBases(userId);
+  if (secs.length && snapshot.close !== null && snapshot.close !== undefined) {
+    const diffs: string[] = [];
+    for (const base of secs) {
+      const q = await fetchQuotes(base, snapshot.code, 3).catch(() => null);
+      const close = q && q.length ? q[q.length - 1].close : null;
+      if (close !== null && close !== undefined && snapshot.close) {
+        const dev = Math.abs(close - snapshot.close) / snapshot.close;
+        if (dev > 0.02) {
+          crossMismatch = true;
+          diffs.push(`${base} 收盘 ${close} 与主源 ${snapshot.close} 偏差 ${(dev * 100).toFixed(1)}%`);
+        }
+      }
+    }
+    checks.push({ name: '交叉验证', ok: !crossMismatch, detail: crossMismatch ? diffs.join('；') : `已与 ${secs.length} 个备用源核对，一致` });
+  } else {
+    checks.push({ name: '交叉验证', ok: true, detail: '（仅一个数据源，跳过；上传数据为最高优先基准）' });
+  }
 
-  // Hard block on missing required fields or impossible values; staleness is surfaced as a warning, not a block.
-  const trusted = missing.length === 0 && rangeIssues.length === 0;
-  const authority: ValidationResult['authority'] = !quoteSrc ? 'none' : uploaded ? 'uploaded' : 'internal';
+  // Hard block on missing required fields, impossible values, or a cross-source mismatch.
+  const trusted = missing.length === 0 && rangeIssues.length === 0 && !crossMismatch;
+  const authority: ValidationResult['authority'] = crossMismatch
+    ? 'cross'
+    : !quoteSrc
+    ? 'none'
+    : uploaded
+    ? 'uploaded'
+    : 'internal';
 
   return { trusted, authority, checks, missing, sources: snapshot.sources };
 }

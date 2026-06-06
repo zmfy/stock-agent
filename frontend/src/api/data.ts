@@ -18,6 +18,21 @@ export interface StockSnapshot {
   limit_down_count: number | null;
   sse_ma20_slope: number | null;
   _missing: string[];
+  sources?: {
+    quote: { source: string; date: string; fetched_at: string } | null;
+    fundamentals: { source: string; date: string; fetched_at: string } | null;
+    market: { source: string; date: string; fetched_at: string } | null;
+    sidecarBase: string | null;
+  };
+}
+
+export interface DataSource {
+  id: string;
+  name: string;
+  base_url: string;
+  builtin: number;
+  priority: number;
+  enabled: number;
 }
 
 export interface NewsItem {
@@ -30,6 +45,10 @@ export interface NewsItem {
 export const dataApi = {
   getNews: () => api.get<{ data: NewsItem[] }>('/data/news'),
   refreshNews: () => api.post<{ data: { inserted: number; news: NewsItem[] } }>('/data/news/refresh'),
+  listSources: () => api.get<{ data: DataSource[] }>('/data/sources'),
+  addSource: (name: string, baseUrl: string) => api.post('/data/sources', { name, baseUrl }),
+  updateSource: (id: string, body: { enabled?: boolean; priority?: number; name?: string; baseUrl?: string }) => api.put(`/data/sources/${id}`, body),
+  deleteSource: (id: string) => api.delete(`/data/sources/${id}`),
   getSource: () => api.get<{ data: { sidecarConfigured: boolean; base: string | null; sidecarHealthy: boolean } }>('/data/source'),
   snapshot: (code: string) => api.get<{ data: StockSnapshot }>(`/data/snapshot/${code}`),
   refresh: (code?: string) => api.post<{ data: { marketRefreshed: boolean; snapshot: StockSnapshot | null } }>('/data/refresh', { code }),

@@ -27,27 +27,27 @@ function snap(over: any = {}) {
 }
 
 describe('validateStock', () => {
-  it('trusted when all veto fields present + sane', () => {
-    const v = validateStock(USER, snap());
+  it('trusted when all veto fields present + sane', async () => {
+    const v = await validateStock(USER, snap());
     expect(v.trusted).toBe(true);
     expect(v.authority).toBe('uploaded'); // quote source = csv
     expect(v.missing).toHaveLength(0);
   });
 
-  it('untrusted + lists missing when a veto field is null', () => {
-    const v = validateStock(USER, snap({ roe_ttm: null, pe: null }));
+  it('untrusted + lists missing when a veto field is null', async () => {
+    const v = await validateStock(USER, snap({ roe_ttm: null, pe: null }));
     expect(v.trusted).toBe(false);
     expect(v.missing).toEqual(expect.arrayContaining(['roe_ttm', 'pe']));
   });
 
-  it('flags impossible values (negative price)', () => {
-    const v = validateStock(USER, snap({ close: -1 }));
+  it('flags impossible values (negative price)', async () => {
+    const v = await validateStock(USER, snap({ close: -1 }));
     expect(v.trusted).toBe(false);
     expect(v.checks.find((c: any) => c.name === '数值合理性').ok).toBe(false);
   });
 
-  it('authority internal when source is not an upload', () => {
-    const v = validateStock(USER, snap({ sources: { quote: { source: 'akshare', date: today, fetched_at: today }, fundamentals: null, market: null, sidecarBase: null } }));
+  it('authority internal when source is not an upload', async () => {
+    const v = await validateStock(USER, snap({ sources: { quote: { source: 'akshare', date: today, fetched_at: today }, fundamentals: null, market: null, sidecarBase: null } }));
     expect(v.authority).toBe('internal');
   });
 });

@@ -144,6 +144,17 @@ function initSchema(): void {
       PRIMARY KEY (code, date)
     );
 
+    CREATE TABLE IF NOT EXISTS data_sources (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      base_url TEXT NOT NULL,
+      builtin INTEGER DEFAULT 0,
+      priority INTEGER DEFAULT 100,
+      enabled INTEGER DEFAULT 1,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
     CREATE TABLE IF NOT EXISTS news (
       id TEXT PRIMARY KEY,
       title TEXT NOT NULL,
