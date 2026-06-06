@@ -148,14 +148,20 @@ export function searchStocks(q: string, limit = 20): Array<{ code: string; name:
   if (!s) return [];
   const like = `%${s}%`;
   const lower = s.toLowerCase();
+  // py 现在可能是空格分隔的多个候选(多音字)，如 "zlkj clkj"。
+  // 匹配「首候选前缀」(lower%) 或「后续候选前缀」(% lower%)，两者都支持前缀输入。
   return getDb()
     .prepare(
       `SELECT code, name FROM stock_names
-       WHERE code LIKE ? OR name LIKE ? OR py LIKE ?
-       ORDER BY (CASE WHEN code = ? THEN 0 WHEN py = ? THEN 1 WHEN code LIKE ? THEN 2 WHEN py LIKE ? THEN 3 ELSE 4 END), code
+       WHERE code LIKE ? OR name LIKE ? OR py LIKE ? OR py LIKE ?
+       ORDER BY (CASE
+                   WHEN code = ? THEN 0
+                   WHEN py = ? OR py LIKE ? THEN 1
+                   WHEN code LIKE ? THEN 2
+                   ELSE 3 END), code
        LIMIT ?`
     )
-    .all(`${s}%`, like, `${lower}%`, s, lower, `${s}%`, `${lower}%`, limit) as Array<{ code: string; name: string }>;
+    .all(`${s}%`, like, `${lower}%`, `% ${lower}%`, s, lower, `% ${lower} %`, `${s}%`, limit) as Array<{ code: string; name: string }>;
 }
 
 export function getCachedName(code: string): string | null {

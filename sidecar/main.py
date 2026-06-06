@@ -88,11 +88,26 @@ def health():
 _NAME_DF = None
 
 try:
-    from pypinyin import lazy_pinyin, Style
+    from pypinyin import pinyin, Style
 
     def _py_initials(name: str) -> str:
+        """拼音首字母缩写。多音字(如"长" cháng/zhǎng)生成所有候选组合(空格分隔)，
+        这样无论按哪种读音输入(clkj 或 zlkj)都能搜到长亮科技。"""
         try:
-            return ''.join(s[0] for s in lazy_pinyin(name, style=Style.FIRST_LETTER) if s).lower()
+            per_char = pinyin(name, style=Style.FIRST_LETTER, heteronym=True)
+            opts_list = []
+            for opts in per_char:
+                seen = []
+                for p in opts:
+                    if p and p[0].lower() not in seen:
+                        seen.append(p[0].lower())
+                opts_list.append(seen or [''])
+            combos = ['']
+            for opts in opts_list:
+                combos = [c + o for c in combos for o in opts]
+                if len(combos) > 24:  # 防多音字组合爆炸
+                    combos = combos[:24]
+            return ' '.join(dict.fromkeys(combos))
         except Exception:
             return ''
 except Exception:

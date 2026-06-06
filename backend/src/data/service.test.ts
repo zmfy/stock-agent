@@ -47,4 +47,16 @@ describe('data/service', () => {
   it('listCachedCodes returns distinct cached codes', () => {
     expect(svc.listCachedCodes()).toContain('600000');
   });
+
+  it('searchStocks matches a heteronym pinyin candidate (长亮科技: clkj as well as zlkj)', () => {
+    const { getDb } = require('../db');
+    getDb()
+      .prepare("INSERT OR REPLACE INTO stock_names (code, name, py, source, fetched_at) VALUES ('300348','长亮科技','zlkj zlkq clkj clkq','test',CURRENT_TIMESTAMP)")
+      .run();
+    // the default reading puts it under z…, but a user typing the cháng reading must still find it
+    expect(svc.searchStocks('clkj').map((r: any) => r.code)).toContain('300348');
+    expect(svc.searchStocks('cl').map((r: any) => r.code)).toContain('300348'); // prefix of a later candidate
+    expect(svc.searchStocks('zlkj').map((r: any) => r.code)).toContain('300348'); // first candidate still works
+    expect(svc.searchStocks('300348').map((r: any) => r.code)).toContain('300348'); // by code
+  });
 });
