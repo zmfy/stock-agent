@@ -13,13 +13,13 @@ let adminTok = '';
 let freshTok = '';
 
 beforeAll(async () => {
-  const login = await request(app).post('/api/auth/login').send({ username: 'stock-agent', password: 'sg123456' });
+  const login = await request(app).post('/api/auth/login').send({ username: 'stock-agent', password: 'sg123456' , agreed: true });
   adminTok = login.body.data.accessToken;
   // a second user with NO rulebook and NO AI
   const inv = await request(app).post('/api/settings/users/invite').set('Authorization', `Bearer ${adminTok}`);
   const reg = await request(app)
     .post('/api/auth/register')
-    .send({ username: 'fresh', password: 'secret123', inviteCode: inv.body.data.code });
+    .send({ username: 'fresh', password: 'secret123', inviteCode: inv.body.data.code , agreed: true });
   freshTok = reg.body.data.accessToken;
 });
 const h = (t: string) => ({ Authorization: `Bearer ${t}` });

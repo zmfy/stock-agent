@@ -13,13 +13,13 @@ let adminTok = '';
 let userTok = '';
 
 beforeAll(async () => {
-  const login = await request(app).post('/api/auth/login').send({ username: 'stock-agent', password: 'sg123456' });
+  const login = await request(app).post('/api/auth/login').send({ username: 'stock-agent', password: 'sg123456' , agreed: true });
   adminTok = login.body.data.accessToken;
   // create a second user via invite
   const inv = await request(app).post('/api/settings/users/invite').set('Authorization', `Bearer ${adminTok}`);
   const reg = await request(app)
     .post('/api/auth/register')
-    .send({ username: 'trader2', password: 'secret123', inviteCode: inv.body.data.code });
+    .send({ username: 'trader2', password: 'secret123', inviteCode: inv.body.data.code , agreed: true });
   userTok = reg.body.data.accessToken;
 });
 

@@ -22,7 +22,7 @@ async function createUser(username: string): Promise<{ id: string; token: string
   const invite = await request(app).post('/api/settings/users/invite').set('Authorization', `Bearer ${at}`);
   const reg = await request(app)
     .post('/api/auth/register')
-    .send({ username, password: 'secret123', inviteCode: invite.body.data.code });
+    .send({ username, password: 'secret123', inviteCode: invite.body.data.code , agreed: true });
   return { id: reg.body.data.user.id, token: reg.body.data.accessToken };
 }
 
@@ -89,7 +89,7 @@ describe('settings/users (admin)', () => {
       .set('Authorization', `Bearer ${at}`)
       .send({ password: 'Reset#1234' });
     expect(strong.status).toBe(200);
-    const login = await request(app).post('/api/auth/login').send({ username: 'resetme', password: 'Reset#1234' });
+    const login = await request(app).post('/api/auth/login').send({ username: 'resetme', password: 'Reset#1234' , agreed: true });
     expect(login.status).toBe(200);
   });
 

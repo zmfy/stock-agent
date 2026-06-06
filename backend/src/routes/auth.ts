@@ -17,10 +17,15 @@ const loginSchema = z.object({
   password: z.string().min(1).max(100),
 });
 
+// 当前免责声明版本（内容变更时升级，便于追溯用户同意的是哪一版）
+export const DISCLAIMER_VERSION = 'v1';
+
 const registerSchema = z.object({
   username: z.string().min(3).max(50),
   password: z.string().min(6).max(100),
+  nickname: z.string().max(30).optional(),
   inviteCode: z.string().optional(),
+  agreed: z.boolean().optional(),
 });
 
 const refreshSchema = z.object({ refreshToken: z.string().min(1) });
@@ -35,7 +40,7 @@ router.post('/login', (req: Request, res: Response) => {
     return errorResponse(res, 401, 'AUTH_UNAUTHORIZED', '用户名或密码错误');
   }
   const tokens = generateTokens(user.id, user.role);
-  successResponse(res, { user: { id: user.id, username: user.username, role: user.role }, ...tokens }, '登录成功');
+  successResponse(res, { user: { id: user.id, username: user.username, role: user.role, nickname: (user as any).nickname ?? null }, ...tokens }, '登录成功');
 });
 
 router.post('/register', (req: Request, res: Response) => {
@@ -47,7 +52,10 @@ router.post('/register', (req: Request, res: Response) => {
 
   const parsed = registerSchema.safeParse(req.body);
   if (!parsed.success) return errorResponse(res, 422, 'VALIDATION_ERROR', '参数校验失败');
-  const { username, password, inviteCode } = parsed.data;
+  const { username, password, nickname, inviteCode, agreed } = parsed.data;
+
+  // 必须勾选同意免责声明才允许注册
+  if (agreed !== true) return errorResponse(res, 422, 'VALIDATION_ERROR', '请先阅读并同意《免责声明》后再注册');
 
   if (registrationMode === 'invite') {
     if (!inviteCode) return errorResponse(res, 422, 'VALIDATION_ERROR', '需要邀请码');
@@ -65,12 +73,9 @@ router.post('/register', (req: Request, res: Response) => {
 
   const userId = uuidv4();
   const hash = bcrypt.hashSync(password, 10);
-  db.prepare('INSERT INTO users (id, username, password_hash, role) VALUES (?, ?, ?, ?)').run(
-    userId,
-    username,
-    hash,
-    'user'
-  );
+  db.prepare(
+    'INSERT INTO users (id, username, password_hash, role, nickname, agreed_at, disclaimer_version) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)'
+  ).run(userId, username, hash, 'user', nickname || null, DISCLAIMER_VERSION);
   if (registrationMode === 'invite' && inviteCode) {
     db.prepare('UPDATE invite_codes SET used_by = ?, used_at = CURRENT_TIMESTAMP WHERE code = ?').run(
       userId,
@@ -78,7 +83,7 @@ router.post('/register', (req: Request, res: Response) => {
     );
   }
   const tokens = generateTokens(userId, 'user');
-  successResponse(res, { user: { id: userId, username, role: 'user' }, ...tokens }, '注册成功', 201);
+  successResponse(res, { user: { id: userId, username, role: 'user', nickname: nickname || null }, ...tokens }, '注册成功', 201);
 });
 
 router.post('/refresh', (req: Request, res: Response) => {
@@ -120,7 +125,7 @@ router.put('/password', authMiddleware, (req: Request, res: Response) => {
 router.get('/me', authMiddleware, (req: Request, res: Response) => {
   const db = getDb();
   const user = db
-    .prepare('SELECT id, username, role, created_at FROM users WHERE id = ?')
+    .prepare('SELECT id, username, role, nickname, created_at FROM users WHERE id = ?')
     .get(req.user!.userId) as Omit<User, 'password_hash'> | undefined;
   if (!user) return errorResponse(res, 404, 'RESOURCE_NOT_FOUND', '用户不存在');
   successResponse(res, user);

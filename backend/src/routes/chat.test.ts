@@ -12,12 +12,12 @@ const app = createApp();
 let tok = '';
 let userTok = '';
 beforeAll(async () => {
-  const login = await request(app).post('/api/auth/login').send({ username: 'stock-agent', password: 'sg123456' });
+  const login = await request(app).post('/api/auth/login').send({ username: 'stock-agent', password: 'sg123456' , agreed: true });
   tok = login.body.data.accessToken;
   const inv = await request(app).post('/api/settings/users/invite').set('Authorization', `Bearer ${tok}`);
   const reg = await request(app)
     .post('/api/auth/register')
-    .send({ username: 'chatuser', password: 'secret123', inviteCode: inv.body.data.code });
+    .send({ username: 'chatuser', password: 'secret123', inviteCode: inv.body.data.code , agreed: true });
   userTok = reg.body.data.accessToken;
 });
 const h = (t: string) => ({ Authorization: `Bearer ${t}` });

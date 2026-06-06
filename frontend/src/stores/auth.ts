@@ -5,6 +5,7 @@ interface AuthUser {
   id: string;
   username: string;
   role: 'admin' | 'user';
+  nickname?: string | null;
 }
 
 export const useAuthStore = defineStore('auth', {
@@ -28,8 +29,8 @@ export const useAuthStore = defineStore('auth', {
       const { accessToken, refreshToken, user } = res.data.data;
       this.persist(accessToken, refreshToken, user);
     },
-    async register(username: string, password: string, inviteCode?: string) {
-      const res = await api.post('/auth/register', { username, password, inviteCode });
+    async register(username: string, password: string, inviteCode?: string, nickname?: string, agreed?: boolean) {
+      const res = await api.post('/auth/register', { username, password, inviteCode, nickname, agreed });
       const { accessToken, refreshToken, user } = res.data.data;
       this.persist(accessToken, refreshToken, user);
     },

@@ -36,14 +36,14 @@ describe('auth routes (invite-only)', () => {
   it('rejects self-registration without an invite code', async () => {
     const res = await request(app)
       .post('/api/auth/register')
-      .send({ username: 'nobody', password: 'secret123' });
+      .send({ username: 'nobody', password: 'secret123' , agreed: true });
     expect(res.status).toBe(422);
   });
 
   it('rejects an invalid invite code', async () => {
     const res = await request(app)
       .post('/api/auth/register')
-      .send({ username: 'nobody', password: 'secret123', inviteCode: 'BOGUSCODE' });
+      .send({ username: 'nobody', password: 'secret123', inviteCode: 'BOGUSCODE' , agreed: true });
     expect(res.status).toBe(422);
   });
 
@@ -51,13 +51,13 @@ describe('auth routes (invite-only)', () => {
     const code = await mintInvite();
     const reg = await request(app)
       .post('/api/auth/register')
-      .send({ username: 'invitee', password: 'secret123', inviteCode: code });
+      .send({ username: 'invitee', password: 'secret123', inviteCode: code , agreed: true });
     expect(reg.status).toBe(201);
     expect(reg.body.data.user.username).toBe('invitee');
 
     const reuse = await request(app)
       .post('/api/auth/register')
-      .send({ username: 'invitee2', password: 'secret123', inviteCode: code });
+      .send({ username: 'invitee2', password: 'secret123', inviteCode: code , agreed: true });
     expect(reuse.status).toBe(422);
   });
 
@@ -65,7 +65,7 @@ describe('auth routes (invite-only)', () => {
     const code = await mintInvite();
     const reg = await request(app)
       .post('/api/auth/register')
-      .send({ username: 'mona', password: 'secret123', inviteCode: code });
+      .send({ username: 'mona', password: 'secret123', inviteCode: code , agreed: true });
     const token = reg.body.data.accessToken;
     const me = await request(app).get('/api/auth/me').set('Authorization', `Bearer ${token}`);
     expect(me.status).toBe(200);
@@ -84,7 +84,7 @@ describe('auth routes (invite-only)', () => {
       const code = await mintInvite();
       const reg = await request(app)
         .post('/api/auth/register')
-        .send({ username: 'weakpwd', password: 'secret123', inviteCode: code });
+        .send({ username: 'weakpwd', password: 'secret123', inviteCode: code , agreed: true });
       const token = reg.body.data.accessToken;
       const res = await request(app)
         .put('/api/auth/password')
@@ -97,7 +97,7 @@ describe('auth routes (invite-only)', () => {
       const code = await mintInvite();
       const reg = await request(app)
         .post('/api/auth/register')
-        .send({ username: 'wrongcur', password: 'secret123', inviteCode: code });
+        .send({ username: 'wrongcur', password: 'secret123', inviteCode: code , agreed: true });
       const token = reg.body.data.accessToken;
       const res = await request(app)
         .put('/api/auth/password')
@@ -110,7 +110,7 @@ describe('auth routes (invite-only)', () => {
       const code = await mintInvite();
       const reg = await request(app)
         .post('/api/auth/register')
-        .send({ username: 'changer', password: 'secret123', inviteCode: code });
+        .send({ username: 'changer', password: 'secret123', inviteCode: code , agreed: true });
       const token = reg.body.data.accessToken;
       const change = await request(app)
         .put('/api/auth/password')
@@ -118,9 +118,9 @@ describe('auth routes (invite-only)', () => {
         .send({ currentPassword: 'secret123', newPassword: 'NewPass#123' });
       expect(change.status).toBe(200);
 
-      const oldLogin = await request(app).post('/api/auth/login').send({ username: 'changer', password: 'secret123' });
+      const oldLogin = await request(app).post('/api/auth/login').send({ username: 'changer', password: 'secret123' , agreed: true });
       expect(oldLogin.status).toBe(401);
-      const newLogin = await request(app).post('/api/auth/login').send({ username: 'changer', password: 'NewPass#123' });
+      const newLogin = await request(app).post('/api/auth/login').send({ username: 'changer', password: 'NewPass#123' , agreed: true });
       expect(newLogin.status).toBe(200);
     });
   });

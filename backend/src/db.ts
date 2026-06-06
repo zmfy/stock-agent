@@ -29,6 +29,9 @@ function initSchema(): void {
       username TEXT UNIQUE NOT NULL,
       password_hash TEXT NOT NULL,
       role TEXT DEFAULT 'user',
+      nickname TEXT,
+      agreed_at DATETIME,
+      disclaimer_version TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
@@ -315,6 +318,12 @@ function migrate(): void {
   const sccols = db.prepare('PRAGMA table_info(screenings)').all() as { name: string }[];
   if (sccols.length && !sccols.some((c) => c.name === 'discussion')) {
     db.exec('ALTER TABLE screenings ADD COLUMN discussion TEXT');
+  }
+  const ucols = db.prepare('PRAGMA table_info(users)').all() as { name: string }[];
+  if (ucols.length) {
+    if (!ucols.some((c) => c.name === 'nickname')) db.exec('ALTER TABLE users ADD COLUMN nickname TEXT');
+    if (!ucols.some((c) => c.name === 'agreed_at')) db.exec('ALTER TABLE users ADD COLUMN agreed_at DATETIME');
+    if (!ucols.some((c) => c.name === 'disclaimer_version')) db.exec('ALTER TABLE users ADD COLUMN disclaimer_version TEXT');
   }
   const ncols = db.prepare('PRAGMA table_info(stock_names)').all() as { name: string }[];
   if (ncols.length) {

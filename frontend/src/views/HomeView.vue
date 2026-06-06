@@ -19,19 +19,20 @@
       <div class="menu">
         <button v-if="sessions.length" class="settings-entry clearall" @click="clearAllChats">🧹 清空所有对话</button>
       </div>
+      <p class="risk-note">⚠️ 仅研究辅助 · 不构成投资建议 · 盈亏自负</p>
     </aside>
 
     <!-- 右侧：顶部功能栏（聊天框之外，常驻） + 聊天 或 功能面板 -->
     <main class="main">
       <nav class="topnav">
         <div class="tnav-scroll">
-          <button class="tnav chat-tab" :class="{ active: !settingsKey }" @click="goChat">💬 聊天</button>
+          <button class="tnav" :class="{ active: !settingsKey }" @click="goChat">💬 聊天</button>
           <button v-for="s in SETTINGS" :key="s.key" class="tnav" :class="{ active: settingsKey === s.key }" @click="settingsKey = s.key">
             <span class="ticon">{{ s.icon }}</span>{{ s.label }}
           </button>
         </div>
         <div class="topnav-user">
-          <span class="uname">👤 {{ auth.user?.username }}</span>
+          <span class="uname">👤 {{ auth.user?.nickname || auth.user?.username }}</span>
           <button class="mini" @click="logout">登出</button>
         </div>
       </nav>
@@ -609,6 +610,7 @@ onMounted(async () => {
 .sessions li.is-pinned.active { background: var(--rail-active); color: #fff; }
 .clearall { background: rgba(229, 72, 77, 0.16) !important; border-color: rgba(229, 72, 77, 0.32) !important; color: #ffb3b5 !important; margin-bottom: 6px; }
 .menu { padding: 10px 0 2px; border-top: 1px solid rgba(255, 255, 255, 0.1); margin-top: 4px; }
+.risk-note { font-size: 11px; color: var(--rail-fg-dim); line-height: 1.5; margin: 6px 2px 2px; }
 .settings-entry { width: 100%; text-align: left; background: rgba(255, 255, 255, 0.07); color: var(--rail-fg); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: var(--radius-sm); padding: 9px 11px; font-size: 13px; cursor: pointer; transition: background 0.15s, color 0.15s; }
 .settings-entry:hover { background: rgba(255, 255, 255, 0.14); color: #fff; }
 .settings-entry.active { background: var(--accent); border-color: var(--accent); color: #fff; }
@@ -638,9 +640,6 @@ onMounted(async () => {
 .tnav { flex: none; white-space: nowrap; background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 6px 13px; font-size: 13px; cursor: pointer; color: var(--text-soft); display: inline-flex; align-items: center; gap: 5px; transition: all 0.15s; }
 .tnav:hover { border-color: var(--accent); color: var(--accent-600); }
 .tnav.active { background: #e5484d; color: #fff; border-color: #e5484d; }
-.tnav.chat-tab { background: #e5484d; color: #fff; border-color: #e5484d; }
-.tnav.chat-tab:hover { background: #d23b40; color: #fff; border-color: #d23b40; }
-.tnav.chat-tab.active { background: #d23b40; border-color: #d23b40; }
 .ticon { font-size: 14px; }
 .panelbox { flex: 1; overflow-y: auto; margin: 14px; padding: 16px 20px; background: var(--surface); border-radius: 14px; box-shadow: var(--shadow); min-height: 0; }
 .chat { flex: 1; display: flex; flex-direction: column; padding: 16px 20px; margin: 14px; background: var(--surface); border-radius: 14px; box-shadow: var(--shadow); min-width: 0; min-height: 0; }
