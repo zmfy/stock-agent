@@ -19,6 +19,8 @@ export interface ReportInput {
   oneLiner: string;
   teachNotes: unknown;
   rawAiResponse: string;
+  sources?: unknown;
+  validation?: unknown;
 }
 
 export function saveReport(r: ReportInput): string {
@@ -27,14 +29,15 @@ export function saveReport(r: ReportInput): string {
     .prepare(
       `INSERT INTO reports (id, user_id, stock_code, stock_name, rulebook_version_id, data_date,
         ai_provider, ai_model, snapshot, gate_results, soft_findings, a_conclusion, b_conclusion,
-        exception_channel, position_suggestion, one_liner, teach_notes, raw_ai_response)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+        exception_channel, position_suggestion, one_liner, teach_notes, raw_ai_response, sources, validation)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
     )
     .run(
       id, r.userId, r.stockCode, r.stockName, r.rulebookVersionId, r.dataDate,
       r.aiProvider, r.aiModel, JSON.stringify(r.snapshot), JSON.stringify(r.gateResults),
       JSON.stringify(r.softFindings ?? []), r.aConclusion, r.bConclusion, r.exceptionChannel,
-      r.positionSuggestion, r.oneLiner, JSON.stringify(r.teachNotes ?? []), r.rawAiResponse
+      r.positionSuggestion, r.oneLiner, JSON.stringify(r.teachNotes ?? []), r.rawAiResponse,
+      JSON.stringify(r.sources ?? null), JSON.stringify(r.validation ?? null)
     );
   return id;
 }
@@ -54,6 +57,8 @@ function hydrate(row: any) {
     gate_results: j(row.gate_results),
     soft_findings: j(row.soft_findings),
     teach_notes: j(row.teach_notes),
+    sources: j(row.sources),
+    validation: j(row.validation),
   };
 }
 

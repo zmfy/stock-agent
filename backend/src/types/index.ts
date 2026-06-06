@@ -50,6 +50,12 @@ export interface StockSnapshot {
   limit_down_count: number | null;
   sse_ma20_slope: number | null;
   _missing: string[];
+  sources?: {
+    quote: { source: string; date: string; fetched_at: string } | null;
+    fundamentals: { source: string; date: string; fetched_at: string } | null;
+    market: { source: string; date: string; fetched_at: string } | null;
+    sidecarBase: string | null;
+  };
 }
 
 export interface GateResult {

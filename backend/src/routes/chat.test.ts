@@ -81,6 +81,12 @@ describe('chat routes', () => {
         : Promise.resolve({ ok: false, status: 404, statusText: 'NF', text: async () => '' })
     );
 
+    // seed complete data so validation passes
+    const data = require('../data/service');
+    data.cacheFundamentals('600519', '2026-06-05', { roe_ttm: 30, pe: 25, pb: 8, ps: 12, net_profit: 1e9, turnover_rate: 1, name: '贵州茅台' }, 'csv');
+    data.cacheQuotes(Array.from({ length: 60 }, (_, i) => ({ code: '600519', date: `2026-04-${String(60 - i).padStart(2, '0')}`, open: 1700, high: 1700, low: 1700, close: 1700, volume: 1 })), 'csv');
+    data.cacheMarket('2026-06-05', { limit_up_count: 60, limit_down_count: 5, sse_ma20_slope: 0.1 }, 'csv');
+
     const s = await request(app).post('/api/chat/sessions').set(h(tok)).send({ kind: 'stock', refId: '600519', title: '个股 600519' });
     const sid = s.body.data.id;
     const a = await request(app).post(`/api/chat/sessions/${sid}/analyze`).set(h(tok));
@@ -122,7 +128,7 @@ describe('chat routes', () => {
 describe('agent profiles routes', () => {
   it('lists profiles and updates one', async () => {
     const list = await request(app).get('/api/agent/profiles').set(h(tok));
-    expect(list.body.data).toHaveLength(5);
+    expect(list.body.data).toHaveLength(6);
     const upd = await request(app).put('/api/agent/profiles/core').set(h(tok)).send({ persona: '稳健中线主 agent' });
     expect(upd.status).toBe(200);
     const after = await request(app).get('/api/agent/profiles').set(h(tok));

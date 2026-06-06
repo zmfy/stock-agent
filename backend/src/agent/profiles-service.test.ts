@@ -11,7 +11,7 @@ const B = 'u-B';
 describe('agent profiles', () => {
   it('lists 5 roles with defaults when unset', () => {
     const list = svc.listProfiles(A);
-    expect(list.map((p: any) => p.role)).toEqual(['core', 'data', 'analysis', 'qualitative', 'review']);
+    expect(list.map((p: any) => p.role)).toEqual(['core', 'data', 'analysis', 'qualitative', 'review', 'validation']);
     expect(list.every((p: any) => p.persona.length > 0)).toBe(true);
     expect(list.find((p: any) => p.role === 'core').label).toBe('主 agent');
   });
@@ -22,11 +22,11 @@ describe('agent profiles', () => {
     expect(svc.getCorePersona(B)).not.toBe('我是激进短线主 agent'); // B still default
   });
 
-  it('generateSubAgents (mocked AI) drafts and persists the 4 sub personas', async () => {
+  it('generateSubAgents (mocked AI) drafts and persists the sub personas', async () => {
     const fakeAI = async () =>
-      JSON.stringify({ data: '快取数子助手', analysis: '严谨分析子助手', qualitative: '研报归纳子助手', review: '复盘子助手' });
+      JSON.stringify({ data: '快取数子助手', analysis: '严谨分析子助手', qualitative: '研报归纳子助手', review: '复盘子助手', validation: '数据校验子助手' });
     const out = await svc.generateSubAgents(A, { aiCall: fakeAI });
-    expect(out.map((o: any) => o.role).sort()).toEqual(['analysis', 'data', 'qualitative', 'review']);
+    expect(out.map((o: any) => o.role).sort()).toEqual(['analysis', 'data', 'qualitative', 'review', 'validation']);
     const list = svc.listProfiles(A);
     expect(list.find((p: any) => p.role === 'analysis').persona).toBe('严谨分析子助手');
     expect(list.find((p: any) => p.role === 'analysis').generated).toBe(true);

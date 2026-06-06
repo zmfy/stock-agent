@@ -175,6 +175,8 @@ function initSchema(): void {
       one_liner TEXT,
       teach_notes TEXT,
       raw_ai_response TEXT,
+      sources TEXT,
+      validation TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
@@ -248,6 +250,13 @@ function migrate(): void {
   const cols = db.prepare('PRAGMA table_info(ai_configs)').all() as { name: string }[];
   if (!cols.some((c) => c.name === 'enabled')) {
     db.exec('ALTER TABLE ai_configs ADD COLUMN enabled INTEGER DEFAULT 1');
+  }
+  const rcols = db.prepare('PRAGMA table_info(reports)').all() as { name: string }[];
+  if (rcols.length && !rcols.some((c) => c.name === 'sources')) {
+    db.exec('ALTER TABLE reports ADD COLUMN sources TEXT');
+  }
+  if (rcols.length && !rcols.some((c) => c.name === 'validation')) {
+    db.exec('ALTER TABLE reports ADD COLUMN validation TEXT');
   }
 }
 

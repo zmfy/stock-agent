@@ -78,7 +78,7 @@ describe('ai/service (per-user)', () => {
 
   it('listRoleAssignments returns all 5 roles with resolved models', () => {
     const roles = svc.listRoleAssignments(A);
-    expect(roles.map((r: any) => r.role)).toEqual(['core', 'data', 'analysis', 'qualitative', 'review']);
+    expect(roles.map((r: any) => r.role)).toEqual(['core', 'data', 'analysis', 'qualitative', 'review', 'validation']);
     expect(roles.every((r: any) => r.resolvedProvider)).toBe(true);
   });
 });

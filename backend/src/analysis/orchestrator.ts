@@ -7,6 +7,7 @@ import { getProvider } from '../ai/providers';
 import { chat } from '../ai/manager';
 import { saveReport, getReport } from './report-service';
 import { getCorePersona } from '../agent/profiles-service';
+import { validateStock } from '../validation/service';
 
 export interface ParsedAnalysis {
   a_conclusion: string;
@@ -117,6 +118,15 @@ export async function runAnalysis(userId: string, code: string, opts: RunOptions
   if (!rb) throw new Error('NO_RULEBOOK');
 
   const snapshot = await getStockSnapshot(userId, code);
+
+  // Data-validation gate: the main agent only analyzes data it can trust.
+  const validation = validateStock(userId, snapshot);
+  if (!validation.trusted) {
+    const err = new Error('DATA_UNTRUSTED');
+    (err as any).validation = validation;
+    throw err;
+  }
+
   const ev = evaluateGates(snapshot, rb.gates);
   // Main-agent persona now lives in agent_profiles (decoupled from the rulebook); fall back to the version persona.
   const persona = getCorePersona(userId) || rb.version.persona;
@@ -144,6 +154,8 @@ export async function runAnalysis(userId: string, code: string, opts: RunOptions
     oneLiner: parsed.one_liner,
     teachNotes: parsed.teach_notes,
     rawAiResponse: raw,
+    sources: snapshot.sources,
+    validation,
   });
 
   return getReport(userId, id);

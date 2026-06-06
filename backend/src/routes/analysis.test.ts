@@ -42,21 +42,42 @@ describe('analysis routes', () => {
     expect(res.body.message).toContain('核心规则');
   });
 
-  it('run with rulebook but no AI model -> 400', async () => {
+  it('run with rulebook + trusted data but no AI model -> 400 (asks for AI)', async () => {
     await request(app).post('/api/rulebook/init').set(h(freshTok));
-    // disable the default akshare-data so snapshot stays offline/fast; no AI configured
-    const res = await request(app).post('/api/analysis/run').set(h(freshTok)).send({ code: '600000' });
+    // seed complete data (global cache) so validation passes and we reach the NO_MODEL guard
+    const data = require('../data/service');
+    data.cacheFundamentals('600600', '2026-06-05', { roe_ttm: 12, pe: 20, pb: 2, ps: 3, net_profit: 1e8, turnover_rate: 5, name: 'T' }, 'csv');
+    data.cacheQuotes(Array.from({ length: 60 }, (_, i) => ({ code: '600600', date: `2026-04-${String(60 - i).padStart(2, '0')}`, open: 10, high: 10, low: 10, close: 10, volume: 1 })), 'csv');
+    data.cacheMarket('2026-06-05', { limit_up_count: 60, limit_down_count: 5, sse_ma20_slope: 0.1 }, 'csv');
+    const res = await request(app).post('/api/analysis/run').set(h(freshTok)).send({ code: '600600' });
     expect(res.status).toBe(400);
     expect(res.body.message).toContain('AI');
   });
 
-  it('runs end-to-end (mocked AI) and persists an auditable report', async () => {
-    // admin: rulebook + an enabled AI model
+  it('blocks analysis when data is untrusted (missing fields)', async () => {
     await request(app).post('/api/rulebook/init').set(h(adminTok));
     await request(app)
       .put('/api/ai/configs/deepseek')
       .set(h(adminTok))
       .send({ apiKey: 'sk-x123456789', baseUrl: 'https://api.deepseek.com/v1', model: 'deepseek-chat' });
+    (global as any).fetch = jest.fn(() => Promise.resolve({ ok: false, status: 404, statusText: 'NF', text: async () => '' }));
+    const res = await request(app).post('/api/analysis/run').set(h(adminTok)).send({ code: '000001' });
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe('DATA_UNTRUSTED');
+  });
+
+  it('runs end-to-end (mocked AI) and persists an auditable report', async () => {
+    // admin: rulebook + an enabled AI model (rulebook may already exist from prior test -> 409 ok)
+    await request(app).post('/api/rulebook/init').set(h(adminTok));
+    await request(app)
+      .put('/api/ai/configs/deepseek')
+      .set(h(adminTok))
+      .send({ apiKey: 'sk-x123456789', baseUrl: 'https://api.deepseek.com/v1', model: 'deepseek-chat' });
+    // seed complete data so validation passes
+    const data = require('../data/service');
+    data.cacheFundamentals('300241', '2026-06-05', { roe_ttm: 1.28, pe: 80, pb: 2.3, ps: 2.8, net_profit: 1e6, turnover_rate: 16, name: '瑞丰光电' }, 'csv');
+    data.cacheQuotes(Array.from({ length: 60 }, (_, i) => ({ code: '300241', date: `2026-04-${String(60 - i).padStart(2, '0')}`, open: 8, high: 8, low: 8, close: 8, volume: 1 })), 'csv');
+    data.cacheMarket('2026-06-05', { limit_up_count: 39, limit_down_count: 18, sse_ma20_slope: 0 }, 'csv');
 
     // mock every fetch: AI chat returns our JSON; sidecar calls return junk (graceful -> nulls)
     (global as any).fetch = jest.fn((url: string) => {
