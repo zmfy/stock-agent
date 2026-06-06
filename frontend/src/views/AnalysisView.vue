@@ -1,16 +1,18 @@
 <template>
   <div class="analysis">
     <header class="bar">
-      <h1>选股分析</h1>
+      <h1>{{ focusCode ? '完整报告' : '选股分析' }}</h1>
       <router-link to="/">返回</router-link>
     </header>
 
-    <section class="card run">
+    <section v-if="!focusCode" class="card run">
       <StockPicker placeholder="代码 / 名称 / 拼音，选中即分析" @pick="onPick" />
       <button @click="run" :disabled="busy || !code">{{ busy ? '分析中…' : '分析' }}</button>
       <p v-if="err" class="err">{{ err }}</p>
       <p class="hint">分析会：代码算硬门槛 → AI 写软判断与结论 → 生成报告并存档（可在下方历史里回看）。</p>
     </section>
+    <p v-else-if="err" class="err card">{{ err }}</p>
+    <p v-else-if="busy" class="card hint">正在加载 {{ focusCode }} 的报告…</p>
 
     <section v-if="report" class="card report">
       <div class="rhead">
@@ -48,7 +50,7 @@
       </div>
     </section>
 
-    <section class="card" v-if="reports.length">
+    <section class="card" v-if="!focusCode && reports.length">
       <h2>历史报告</h2>
       <table>
         <thead><tr><th>代码</th><th>一句话结论</th><th>模型</th><th>时间</th></tr></thead>
@@ -67,8 +69,12 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, defineComponent, h } from 'vue';
+import { useRoute } from 'vue-router';
 import { analysisApi, type AnalysisReport, type ReportSummary, type GateResult } from '../api/analysis';
 import StockPicker from '../components/StockPicker.vue';
+
+const route = useRoute();
+const focusCode = ref<string>(typeof route.query.code === 'string' ? route.query.code : '');
 
 const ICON: Record<string, string> = { pass: '✅', fail: '❌', unknown: '⚠️' };
 
@@ -133,7 +139,27 @@ async function view(id: string) {
 async function loadList() {
   reports.value = (await analysisApi.listReports()).data.data;
 }
-onMounted(loadList);
+
+onMounted(async () => {
+  if (focusCode.value) {
+    // 直达模式：直接展示该股最近一份报告，没有就现跑一次
+    busy.value = true;
+    try {
+      report.value = (await analysisApi.getLatestByCode(focusCode.value)).data.data;
+    } catch {
+      code.value = focusCode.value;
+      try {
+        report.value = (await analysisApi.run(focusCode.value)).data.data;
+      } catch (e: any) {
+        err.value = e.response?.data?.message || '暂无报告，且重新分析失败';
+      }
+    } finally {
+      busy.value = false;
+    }
+    return;
+  }
+  await loadList();
+});
 </script>
 
 <style scoped>

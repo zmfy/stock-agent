@@ -1,0 +1,79 @@
+/* 股票小作手 — 全局视觉主题（深色侧栏 + 浅色内容区 + 青绿强调色，admin 风格） */
+:root {
+  --bg: #eef1f6;
+  --surface: #ffffff;
+  --surface-2: #f7f9fc;
+
+  --rail-bg: #1b2433;
+  --rail-bg-2: #161e2b;
+  --rail-fg: #c4cdda;
+  --rail-fg-dim: #8893a5;
+  --rail-active: rgba(255, 255, 255, 0.09);
+
+  --text: #2a3342;
+  --text-soft: #5b6675;
+  --muted: #939dac;
+  --border: #e4e8ef;
+  --border-soft: #eef1f6;
+
+  --accent: #12b3a4;
+  --accent-600: #0ea193;
+  --accent-soft: #e4f6f3;
+  --accent-ink: #0a6c62;
+
+  --info: #3b82f6;
+  --info-soft: #e8f0fe;
+  --warn: #e8a33d;
+  --warn-soft: #fdf3e3;
+  --danger: #e5484d;
+  --danger-soft: #fdecec;
+  --ok: #1f9d57;
+
+  --radius: 10px;
+  --radius-sm: 7px;
+  --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.05);
+  --shadow: 0 1px 3px rgba(16, 24, 40, 0.07), 0 1px 2px rgba(16, 24, 40, 0.04);
+  --shadow-md: 0 6px 20px rgba(16, 24, 40, 0.08);
+
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB",
+    "Microsoft YaHei", Roboto, Helvetica, Arial, sans-serif;
+}
+
+* { box-sizing: border-box; }
+html, body, #app { height: 100%; }
+body {
+  margin: 0;
+  font-family: var(--font);
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--text);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+a { color: var(--accent-600); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+h1, h2, h3, h4 { color: var(--text); line-height: 1.3; }
+
+/* 默认（未被组件覆盖的）控件统一基线 */
+button { font-family: inherit; cursor: pointer; }
+input, textarea, select { font-family: inherit; font-size: 14px; color: var(--text); }
+input, textarea, select {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+input:focus, textarea:focus, select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+/* 滚动条 */
+::-webkit-scrollbar { width: 9px; height: 9px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #ccd4e0; border-radius: 8px; }
+::-webkit-scrollbar-thumb:hover { background: #b3bdcd; }

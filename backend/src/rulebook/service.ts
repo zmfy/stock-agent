@@ -119,10 +119,12 @@ export function instantiateBaseline(userId: string): FullRulebook {
   return instantiateFrom(userId, BASELINE_V3, '导入 V3.0 双系统基线');
 }
 
-// Instantiate from a named template (defaults to the V3 dual-system template).
+// Instantiate from a named template; with no/unknown key, default to the V3 dual-system baseline.
+// (V3 is removed from the selectable template picker, but remains the canonical default.)
 export function instantiateTemplate(userId: string, templateKey?: string): FullRulebook {
-  const tpl = (templateKey && getTemplate(templateKey)) || getTemplate('v3-dual-system')!;
-  return instantiateFrom(userId, tpl.baseline, `导入模板：${tpl.label}`);
+  const tpl = templateKey ? getTemplate(templateKey) : undefined;
+  if (tpl) return instantiateFrom(userId, tpl.baseline, `导入模板：${tpl.label}`);
+  return instantiateFrom(userId, BASELINE_V3, '导入 V3.0 双系统基线');
 }
 
 // Compose multiple templates (keys order = priority) and switch to the result.

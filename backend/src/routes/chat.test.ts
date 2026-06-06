@@ -23,12 +23,12 @@ beforeAll(async () => {
 const h = (t: string) => ({ Authorization: `Bearer ${t}` });
 
 describe('rulebook templates', () => {
-  it('lists 3 starter templates incl the user default', async () => {
+  it('lists starter templates (V3 dual-system removed from the picker)', async () => {
     const res = await request(app).get('/api/rulebook/templates').set(h(tok));
     expect(res.status).toBe(200);
-    expect(res.body.data.map((t: any) => t.key)).toEqual(
-      expect.arrayContaining(['v3-dual-system', 'ma-bullish', 'value-quality'])
-    );
+    const keys = res.body.data.map((t: any) => t.key);
+    expect(keys).toEqual(expect.arrayContaining(['ma-bullish', 'value-quality']));
+    expect(keys).not.toContain('v3-dual-system');
   });
 
   it('init with a chosen template instantiates that one', async () => {

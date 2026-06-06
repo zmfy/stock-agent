@@ -1,4 +1,4 @@
-import { Baseline, BASELINE_V3, SeedGate } from './baseline-v3';
+import { Baseline, SeedGate } from './baseline-v3';
 
 const g = (o: Partial<SeedGate> & Pick<SeedGate, 'system' | 'gate_key' | 'label' | 'field' | 'op'>): SeedGate => ({
   threshold: null, threshold2: null, ref_field: null, unit: '', veto: 1, teach: '', ...o,
@@ -191,7 +191,6 @@ export interface TemplateMeta {
 }
 
 export const TEMPLATES: TemplateMeta[] = [
-  { key: 'v3-dual-system', label: 'A/B 双系统（中线+短线）', description: '中线业绩仓 + 短线题材仓，两套规则永不混用（用户默认模板）。', baseline: BASELINE_V3 },
   { key: 'value-quality', label: '价值质量', description: '高 ROE、合理估值、真实盈利的好公司，长期持有。', baseline: VALUE_QUALITY },
   { key: 'low-pe-bluechip', label: '低估值蓝筹', description: '低 PE/PB + 高 ROE 的蓝筹白马，便宜买好公司。', baseline: LOW_PE_BLUECHIP },
   { key: 'high-growth', label: '高成长', description: '高 ROE、高增速，赚业绩成长的钱，容忍较高估值。', baseline: HIGH_GROWTH },

@@ -54,4 +54,5 @@ export const analysisApi = {
   run: (code: string) => api.post<{ data: AnalysisReport }>('/analysis/run', { code }),
   listReports: () => api.get<{ data: ReportSummary[] }>('/analysis/reports'),
   getReport: (id: string) => api.get<{ data: AnalysisReport }>(`/analysis/reports/${id}`),
+  getLatestByCode: (code: string) => api.get<{ data: AnalysisReport }>(`/analysis/reports/by-code/${code}`),
 };

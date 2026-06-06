@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { authMiddleware } from '../middleware/auth';
 import { successResponse, errorResponse } from '../utils/response';
 import { runAnalysis } from '../analysis/orchestrator';
-import { listReports, getReport } from '../analysis/report-service';
+import { listReports, getReport, getLatestReportByCode } from '../analysis/report-service';
 
 const router = Router();
 router.use(authMiddleware);
@@ -30,6 +30,13 @@ router.post('/run', async (req: Request, res: Response) => {
 // GET /api/analysis/reports
 router.get('/reports', (req: Request, res: Response) => {
   successResponse(res, listReports(req.user!.userId));
+});
+
+// GET /api/analysis/reports/by-code/:code — latest report for a stock (for 完整报告 直达)
+router.get('/reports/by-code/:code', (req: Request, res: Response) => {
+  const report = getLatestReportByCode(req.user!.userId, req.params.code);
+  if (!report) return errorResponse(res, 404, 'RESOURCE_NOT_FOUND', '该股票还没有分析报告');
+  successResponse(res, report);
 });
 
 // GET /api/analysis/reports/:id
