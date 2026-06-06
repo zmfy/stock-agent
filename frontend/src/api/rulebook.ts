@@ -66,9 +66,18 @@ export interface NewVersionPayload {
   positionRules: Record<string, any>;
 }
 
+export interface TemplateMeta {
+  key: string;
+  label: string;
+  description: string;
+  versionLabel: string;
+  gateCount: number;
+}
+
 export const rulebookApi = {
   getActive: () => api.get<{ data: FullRulebook | null }>('/rulebook/active'),
-  init: () => api.post<{ data: FullRulebook }>('/rulebook/init'),
+  getTemplates: () => api.get<{ data: TemplateMeta[] }>('/rulebook/templates'),
+  init: (template?: string) => api.post<{ data: FullRulebook }>('/rulebook/init', { template }),
   listVersions: () => api.get<{ data: RulebookVersion[] }>('/rulebook/versions'),
   getVersion: (id: string) => api.get<{ data: FullRulebook }>(`/rulebook/versions/${id}`),
   createVersion: (payload: NewVersionPayload) => api.post<{ data: FullRulebook }>('/rulebook/versions', payload),

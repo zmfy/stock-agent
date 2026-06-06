@@ -1,0 +1,31 @@
+import api from './client';
+
+export type ChatKind = 'general' | 'core_principle' | 'stock' | 'morning' | 'evening';
+
+export interface ChatSession {
+  id: string;
+  user_id: string;
+  kind: ChatKind;
+  ref_id: string | null;
+  title: string | null;
+  created_at: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  session_id: string;
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+  created_at: string;
+}
+
+export const chatApi = {
+  createSession: (kind: ChatKind, refId?: string | null, title?: string) =>
+    api.post<{ data: { id: string } }>('/chat/sessions', { kind, refId, title }),
+  listSessions: (kind?: ChatKind) =>
+    api.get<{ data: ChatSession[] }>(`/chat/sessions${kind ? `?kind=${kind}` : ''}`),
+  getMessages: (id: string) => api.get<{ data: ChatMessage[] }>(`/chat/sessions/${id}/messages`),
+  postMessage: (id: string, content: string) =>
+    api.post<{ data: ChatMessage }>(`/chat/sessions/${id}/messages`, { content }),
+  deleteSession: (id: string) => api.delete(`/chat/sessions/${id}`),
+};
