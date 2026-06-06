@@ -38,7 +38,7 @@
     <section class="panel">
       <form class="card" @submit.prevent="submit">
         <h1>欢迎回来</h1>
-        <p class="hint">登录后继续和你的操盘 agent 探讨规则、分析个股。</p>
+        <p class="hint">登录后继续和你的股票小作手探讨规则、分析个股。</p>
         <label>用户名
           <input v-model="username" placeholder="用户名" autocomplete="username" />
         </label>

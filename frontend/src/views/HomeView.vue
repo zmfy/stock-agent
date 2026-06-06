@@ -527,6 +527,18 @@ async function runScreen() {
 async function send() {
   if (!active.value || !input.value.trim() || sending.value) return;
   const text = input.value.trim();
+  // 全局召唤词「来财」：在任意会话里输入「来财」或「来财 …」即切到主 agent 对话，
+  // 「来财」后面的内容作为消息发给主 agent。
+  if (/^来财(\s|[，,：:！!。.]|$)/.test(text)) {
+    const rest = text.replace(/^来财[\s，,：:！!。.]*/, '').trim();
+    input.value = '';
+    await summonMainAgent();
+    if (rest) {
+      input.value = rest;
+      await send();
+    }
+    return;
+  }
   input.value = '';
   chatErr.value = '';
   // optimistic
