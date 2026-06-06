@@ -5,7 +5,7 @@ import { getLatestMarket } from '../data/service';
 import { getModelForRole } from '../ai/service';
 import { getProvider } from '../ai/providers';
 import { chat } from '../ai/manager';
-import { getCorePersona } from '../agent/profiles-service';
+import { getCorePersona, listProfiles } from '../agent/profiles-service';
 
 export type MeetingKind = 'morning' | 'evening';
 
@@ -43,17 +43,63 @@ function getMorningOfToday(userId: string): { content: string } | undefined {
     .get(userId, today()) as any;
 }
 
-export function buildMorningPrompt(persona: string, market: string, rulebook: string): string {
+// 子助手人设（取不到就用空串，由各 prompt 自带职责说明兜底）
+function personaOf(userId: string, role: string): string {
+  return listProfiles(userId).find((p) => p.role === role)?.persona || '';
+}
+
+// 数据员：把今日盘面数据读成要点
+export function buildMorningDataPrompt(persona: string, market: string): string {
+  return `${persona || '你是后台数据员，只客观整理盘面事实，不下结论。'}
+
+你是早会上的【数据员】。今日盘面原始数据：
+${market}
+请用 2-4 条要点，客观整理今日盘面事实（涨跌停对比、上证趋势、情绪冷热程度），只陈述事实、不下交易结论。中文、简短。`;
+}
+
+// 分析师：按核心原则把数据读成交易研判
+export function buildMorningAnalysisPrompt(persona: string, market: string, rulebook: string, dataOut: string): string {
+  return `${persona || '你是分析师，严格按核心原则把数据转成可执行研判。'}
+
+你是早会上的【分析师】。数据员刚才的整理：
+${dataOut}
+${market}
+${rulebook}
+请据此判断：今日能否开新仓？A / B 系统今日是否开闸？给出理由（对照硬门槛/情绪闸门）。中文、分点、简短。`;
+}
+
+// 情绪面：题材/情绪观察
+export function buildMorningQualPrompt(persona: string, market: string): string {
+  return `${persona || '你负责情绪与题材面观察，提炼成要点。'}
+
+你是早会上的【情绪面观察员】。今日盘面：
+${market}
+请从市场情绪/题材活跃度角度给 1-3 条观察（情绪是否过热或冰点、是否适合做短线题材）。中文、简短。`;
+}
+
+// 主 agent 来财：综合三位子助手，给最终研判并指出依据
+export function buildMorningSynthPrompt(
+  persona: string,
+  market: string,
+  rulebook: string,
+  dataOut: string,
+  analysisOut: string,
+  qualOut: string
+): string {
   return `${persona}
 
-你在主持盘前【早会】。已知信息：
+你是主 agent「来财」，正在主持盘前【早会】。三位子助手已分别汇报：
+〖数据员〗${dataOut}
+〖分析师〗${analysisOut}
+〖情绪面〗${qualOut}
 ${market}
 ${rulebook}
 
-请整合大盘情绪与核心原则，输出今日的：
+请你综合三位的汇报，给出今日的最终研判：
 1）大盘研判（情绪冷热、能否开新仓、A/B 系统今日是否开闸）
-2）今日操作思路（在你的原则框架下，今天该偏防守还是进攻、重点关注什么）
-要求：简洁、可执行、不预测点位。用中文，分点输出。`;
+2）今日操作思路（偏防守还是进攻、重点关注什么）
+并务必说明：你主要采纳了哪位子助手的哪条结论作为依据（点名「数据员/分析师/情绪面」）。
+要求：简洁、可执行、不预测点位。中文、分点输出。`;
 }
 
 export function buildEveningPrompt(
@@ -80,11 +126,11 @@ ${opsText}
 用中文，分点输出，简洁。`;
 }
 
-async function defaultAiCall(userId: string, prompt: string): Promise<string> {
-  const cfg = getModelForRole(userId, 'review') || getModelForRole(userId, 'core');
+async function defaultAiCall(userId: string, prompt: string, role: string): Promise<string> {
+  const cfg = getModelForRole(userId, role) || getModelForRole(userId, 'core');
   if (!cfg) throw new Error('NO_MODEL');
   const style = getProvider(cfg.provider)?.apiStyle || 'openai';
-  return chat(style, { baseUrl: cfg.baseUrl, model: cfg.model, apiKey: cfg.apiKey }, prompt, 1500);
+  return chat(style, { baseUrl: cfg.baseUrl, model: cfg.model, apiKey: cfg.apiKey }, prompt, 1200);
 }
 
 function upsert(userId: string, kind: MeetingKind, content: string, data: any): any {
@@ -102,16 +148,39 @@ function upsert(userId: string, kind: MeetingKind, content: string, data: any): 
 }
 
 export interface GenOpts {
-  aiCall?: (prompt: string) => Promise<string>;
+  aiCall?: (prompt: string, role: string) => Promise<string>;
 }
 
+// 早会 = 多 agent 讨论：数据员→分析师→情绪面 三位子助手分别汇报，来财综合研判并指出依据。
 export async function generateMorning(userId: string, opts: GenOpts = {}): Promise<any> {
   const persona = getCorePersona(userId);
   const mkt = marketText();
-  const prompt = buildMorningPrompt(persona, mkt.text, rulebookText(userId));
-  const aiCall = opts.aiCall || ((p: string) => defaultAiCall(userId, p));
-  const content = await aiCall(prompt);
-  return upsert(userId, 'morning', content.trim(), mkt.data);
+  const rbText = rulebookText(userId);
+  const aiCall = opts.aiCall || ((p: string, role: string) => defaultAiCall(userId, p, role));
+
+  const dataOut = (await aiCall(buildMorningDataPrompt(personaOf(userId, 'data'), mkt.text), 'data')).trim();
+  const analysisOut = (await aiCall(buildMorningAnalysisPrompt(personaOf(userId, 'analysis'), mkt.text, rbText, dataOut), 'analysis')).trim();
+  const qualOut = (await aiCall(buildMorningQualPrompt(personaOf(userId, 'qualitative'), mkt.text), 'qualitative')).trim();
+  const coreOut = (await aiCall(buildMorningSynthPrompt(persona, mkt.text, rbText, dataOut, analysisOut, qualOut), 'core')).trim();
+
+  const content = [
+    `🗣 早会讨论 · ${today()}`,
+    '',
+    '【数据员】整理今日盘面：',
+    dataOut,
+    '',
+    '【分析师】按核心原则研判：',
+    analysisOut,
+    '',
+    '【情绪面】题材/情绪观察：',
+    qualOut,
+    '',
+    '———',
+    '🧠 来财综合研判：',
+    coreOut,
+  ].join('\n');
+
+  return upsert(userId, 'morning', content, { market: mkt.data, discussion: { data: dataOut, analysis: analysisOut, qualitative: qualOut, core: coreOut } });
 }
 
 export async function generateEvening(userId: string, opts: GenOpts = {}): Promise<any> {
@@ -120,8 +189,8 @@ export async function generateEvening(userId: string, opts: GenOpts = {}): Promi
   const morning = getMorningOfToday(userId)?.content ?? null;
   const ops = todaysReports(userId);
   const prompt = buildEveningPrompt(persona, mkt.text, rulebookText(userId), morning, ops);
-  const aiCall = opts.aiCall || ((p: string) => defaultAiCall(userId, p));
-  const content = await aiCall(prompt);
+  const aiCall = opts.aiCall || ((p: string, role: string) => defaultAiCall(userId, p, role));
+  const content = await aiCall(prompt, 'review');
   return upsert(userId, 'evening', content.trim(), { market: mkt.data, ops });
 }
 
