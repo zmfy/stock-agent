@@ -91,9 +91,9 @@ async function submit() {
 
 /* 左侧 hero */
 .hero { flex: 1.1; background: linear-gradient(150deg, #18b3a3 0%, #138e9e 55%, #1b2433 100%); color: #fff; display: flex; align-items: center; justify-content: center; padding: 40px; }
-.hero-in { max-width: 440px; }
+.hero-in { max-width: 500px; }
 .logo { font-size: 22px; font-weight: 800; letter-spacing: 0.4px; }
-.slogan { font-size: 34px; line-height: 1.25; margin: 22px 0 12px; font-weight: 800; }
+.slogan { font-size: 28px; line-height: 1.25; margin: 22px 0 12px; font-weight: 800; white-space: nowrap; }
 .sub { font-size: 14px; opacity: 0.9; line-height: 1.7; margin: 0 0 24px; }
 .art { width: 100%; max-width: 360px; display: block; margin: 8px 0; }
 .tag-mini { font-size: 13px; opacity: 0.85; margin-top: 4px; }
@@ -113,7 +113,7 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
 @media (max-width: 720px) {
   .login { flex-direction: column; }
   .hero { padding: 32px 24px; }
-  .slogan { font-size: 26px; }
+  .slogan { font-size: 22px; white-space: normal; }
   .art { max-width: 280px; }
 }
 </style>
