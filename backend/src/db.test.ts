@@ -35,4 +35,13 @@ describe('getDb', () => {
     expect(user).toBeTruthy();
     expect(user.role).toBe('admin');
   });
+
+  it('creates the rulebook tables', () => {
+    const { getDb } = require('./db');
+    const tables = getDb()
+      .prepare("SELECT name FROM sqlite_master WHERE type='table'")
+      .all()
+      .map((r: { name: string }) => r.name);
+    expect(tables).toEqual(expect.arrayContaining(['rulebook_versions', 'gates', 'soft_rules']));
+  });
 });

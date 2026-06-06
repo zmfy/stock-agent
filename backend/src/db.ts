@@ -44,6 +44,50 @@ function initSchema(): void {
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS rulebook_versions (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      version_label TEXT,
+      persona TEXT,
+      position_rules TEXT,
+      note TEXT,
+      author TEXT DEFAULT 'user',
+      parent_version_id TEXT,
+      is_active INTEGER DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS gates (
+      id TEXT PRIMARY KEY,
+      version_id TEXT NOT NULL,
+      system TEXT NOT NULL,
+      gate_key TEXT NOT NULL,
+      label TEXT,
+      field TEXT,
+      op TEXT,
+      threshold REAL,
+      threshold2 REAL,
+      ref_field TEXT,
+      unit TEXT,
+      veto INTEGER DEFAULT 1,
+      exception_channel TEXT,
+      teach TEXT,
+      sort_order INTEGER DEFAULT 0
+    );
+
+    CREATE TABLE IF NOT EXISTS soft_rules (
+      id TEXT PRIMARY KEY,
+      version_id TEXT NOT NULL,
+      system TEXT NOT NULL,
+      text TEXT NOT NULL,
+      teach TEXT,
+      sort_order INTEGER DEFAULT 0
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_rulebook_user_active ON rulebook_versions (user_id, is_active);
+    CREATE INDEX IF NOT EXISTS idx_gates_version ON gates (version_id);
+    CREATE INDEX IF NOT EXISTS idx_soft_rules_version ON soft_rules (version_id);
   `);
 
   // Registration is invite-only by default; set REGISTRATION_MODE=open to allow self sign-up.

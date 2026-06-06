@@ -3,6 +3,7 @@
     <h1>股票小作手</h1>
     <p v-if="auth.user">欢迎，{{ auth.user.username }}（{{ auth.user.role }}）</p>
     <nav class="nav">
+      <router-link to="/rulebook">核心规则</router-link>
       <router-link to="/settings">设置 / 修改密码</router-link>
       <button @click="logout">登出</button>
     </nav>
