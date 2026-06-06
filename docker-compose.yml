@@ -13,6 +13,16 @@ services:
       - DEFAULT_ADMIN_PASSWORD=sg123456
     volumes:
       - stock_agent_data:/app/backend/data
+    depends_on:
+      - akshare-mcp
+
+  akshare-mcp:
+    build:
+      context: ./sidecar
+      dockerfile: Dockerfile
+    expose:
+      - "8000"
+    # Exposed on the compose network as http://akshare-mcp:8000 (the akshare-data plugin default).
 
 volumes:
   stock_agent_data:

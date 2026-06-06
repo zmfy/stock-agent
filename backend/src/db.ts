@@ -126,8 +126,37 @@ function initSchema(): void {
       UNIQUE(user_id, plugin_key)
     );
 
+    CREATE TABLE IF NOT EXISTS quote_daily (
+      code TEXT NOT NULL,
+      date TEXT NOT NULL,
+      open REAL, high REAL, low REAL, close REAL, volume REAL,
+      source TEXT,
+      fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (code, date)
+    );
+
+    CREATE TABLE IF NOT EXISTS fundamentals (
+      code TEXT NOT NULL,
+      date TEXT NOT NULL,
+      data TEXT,
+      source TEXT,
+      fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (code, date)
+    );
+
+    CREATE TABLE IF NOT EXISTS market_sentiment (
+      date TEXT PRIMARY KEY,
+      limit_up_count INTEGER,
+      limit_down_count INTEGER,
+      sse_ma20_slope REAL,
+      data TEXT,
+      source TEXT,
+      fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
     CREATE INDEX IF NOT EXISTS idx_ai_configs_user_active ON ai_configs (user_id, is_active);
     CREATE INDEX IF NOT EXISTS idx_plugins_user_enabled ON plugins (user_id, enabled);
+    CREATE INDEX IF NOT EXISTS idx_quote_daily_code ON quote_daily (code);
   `);
 
   migrate();

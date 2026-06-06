@@ -11,6 +11,7 @@ import settingsRoutes from './routes/settings';
 import rulebookRoutes from './routes/rulebook';
 import aiRoutes from './routes/ai';
 import pluginRoutes from './routes/plugins';
+import dataRoutes from './routes/data';
 
 export function createApp(): express.Express {
   const app = express();
@@ -51,6 +52,7 @@ export function createApp(): express.Express {
   app.use('/api/rulebook', rulebookRoutes);
   app.use('/api/ai', aiRoutes);
   app.use('/api/plugins', pluginRoutes);
+  app.use('/api/data', dataRoutes);
 
   app.get('/health', (_req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
@@ -72,5 +74,10 @@ export function createApp(): express.Express {
 // Only start a listener when run directly (not when imported by tests).
 if (require.main === module) {
   const PORT = process.env.PORT || 3000;
-  createApp().listen(PORT, () => console.log(`[stock-agent] backend listening on :${PORT}`));
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { startNightlyCron } = require('./cron/nightly');
+  createApp().listen(PORT, () => {
+    console.log(`[stock-agent] backend listening on :${PORT}`);
+    startNightlyCron();
+  });
 }

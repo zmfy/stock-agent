@@ -29,9 +29,9 @@ export const CATALOG: PluginDef[] = [
     kind: 'mcp',
     transport: 'http',
     label: 'AkShare A股数据源',
-    description: 'A 股基本面/行情/涨停跌停数据，由内置 Python 数据服务提供（Plan 5 接入）。',
-    defaultConfig: { url: 'http://akshare-mcp:8000/sse' },
-    configHint: 'http：MCP 服务的 SSE/HTTP 地址',
+    description: 'A 股基本面/行情/涨停跌停数据，由内置 Python 数据服务（akshare-mcp）提供。',
+    defaultConfig: { url: 'http://akshare-mcp:8000' },
+    configHint: 'http：数据服务的基础地址（默认指向内置 akshare-mcp 容器）',
   },
   {
     key: 'research',
