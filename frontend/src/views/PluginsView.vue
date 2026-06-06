@@ -87,7 +87,8 @@ const PluginCard = defineComponent({
         h('div', { class: 'pdesc' }, props.p.description),
         open.value
           ? h('div', { class: 'pcfg' }, [
-              h('textarea', { rows: 4, value: text.value, onInput: (e: any) => (text.value = e.target.value) }),
+              props.p.configHint ? h('p', { class: 'cfghint' }, props.p.configHint) : null,
+              h('textarea', { rows: props.p.configHint ? 6 : 4, value: text.value, onInput: (e: any) => (text.value = e.target.value) }),
               err.value ? h('p', { class: 'err' }, err.value) : null,
               h('button', { onClick: save }, '保存配置'),
             ])
@@ -162,6 +163,7 @@ onMounted(reload);
 :deep(.pops) { display: flex; gap: 6px; }
 :deep(.pcfg) { margin-top: 6px; }
 :deep(.pcfg textarea) { width: 100%; box-sizing: border-box; font-family: monospace; font-size: 12px; }
+:deep(.pcfg .cfghint) { font-size: 12px; color: #888; line-height: 1.6; margin: 0 0 6px; white-space: pre-wrap; }
 :deep(.tag) { font-size: 11px; background: #eef; color: #446; border-radius: 8px; padding: 1px 6px; margin-left: 6px; }
 :deep(.tag.rec) { background: #fff3d6; color: #a76b00; }
 :deep(.tag.cust) { background: #e9f7e9; color: #2a8a2a; }

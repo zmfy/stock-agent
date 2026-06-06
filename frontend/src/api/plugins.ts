@@ -10,6 +10,7 @@ export interface PluginView {
   transport: 'stdio' | 'http' | null;
   enabled: boolean;
   config: Record<string, any>;
+  configHint?: string;
 }
 
 export const pluginsApi = {

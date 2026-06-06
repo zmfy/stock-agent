@@ -48,6 +48,20 @@ describe('plugins service', () => {
     expect(caps.skills.map((s: any) => s.key)).toContain('research');
   });
 
+  it('skills carry a default config + hint, and skillDirectives reflects enabled skills', () => {
+    const sk = svc.listForUser(A).find((p: any) => p.key === 'sequential-thinking');
+    expect(sk.config.max_steps).toBe(6); // 不再是空配置
+    expect(sk.configHint).toContain('max_steps');
+    // built-in skills are default-ON -> directives mention 分步推理 / 探索 / 记忆
+    const d = svc.skillDirectives(A);
+    expect(d).toContain('分步推理');
+    expect(d).toContain('探索');
+    expect(d).toContain('记忆');
+    // honor config: 关掉分步推理触发后不再出现该条
+    svc.updateConfig(A, 'sequential-thinking', { max_steps: 6, show_steps: false, trigger: '从不' });
+    expect(svc.skillDirectives(A)).not.toContain('分步推理');
+  });
+
   it('removing a custom plugin deletes it; disabling a builtin turns it off', () => {
     svc.remove(A, 'my-mcp');
     expect(svc.listForUser(A).find((p: any) => p.key === 'my-mcp')).toBeUndefined();

@@ -37,15 +37,22 @@ export const CATALOG: PluginDef[] = [
     key: 'research',
     kind: 'skill',
     label: 'Research 探索技能',
-    description: '帮 agent 做需求探索与方案设计（对标 superpowers 理念）。',
-    defaultConfig: {},
+    description: '帮 agent 做需求探索与方案设计：下结论前先澄清关键前提、列出假设与不确定点。',
+    defaultConfig: { clarify_before_conclusion: true, max_followup_questions: 2, list_assumptions: true },
+    configHint: 'clarify_before_conclusion：下结论前先澄清关键前提；max_followup_questions：一次最多追问几个问题；list_assumptions：结论后是否列出关键假设/不确定点',
   },
   {
     key: 'memory',
     kind: 'skill',
     label: 'Memory 记忆技能',
-    description: '帮 agent 长期记忆市场观察、你的操作习惯与历次教训（对标 agentmemory）。',
-    defaultConfig: {},
+    description: '帮 agent 长期记忆市场观察、你的操作习惯与历次教训，并在讨论时主动复用。',
+    defaultConfig: {
+      capture: ['市场观察', '操作习惯', '历次教训', '规则变更'],
+      recall_scenes: ['早会', '个股分析', '复盘'],
+      retention_days: 180,
+      max_items: 200,
+    },
+    configHint: 'capture：记录哪些类型；recall_scenes：在哪些场景主动调用记忆；retention_days：记忆保留天数；max_items：最多记多少条',
   },
   {
     key: 'fetch',
@@ -62,7 +69,8 @@ export const CATALOG: PluginDef[] = [
     recommended: true,
     label: '分步推理技能（推荐）',
     description: '让 agent 把复杂分析分步拆解，减少跳步出错。',
-    defaultConfig: {},
+    defaultConfig: { max_steps: 6, show_steps: false, trigger: '复杂问题' },
+    configHint: 'max_steps：最多拆几步；show_steps：是否在回复里展示推理步骤；trigger：触发条件（复杂问题 / 总是 / 从不）',
   },
 ];
 

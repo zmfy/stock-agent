@@ -6,6 +6,7 @@ import { chat } from '../ai/manager';
 import { getCorePersona } from '../agent/profiles-service';
 import { runAnalysis } from '../analysis/orchestrator';
 import { getStockName, getCachedName } from '../data/service';
+import { skillDirectives } from '../plugins/service';
 import { getLatestReportByCode, deleteReportsByCode, deleteAllReports } from '../analysis/report-service';
 import { getTodayContent } from '../meetings/service';
 import { getActive } from '../rulebook/service';
@@ -101,11 +102,11 @@ function addMessage(sessionId: string, role: ChatMessage['role'], content: strin
 // 主 agent 的名字。用户在系统里说「来财」即指主 agent。
 export const AGENT_NAME = '来财';
 
-function buildPrompt(persona: string, kind: ChatKind, history: ChatMessage[], extraContext?: string): string {
+function buildPrompt(persona: string, kind: ChatKind, history: ChatMessage[], extraContext?: string, directives?: string): string {
   const convo = history.map((m) => `${m.role === 'user' ? '用户' : '助手'}：${m.content}`).join('\n');
   return `你的名字叫「${AGENT_NAME}」，是用户的操盘主助手；当用户称呼「${AGENT_NAME}」时就是在叫你。
 ${persona}
-
+${directives ? `\n${directives}\n` : ''}
 当前场景：${KIND_FRAMING[kind]}${extraContext ? `\n背景资料：\n${extraContext}` : ''}
 
 对话历史：
@@ -188,7 +189,7 @@ export async function postMessage(userId: string, sessionId: string, content: st
       extra = `当前核心原则【${rb.version.version_label}】人设：${rb.version.persona}\n硬门槛：${g}`;
     }
   }
-  const prompt = buildPrompt(persona, session.kind, history, extra);
+  const prompt = buildPrompt(persona, session.kind, history, extra, skillDirectives(userId));
   const aiCall = opts.aiCall || ((p: string) => defaultAiCall(userId, p));
   const { raw } = await aiCall(prompt);
   return addMessage(sessionId, 'assistant', (raw || '').trim() || '（无回复）');

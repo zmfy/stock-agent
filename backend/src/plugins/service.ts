@@ -25,6 +25,7 @@ export interface PluginView {
   transport: Transport | null;
   enabled: boolean;
   config: Record<string, unknown>;
+  configHint?: string;
 }
 
 function parse(json: string | null): Record<string, unknown> {
@@ -61,6 +62,7 @@ export function listForUser(userId: string): PluginView[] {
       // Default ON: built-ins are enabled unless the user explicitly stored a row turning it off.
       enabled: r ? !!r.enabled : true,
       config: r && r.config ? parse(r.config) : def.defaultConfig,
+      configHint: def.configHint,
     };
   });
 
@@ -160,4 +162,38 @@ export function getEnabledCapabilities(userId: string): EnabledCapabilities {
     mcp: enabled.filter((p) => p.kind === 'mcp').map((p) => ({ key: p.key, label: p.label, transport: p.transport, config: p.config })),
     skills: enabled.filter((p) => p.kind === 'skill').map((p) => ({ key: p.key, label: p.label, config: p.config })),
   };
+}
+
+// Turn enabled skills + their config into a system-prompt directive snippet,
+// so the skills actually change how the agent thinks (not just registered).
+export function skillDirectives(userId: string): string {
+  const skills = getEnabledCapabilities(userId).skills;
+  const lines: string[] = [];
+  for (const s of skills) {
+    const c = s.config || {};
+    if (s.key === 'sequential-thinking') {
+      const steps = Number(c.max_steps) || 6;
+      const trigger = String(c.trigger || '复杂问题');
+      const when = trigger === '总是' ? '' : trigger === '从不' ? null : '遇到复杂问题时，';
+      if (when !== null) {
+        lines.push(
+          c.show_steps
+            ? `· 分步推理：${when}请把推理拆成不超过 ${steps} 步并在回复中简要展示关键步骤，再给结论。`
+            : `· 分步推理：${when}请在内部分步推理（不超过 ${steps} 步）后再给结论，回复只呈现结论与要点。`
+        );
+      }
+    } else if (s.key === 'research') {
+      const parts: string[] = [];
+      if (c.clarify_before_conclusion) {
+        const n = Number(c.max_followup_questions) || 2;
+        parts.push(`下结论前，若关键前提不明确，先提出最多 ${n} 个澄清问题`);
+      }
+      if (c.list_assumptions) parts.push('给出结论后，列出你依赖的关键假设与不确定点');
+      if (parts.length) lines.push(`· 探索：${parts.join('；')}。`);
+    } else if (s.key === 'memory') {
+      const capture = Array.isArray(c.capture) && c.capture.length ? (c.capture as string[]).join('、') : '市场观察、操作习惯、教训';
+      lines.push(`· 记忆：主动复用并延续历史的【${capture}】，讨论时如与过去观察/教训相关请点出来。`);
+    }
+  }
+  return lines.length ? `已启用的能力（请遵循）：\n${lines.join('\n')}` : '';
 }
