@@ -30,16 +30,19 @@ describe('plugins routes', () => {
     expect(res.body.data).toHaveLength(6);
   });
 
-  it('enables a builtin and the list reflects it', async () => {
-    const en = await request(app).post('/api/plugins/playwright/enable').set(h(adminTok)).send({ enabled: true });
-    expect(en.status).toBe(200);
-    const list = await request(app).get('/api/plugins').set(h(adminTok));
-    expect(list.body.data.find((p: any) => p.key === 'playwright').enabled).toBe(true);
+  it('built-ins are enabled by default; disabling persists', async () => {
+    const list0 = await request(app).get('/api/plugins').set(h(adminTok));
+    expect(list0.body.data.every((p: any) => p.enabled)).toBe(true);
+    const off = await request(app).post('/api/plugins/fetch/enable').set(h(adminTok)).send({ enabled: false });
+    expect(off.status).toBe(200);
+    const list1 = await request(app).get('/api/plugins').set(h(adminTok));
+    expect(list1.body.data.find((p: any) => p.key === 'fetch').enabled).toBe(false);
   });
 
-  it('is per-user isolated', async () => {
+  it('a new user sees built-ins enabled by default (isolation)', async () => {
     const list = await request(app).get('/api/plugins').set(h(userTok));
-    expect(list.body.data.find((p: any) => p.key === 'playwright').enabled).toBe(false);
+    expect(list.body.data.find((p: any) => p.key === 'playwright').enabled).toBe(true);
+    expect(list.body.data.find((p: any) => p.key === 'fetch').enabled).toBe(true); // admin's disable didn't leak
   });
 
   it('adds a custom plugin; duplicate is 409', async () => {

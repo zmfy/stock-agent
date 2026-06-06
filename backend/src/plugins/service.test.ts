@@ -9,24 +9,21 @@ const A = 'user-A';
 const B = 'user-B';
 
 describe('plugins service', () => {
-  it('lists the 6 catalog plugins, all disabled initially', () => {
+  it('lists the 6 catalog plugins, all ENABLED by default', () => {
     const list = svc.listForUser(A);
     expect(list).toHaveLength(6);
-    expect(list.every((p: any) => !p.enabled)).toBe(true);
+    expect(list.every((p: any) => p.enabled)).toBe(true);
     expect(list.map((p: any) => p.key)).toEqual(
       expect.arrayContaining(['playwright', 'akshare-data', 'research', 'memory', 'fetch', 'sequential-thinking'])
     );
+    expect(list.find((p: any) => p.key === 'playwright').config.command).toBe('npx');
   });
 
-  it('enabling a builtin sets enabled + default config', () => {
-    svc.setEnabled(A, 'playwright', true);
-    const pw = svc.listForUser(A).find((p: any) => p.key === 'playwright');
-    expect(pw.enabled).toBe(true);
-    expect(pw.config.command).toBe('npx');
-  });
-
-  it('is per-user isolated', () => {
+  it('disabling a builtin persists OFF; per-user isolated', () => {
+    svc.setEnabled(B, 'playwright', false);
     expect(svc.listForUser(B).find((p: any) => p.key === 'playwright').enabled).toBe(false);
+    // A unaffected — still default ON
+    expect(svc.listForUser(A).find((p: any) => p.key === 'playwright').enabled).toBe(true);
   });
 
   it('adds a custom plugin (enabled) and rejects duplicate keys', () => {
@@ -51,10 +48,13 @@ describe('plugins service', () => {
     expect(caps.skills.map((s: any) => s.key)).toContain('research');
   });
 
-  it('removing a custom plugin deletes it; removing a builtin just disables', () => {
+  it('removing a custom plugin deletes it; disabling a builtin turns it off', () => {
     svc.remove(A, 'my-mcp');
     expect(svc.listForUser(A).find((p: any) => p.key === 'my-mcp')).toBeUndefined();
-    svc.remove(A, 'playwright');
+    svc.setEnabled(A, 'playwright', false);
     expect(svc.listForUser(A).find((p: any) => p.key === 'playwright').enabled).toBe(false);
+    // removing the builtin row reverts it to default ON
+    svc.remove(A, 'playwright');
+    expect(svc.listForUser(A).find((p: any) => p.key === 'playwright').enabled).toBe(true);
   });
 });

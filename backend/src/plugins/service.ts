@@ -58,7 +58,8 @@ export function listForUser(userId: string): PluginView[] {
       recommended: !!def.recommended,
       source: 'builtin',
       transport: def.transport ?? null,
-      enabled: !!r?.enabled,
+      // Default ON: built-ins are enabled unless the user explicitly stored a row turning it off.
+      enabled: r ? !!r.enabled : true,
       config: r && r.config ? parse(r.config) : def.defaultConfig,
     };
   });
@@ -130,27 +131,21 @@ export function updateConfig(userId: string, key: string, config: Record<string,
   if (existing) {
     getDb().prepare('UPDATE plugins SET config = ? WHERE id = ?').run(JSON.stringify(config), existing.id);
   } else if (def) {
-    // create a disabled row that just carries the config override
+    // built-ins are default-ON, so a config-override row keeps enabled = 1
     getDb()
       .prepare(
-        'INSERT INTO plugins (id, user_id, plugin_key, kind, label, source, transport, config, enabled) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)'
+        'INSERT INTO plugins (id, user_id, plugin_key, kind, label, source, transport, config, enabled) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)'
       )
       .run(uuidv4(), userId, key, def.kind, def.label, 'builtin', def.transport ?? null, JSON.stringify(config));
   }
 }
 
+// Delete the user's row for a plugin. Custom -> gone. Built-in -> reverts to default (ON).
+// (To turn a built-in OFF, use setEnabled(false), which persists an enabled=0 row.)
 export function remove(userId: string, key: string): void {
   const existing = rowFor(userId, key);
   if (!existing) return;
-  if (existing.source === 'custom') {
-    getDb().prepare('DELETE FROM plugins WHERE id = ?').run(existing.id);
-  } else {
-    // builtin: just disable and clear override back to default
-    const def = getCatalogPlugin(key);
-    getDb()
-      .prepare('UPDATE plugins SET enabled = 0, config = ? WHERE id = ?')
-      .run(JSON.stringify(def?.defaultConfig ?? {}), existing.id);
-  }
+  getDb().prepare('DELETE FROM plugins WHERE id = ?').run(existing.id);
 }
 
 export interface EnabledCapabilities {
