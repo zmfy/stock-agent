@@ -26,6 +26,25 @@ def health():
     return {"status": "ok", "ts": datetime.now().isoformat()}
 
 
+_NAME_DF = None
+
+
+@app.get("/name/{code}")
+def stock_name(code: str):
+    """Code -> name via the full A-share list (reliable, independent of the spot endpoint)."""
+    global _NAME_DF
+    code = code[-6:]
+    try:
+        if _NAME_DF is None:
+            _NAME_DF = ak.stock_info_a_code_name()
+        row = _NAME_DF[_NAME_DF["code"].astype(str).str[-6:] == code]
+        if not row.empty:
+            return {"code": code, "name": str(row.iloc[0]["name"])}
+    except Exception:
+        pass
+    return {"code": code, "name": None}
+
+
 @app.get("/fundamentals/{code}")
 def fundamentals(code: str):
     code = code[-6:]

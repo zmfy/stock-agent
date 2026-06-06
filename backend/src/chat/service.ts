@@ -5,6 +5,7 @@ import { getProvider } from '../ai/providers';
 import { chat } from '../ai/manager';
 import { getCorePersona } from '../agent/profiles-service';
 import { runAnalysis } from '../analysis/orchestrator';
+import { getStockName } from '../data/service';
 import { getLatestReportByCode, deleteReportsByCode, deleteAllReports } from '../analysis/report-service';
 import { getTodayContent } from '../meetings/service';
 import { getActive } from '../rulebook/service';
@@ -127,9 +128,14 @@ export async function analyzeStockSession(userId: string, sessionId: string): Pr
   const session = ownSession(userId, sessionId);
   if (!session) throw new Error('NOT_FOUND');
   if (session.kind !== 'stock' || !session.ref_id) throw new Error('NOT_STOCK');
+  // Resolve the name first (reliable, independent of full data) so the window shows
+  // name+code even if analysis is then blocked by the validation gate.
+  const name = await getStockName(userId, session.ref_id).catch(() => null);
+  if (name) {
+    getDb().prepare('UPDATE chat_sessions SET title = ? WHERE id = ?').run(`${name} ${session.ref_id}`, sessionId);
+  }
   const report = await runAnalysis(userId, session.ref_id);
-  // Show name + code in the session title (rail) once we know the name.
-  if (report?.stock_name) {
+  if (report?.stock_name && !name) {
     getDb().prepare('UPDATE chat_sessions SET title = ? WHERE id = ?').run(`${report.stock_name} ${session.ref_id}`, sessionId);
   }
   const summary = `${reportContext(report)}\n\n你可以继续追问这只股票（估值、买点、仓位、与同类比较等）。`;

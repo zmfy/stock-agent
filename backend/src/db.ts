@@ -144,6 +144,13 @@ function initSchema(): void {
       PRIMARY KEY (code, date)
     );
 
+    CREATE TABLE IF NOT EXISTS stock_names (
+      code TEXT PRIMARY KEY,
+      name TEXT,
+      source TEXT,
+      fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
     CREATE TABLE IF NOT EXISTS market_sentiment (
       date TEXT PRIMARY KEY,
       limit_up_count INTEGER,

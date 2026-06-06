@@ -311,13 +311,14 @@ async function doAnalyze(s: ChatSession) {
   try {
     await chatApi.analyze(s.id);
     messages.value = (await chatApi.getMessages(s.id)).data.data;
-    await loadSessions(); // refresh the rail title (now includes the stock name)
-    active.value = sessions.value.find((x) => x.id === s.id) || active.value;
     scrollDown();
   } catch (e: any) {
     chatErr.value = e.response?.data?.message || '分析失败';
   } finally {
     analyzing.value = false;
+    // refresh the rail title even on block — the name is resolved independently of analysis
+    await loadSessions();
+    active.value = sessions.value.find((x) => x.id === s.id) || active.value;
   }
 }
 // delete button appears after hovering ~3s, hides on leave
