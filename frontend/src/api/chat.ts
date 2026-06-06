@@ -8,6 +8,7 @@ export interface ChatSession {
   kind: ChatKind;
   ref_id: string | null;
   title: string | null;
+  pinned: number;
   created_at: string;
 }
 
@@ -29,5 +30,6 @@ export const chatApi = {
     api.post<{ data: ChatMessage }>(`/chat/sessions/${id}/messages`, { content }),
   analyze: (id: string) => api.post<{ data: { report: any; message: ChatMessage } }>(`/chat/sessions/${id}/analyze`),
   deleteSession: (id: string) => api.delete(`/chat/sessions/${id}`),
+  setPinned: (id: string, pinned: boolean) => api.put(`/chat/sessions/${id}/pin`, { pinned }),
   clearAll: () => api.delete('/chat/sessions'),
 };

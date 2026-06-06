@@ -232,6 +232,7 @@ function initSchema(): void {
       kind TEXT NOT NULL,
       ref_id TEXT,
       title TEXT,
+      pinned INTEGER DEFAULT 0,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
@@ -293,6 +294,10 @@ function migrate(): void {
   }
   if (rcols.length && !rcols.some((c) => c.name === 'validation')) {
     db.exec('ALTER TABLE reports ADD COLUMN validation TEXT');
+  }
+  const scols = db.prepare('PRAGMA table_info(chat_sessions)').all() as { name: string }[];
+  if (scols.length && !scols.some((c) => c.name === 'pinned')) {
+    db.exec('ALTER TABLE chat_sessions ADD COLUMN pinned INTEGER DEFAULT 0');
   }
 }
 

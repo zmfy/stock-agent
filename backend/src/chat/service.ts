@@ -39,10 +39,14 @@ export function createSession(userId: string, kind: ChatKind, refId?: string | n
 export function listSessions(userId: string, kind?: ChatKind): any[] {
   if (kind) {
     return getDb()
-      .prepare('SELECT * FROM chat_sessions WHERE user_id = ? AND kind = ? ORDER BY created_at DESC')
+      .prepare('SELECT * FROM chat_sessions WHERE user_id = ? AND kind = ? ORDER BY pinned DESC, created_at DESC')
       .all(userId, kind);
   }
-  return getDb().prepare('SELECT * FROM chat_sessions WHERE user_id = ? ORDER BY created_at DESC').all(userId);
+  return getDb().prepare('SELECT * FROM chat_sessions WHERE user_id = ? ORDER BY pinned DESC, created_at DESC').all(userId);
+}
+
+export function setPinned(userId: string, sessionId: string, pinned: boolean): void {
+  getDb().prepare('UPDATE chat_sessions SET pinned = ? WHERE id = ? AND user_id = ?').run(pinned ? 1 : 0, sessionId, userId);
 }
 
 function ownSession(userId: string, sessionId: string): any | undefined {

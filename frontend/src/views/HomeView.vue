@@ -48,10 +48,11 @@
       <!-- 会话列表 -->
       <div class="sect-head">对话 <button class="mini" @click="newGeneral">＋新对话</button></div>
       <ul class="sessions">
-        <li v-for="s in sessions" :key="s.id" :class="{ active: active?.id === s.id }"
+        <li v-for="s in sessions" :key="s.id" :class="{ active: active?.id === s.id, pinned: s.pinned === 1 }"
             @click="open(s)" @mouseenter="startHover(s.id)" @mouseleave="endHover">
           <span class="kind">{{ kindIcon(s.kind) }}</span>
           <span class="stitle">{{ s.title || sessionLabel(s) }}</span>
+          <button class="pin" :class="{ on: s.pinned === 1 }" :title="s.pinned === 1 ? '取消置顶' : '置顶'" @click.stop="togglePin(s)">📌</button>
           <button v-show="hoverDelId === s.id" class="del" title="删除（含清空该股记忆）" @click.stop="removeSession(s)">×</button>
         </li>
       </ul>
@@ -335,6 +336,11 @@ function endHover() {
   hoverDelId.value = null;
 }
 
+async function togglePin(s: ChatSession) {
+  await chatApi.setPinned(s.id, s.pinned !== 1);
+  await loadSessions();
+}
+
 async function removeSession(s: ChatSession) {
   if (!confirm(`删除「${s.title || sessionLabel(s)}」？${s.kind === 'stock' ? '（同时清空 agent 对该股的记忆/分析）' : ''}`)) return;
   await chatApi.deleteSession(s.id);
@@ -501,6 +507,12 @@ onMounted(async () => {
 .stitle { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .del { flex: none; border: none; background: none; color: #bbb; cursor: pointer; font-size: 15px; line-height: 1; padding: 0 2px; }
 .del:hover { color: #c00; }
+.pin { flex: none; border: none; background: none; cursor: pointer; font-size: 12px; line-height: 1; padding: 0 1px; opacity: 0.25; filter: grayscale(1); }
+.pin.on { opacity: 1; filter: none; }
+.sessions li:hover .pin { opacity: 0.6; }
+.sessions li:hover .pin.on { opacity: 1; }
+.sessions li.pinned { background: #fffdf3; }
+.sessions li.pinned.active { background: #eef; }
 .clearall { background: #fff3f3; border-color: #f3d0d0; margin-bottom: 6px; }
 .menu { padding: 8px 4px; border-top: 1px solid #eee; }
 .settings-entry { width: 100%; text-align: left; background: #f2f2f2; border: 1px solid #e0e0e0; border-radius: 6px; padding: 8px 10px; font-size: 13px; cursor: pointer; }

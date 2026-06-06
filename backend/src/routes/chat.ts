@@ -67,6 +67,14 @@ router.post('/sessions/:id/analyze', async (req: Request, res: Response) => {
   }
 });
 
+// PUT /api/chat/sessions/:id/pin { pinned }
+router.put('/sessions/:id/pin', (req: Request, res: Response) => {
+  const parsed = z.object({ pinned: z.boolean() }).safeParse(req.body);
+  if (!parsed.success) return errorResponse(res, 422, 'VALIDATION_ERROR', '参数校验失败');
+  chat.setPinned(req.user!.userId, req.params.id, parsed.data.pinned);
+  successResponse(res, null, parsed.data.pinned ? '已置顶' : '已取消置顶');
+});
+
 // DELETE /api/chat/sessions — clear ALL chats + stock memory
 router.delete('/sessions', (req: Request, res: Response) => {
   chat.clearAll(req.user!.userId);
