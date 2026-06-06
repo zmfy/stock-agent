@@ -12,6 +12,12 @@ import { User, JwtPayload } from '../types';
 
 const router = Router();
 
+// 登录防暴力破解：按「用户名+IP」记失败次数，连续失败达上限即锁定一段时间（返回 429）。
+const LOGIN_MAX_FAILS = Number(process.env.LOGIN_MAX_FAILS) || 5;
+const LOGIN_LOCK_MS = (Number(process.env.LOGIN_LOCK_MINUTES) || 15) * 60 * 1000;
+const loginFails = new Map<string, { fails: number; lockedUntil: number }>();
+const loginKey = (req: Request, username: string) => `${String(username || '').toLowerCase()}|${req.ip}`;
+
 const loginSchema = z.object({
   username: z.string().min(1).max(50),
   password: z.string().min(1).max(100),
@@ -34,11 +40,31 @@ router.post('/login', (req: Request, res: Response) => {
   const parsed = loginSchema.safeParse(req.body);
   if (!parsed.success) return errorResponse(res, 422, 'VALIDATION_ERROR', '参数校验失败');
   const { username, password } = parsed.data;
+
+  // 锁定检查
+  const key = loginKey(req, username);
+  const now = Date.now();
+  const rec = loginFails.get(key);
+  if (rec && rec.lockedUntil > now) {
+    const secs = Math.ceil((rec.lockedUntil - now) / 1000);
+    res.set('Retry-After', String(secs));
+    return errorResponse(res, 429, 'RATE_LIMIT', `登录失败次数过多，请 ${Math.ceil(secs / 60)} 分钟后再试`);
+  }
+
   const db = getDb();
   const user = db.prepare('SELECT * FROM users WHERE username = ?').get(username) as User | undefined;
   if (!user || !bcrypt.compareSync(password, user.password_hash)) {
-    return errorResponse(res, 401, 'AUTH_UNAUTHORIZED', '用户名或密码错误');
+    const r = loginFails.get(key) || { fails: 0, lockedUntil: 0 };
+    r.fails += 1;
+    if (r.fails >= LOGIN_MAX_FAILS) {
+      r.lockedUntil = now + LOGIN_LOCK_MS;
+      r.fails = 0;
+    }
+    loginFails.set(key, r);
+    const left = Math.max(0, LOGIN_MAX_FAILS - r.fails);
+    return errorResponse(res, 401, 'AUTH_UNAUTHORIZED', `用户名或密码错误${r.lockedUntil > now ? '，已临时锁定' : left <= 2 ? `（再错 ${left} 次将锁定）` : ''}`);
   }
+  loginFails.delete(key); // 成功即清零
   const tokens = generateTokens(user.id, user.role);
   successResponse(res, { user: { id: user.id, username: user.username, role: user.role, nickname: (user as any).nickname ?? null }, ...tokens }, '登录成功');
 });

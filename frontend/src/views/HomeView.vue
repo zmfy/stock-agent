@@ -1,7 +1,9 @@
 <template>
   <div class="shell">
+    <!-- 移动端左栏抽屉的遮罩 -->
+    <div v-if="railOpen" class="drawer-backdrop" @click="railOpen = false"></div>
     <!-- 左栏 -->
-    <aside class="rail">
+    <aside class="rail" :class="{ open: railOpen }">
       <div class="brand">股票小作手</div>
 
       <!-- 会话列表 -->
@@ -25,6 +27,7 @@
     <!-- 右侧：顶部功能栏（聊天框之外，常驻） + 聊天 或 功能面板 -->
     <main class="main">
       <nav class="topnav">
+        <button class="hamburger" title="菜单" @click="railOpen = !railOpen">☰</button>
         <div class="tnav-scroll">
           <button class="tnav" :class="{ active: !settingsKey }" @click="goChat">💬 聊天</button>
           <button v-for="s in SETTINGS" :key="s.key" class="tnav" :class="{ active: settingsKey === s.key }" @click="settingsKey = s.key">
@@ -230,7 +233,9 @@ const genning = ref<'' | 'morning' | 'evening'>('');
 const screen = ref<ScreenRun | null>(null);
 const screening = ref(false);
 const screenOpen = ref(true);
-const opsOpen = ref(true); // 右侧操作框是否展开
+const isMobile = typeof window !== 'undefined' && window.innerWidth <= 768;
+const opsOpen = ref(!isMobile); // 右侧操作框是否展开（手机默认收起，避免遮挡）
+const railOpen = ref(false); // 移动端左栏抽屉
 const activeRulebook = ref<FullRulebook | null>(null);
 const templates = ref<TemplateMeta[]>([]);
 const tplOpen = ref(false);
@@ -371,6 +376,7 @@ async function loadSessions() {
 }
 async function open(s: ChatSession) {
   settingsKey.value = ''; // 打开会话即回到聊天视图
+  railOpen.value = false; // 手机端选中会话后收起抽屉
   active.value = s;
   chatErr.value = '';
   proposal.value = null;
@@ -633,6 +639,8 @@ onMounted(async () => {
 /* 右侧主区：顶部功能栏 + 内容卡片 */
 .main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
 .topnav { display: flex; align-items: center; gap: 10px; padding: 12px 14px 0; }
+.hamburger { display: none; flex: none; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 16px; line-height: 1; padding: 6px 10px; cursor: pointer; color: var(--text); }
+.drawer-backdrop { display: none; }
 .tnav-scroll { flex: 1; min-width: 0; display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; }
 .tnav-scroll::-webkit-scrollbar { height: 6px; }
 .topnav-user { flex: none; display: flex; align-items: center; gap: 8px; }
@@ -657,6 +665,26 @@ onMounted(async () => {
 .ops-side .tplswitch, .ops-side .propose-bar, .ops-side .proposal { margin: 0; }
 .ops-fab { position: fixed; right: 22px; bottom: 104px; z-index: 50; background: #e5484d; color: #fff; border: none; border-radius: 22px; padding: 10px 16px; box-shadow: var(--shadow-md); cursor: pointer; font-size: 13px; font-weight: 600; }
 .ops-fab:hover { background: #d23b40; }
+
+/* ============ 移动端适配（<=768px）============ */
+@media (max-width: 768px) {
+  .hamburger { display: inline-flex; align-items: center; }
+  /* 左栏变为抽屉 */
+  .rail { position: fixed; z-index: 60; top: 0; bottom: 0; left: 0; width: 80%; max-width: 300px; transform: translateX(-100%); transition: transform 0.22s ease; }
+  .rail.open { transform: translateX(0); box-shadow: 4px 0 22px rgba(0, 0, 0, 0.35); }
+  .drawer-backdrop { display: block; position: fixed; inset: 0; background: rgba(0, 0, 0, 0.4); z-index: 55; }
+  /* 内容区占满 */
+  .main { width: 100%; }
+  .chat, .panelbox { margin: 8px; padding: 12px 12px; border-radius: 12px; }
+  .topnav { padding: 10px 10px 0; }
+  .topnav-user .uname { display: none; }
+  /* 右操作框变为右侧抽屉 */
+  .chat-row { flex-direction: column; }
+  .ops-side { position: fixed; z-index: 60; top: 0; right: 0; bottom: 0; width: 86%; max-width: 340px; background: var(--surface); border-left: 1px solid var(--border); padding: 14px; box-shadow: -4px 0 22px rgba(0, 0, 0, 0.3); }
+  .cp-side, .convo { width: auto; }
+  .bubble { max-width: 88%; }
+  .ops-fab { bottom: 84px; right: 14px; }
+}
 .initbar { background: #fff7e6; border: 1px solid #ffe0a3; border-radius: 6px; padding: 8px 12px; font-size: 13px; margin-bottom: 8px; }
 .empty { margin: auto; text-align: center; color: var(--text-soft); max-width: 460px; }
 .empty h2 { font-size: 22px; margin-bottom: 8px; }
