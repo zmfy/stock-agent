@@ -7,10 +7,69 @@ real run; keep them isolated so one broken endpoint never sinks the whole respon
 """
 from datetime import datetime
 
+import socket
+from concurrent.futures import ThreadPoolExecutor
+from datetime import timedelta
+
+# Bound all upstream network calls so a blocked/slow source fails fast instead of hanging.
+socket.setdefaulttimeout(20)
+
 from fastapi import FastAPI
 import akshare as ak
 
 app = FastAPI(title="stock-agent akshare sidecar")
+
+# BaoStock: free, no-token A-share source for fundamentals (PE/PB/PS/ROE/净利/换手).
+# IMPORTANT: never login at import — that network call can hang and block uvicorn startup.
+try:
+    import baostock as bs
+except Exception:
+    bs = None
+
+_BS_LOGGED_IN = False
+
+
+_EXEC = ThreadPoolExecutor(max_workers=6)
+
+
+def _timed(fn, seconds=10):
+    """Run a blocking upstream call but never wait longer than `seconds`."""
+    try:
+        return _EXEC.submit(fn).result(timeout=seconds)
+    except Exception:
+        return None
+
+
+def _ensure_bs() -> bool:
+    global _BS_LOGGED_IN
+    if bs is None:
+        return False
+    if _BS_LOGGED_IN:
+        return True
+    try:
+        lg = bs.login()
+        _BS_LOGGED_IN = getattr(lg, "error_code", "1") == "0"
+        return _BS_LOGGED_IN
+    except Exception:
+        return False
+
+
+def _bs_code(code: str) -> str:
+    code = code[-6:]
+    return ("sh." if code[0] == "6" else "sz.") + code
+
+
+def _recent_quarters(n: int = 6):
+    y = datetime.now().year
+    q = (datetime.now().month - 1) // 3 + 1
+    out = []
+    for _ in range(n):
+        out.append((y, q))
+        q -= 1
+        if q == 0:
+            q = 4
+            y -= 1
+    return out
 
 
 def _f(x):
@@ -72,28 +131,43 @@ def stock_name(code: str):
     return {"code": code, "name": None}
 
 
-@app.get("/fundamentals/{code}")
-def fundamentals(code: str):
-    code = code[-6:]
+def _bs_fund(code: str) -> dict:
     out: dict = {}
-
-    # name / PE(dynamic) / PB / turnover from the whole-market spot snapshot (one call).
+    if not _ensure_bs():
+        return out
+    bcode = _bs_code(code)
     try:
-        spot = ak.stock_zh_a_spot_em()
-        row = spot[spot["代码"] == code]
-        if not row.empty:
-            r = row.iloc[0]
-            out["name"] = r.get("名称")
-            out["pe"] = _f(r.get("市盈率-动态"))
-            out["pb"] = _f(r.get("市净率"))
-            out["turnover_rate"] = _f(r.get("换手率"))
+        start = (datetime.now() - timedelta(days=20)).strftime("%Y-%m-%d")
+        rs = bs.query_history_k_data_plus(bcode, "date,close,turn,peTTM,pbMRQ,psTTM", start_date=start, frequency="d", adjustflag="3")
+        rows = []
+        while rs and rs.error_code == "0" and rs.next():
+            rows.append(rs.get_row_data())
+        if rows:
+            last = rows[-1]
+            out["pe"], out["pb"], out["ps"], out["turnover_rate"] = _f(last[3]), _f(last[4]), _f(last[5]), _f(last[2])
     except Exception:
         pass
+    try:
+        for (y, q) in _recent_quarters():
+            pr = bs.query_profit_data(code=bcode, year=y, quarter=q)
+            prows = []
+            while pr and pr.error_code == "0" and pr.next():
+                prows.append(pr.get_row_data())
+            if prows:
+                d = dict(zip(pr.fields, prows[0]))
+                roe = _f(d.get("roeAvg"))
+                out["roe_ttm"] = round(roe * 100, 2) if roe is not None else None  # baostock roeAvg is a ratio
+                out["net_profit"] = _f(d.get("netProfit"))
+                break
+    except Exception:
+        pass
+    return out
 
-    # ROE(TTM) + 归母净利润 via financial abstract / indicators (latest reported)
+
+def _ak_fund(code: str) -> dict:
+    out: dict = {}
     try:
         abstract = ak.stock_financial_abstract(symbol=code)
-        # abstract is wide: 指标 + period columns; pick the most recent numeric column
         cols = [c for c in abstract.columns if c not in ("选项", "指标")]
         latest = cols[0] if cols else None
         def pick(name):
@@ -103,14 +177,36 @@ def fundamentals(code: str):
         out["roe_ttm"] = pick("净资产收益率")
     except Exception:
         pass
-
-    # turnover rate from latest daily bar
     try:
         hist = ak.stock_zh_a_hist(symbol=code, period="daily", adjust="qfq")
         if not hist.empty and "换手率" in hist.columns:
             out["turnover_rate"] = _f(hist.iloc[-1]["换手率"])
     except Exception:
         pass
+    return out
+
+
+@app.get("/fundamentals/{code}")
+def fundamentals(code: str):
+    code = code[-6:]
+    out: dict = {}
+    try:
+        out["name"] = stock_name(code).get("name")
+    except Exception:
+        pass
+
+    # BaoStock primary (bounded so a blocked source never hangs the request)
+    bsd = _timed(lambda: _bs_fund(code), 10) or {}
+    for k, v in bsd.items():
+        if v is not None:
+            out[k] = v
+
+    # AkShare fallback only for fields still missing
+    if out.get("roe_ttm") is None or out.get("net_profit") is None or out.get("turnover_rate") is None:
+        akd = _timed(lambda: _ak_fund(code), 10) or {}
+        for k in ("roe_ttm", "net_profit", "turnover_rate"):
+            if out.get(k) is None and akd.get(k) is not None:
+                out[k] = akd[k]
 
     return out
 
