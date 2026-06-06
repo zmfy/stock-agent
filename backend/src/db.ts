@@ -1,4 +1,6 @@
 import Database from 'better-sqlite3';
+import bcrypt from 'bcryptjs';
+import { v4 as uuidv4 } from 'uuid';
 import path from 'path';
 import fs from 'fs';
 
@@ -44,10 +46,28 @@ function initSchema(): void {
     );
   `);
 
-  // Seed registration mode from env (open | invite). Default open for a fresh single-user install.
-  const mode = process.env.REGISTRATION_MODE === 'invite' ? 'invite' : 'open';
+  // Registration is invite-only by default; set REGISTRATION_MODE=open to allow self sign-up.
+  const mode = process.env.REGISTRATION_MODE === 'open' ? 'open' : 'invite';
   db.prepare(
     `INSERT INTO settings (key, value) VALUES ('registration_mode', ?)
      ON CONFLICT(key) DO NOTHING`
   ).run(mode);
+
+  seedDefaultAdmin();
+}
+
+// Seed a default admin account on first init so an invite-only system is reachable.
+// Override via DEFAULT_ADMIN_USER / DEFAULT_ADMIN_PASSWORD. Change the password after first login.
+function seedDefaultAdmin(): void {
+  const username = process.env.DEFAULT_ADMIN_USER || 'stock-agent';
+  const password = process.env.DEFAULT_ADMIN_PASSWORD || 'sg123456';
+  const existing = db.prepare('SELECT id FROM users WHERE username = ?').get(username);
+  if (existing) return;
+  db.prepare('INSERT INTO users (id, username, password_hash, role) VALUES (?, ?, ?, ?)').run(
+    uuidv4(),
+    username,
+    bcrypt.hashSync(password, 10),
+    'admin'
+  );
+  console.log(`[db] seeded default admin user '${username}' — change the password after first login`);
 }

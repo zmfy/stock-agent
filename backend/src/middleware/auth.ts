@@ -20,6 +20,14 @@ export function authMiddleware(req: Request, res: Response, next: NextFunction):
   }
 }
 
+export function adminMiddleware(req: Request, res: Response, next: NextFunction): void {
+  if (!req.user || req.user.role !== 'admin') {
+    errorResponse(res, 403, 'AUTH_FORBIDDEN', '需要管理员权限');
+    return;
+  }
+  next();
+}
+
 export function generateTokens(
   userId: string,
   role: 'admin' | 'user'

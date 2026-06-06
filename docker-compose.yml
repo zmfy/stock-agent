@@ -8,7 +8,9 @@ services:
     environment:
       - PORT=3000
       - DATA_DIR=/app/backend/data
-      - REGISTRATION_MODE=open
+      - REGISTRATION_MODE=invite
+      - DEFAULT_ADMIN_USER=stock-agent
+      - DEFAULT_ADMIN_PASSWORD=sg123456
     volumes:
       - stock_agent_data:/app/backend/data
 
