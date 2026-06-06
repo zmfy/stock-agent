@@ -5,7 +5,7 @@
       <div class="brand">股票小作手</div>
 
       <!-- 会话列表 -->
-      <div class="sect-head">对话 <button class="mini" @click="newGeneral">＋新对话</button></div>
+      <div class="sect-head">讨论记录</div>
       <ul class="sessions">
         <li v-for="s in sessions" :key="s.id" :class="{ active: active?.id === s.id, 'is-pinned': s.pinned === 1 }"
             @click="open(s)" @mouseenter="startHover(s.id)" @mouseleave="endHover">
@@ -52,9 +52,9 @@
 
             <div v-if="!active" class="empty">
               <h2>你好，我是股票小作手，来财。🤝</h2>
-              <p class="muted">输入股票代码 / 名称 / 拼音，直接开一个该股的分析对话；输入「来财」可直接呼叫主 agent 对话；或在右侧操作框选「早会」「核心原则」等。</p>
+              <p class="muted">输入股票代码 / 名称 / 拼音，开一个该股的分析讨论；或在右侧操作框点「核心原则讨论 / 更换模板」。本系统是操盘专用工具，只做个股与核心原则的讨论。</p>
               <div class="qbox">
-                <StockPicker placeholder="输入股票代码 / 名称 / 拼音；或输入「来财」呼叫主 agent" @pick="onDefaultPick" />
+                <StockPicker placeholder="输入股票代码 / 名称 / 拼音，开个股讨论" @pick="onDefaultPick" />
               </div>
             </div>
 
@@ -437,12 +437,6 @@ async function clearAllChats() {
   await loadSessions();
 }
 
-async function newGeneral() {
-  const id = (await chatApi.createSession('general')).data.data.id;
-  await loadSessions();
-  const s = sessions.value.find((x) => x.id === id);
-  if (s) await open(s);
-}
 async function openCorePrinciple() {
   let s = sessions.value.find((x) => x.kind === 'core_principle');
   if (!s) {
@@ -484,20 +478,14 @@ async function openMeeting(kind: 'morning' | 'evening') {
 
 const AGENT_NAME = '来财'; // 主 agent 的名字
 
-// 默认页查询框：输入「来财」呼叫主 agent，否则按股票开个股会话
+// 默认页查询框：输入「来财」与主 agent 讨论核心原则，否则按股票开个股讨论
 function onDefaultPick(val: string) {
   if (val.trim() === AGENT_NAME) return summonMainAgent();
   return openStockCode(val);
 }
-// 打开（复用）与主 agent 的通用对话
+// 呼叫主 agent 来财 = 进入核心原则讨论（本系统是操盘工具，不做无目的闲聊）
 async function summonMainAgent() {
-  let s = sessions.value.find((x) => x.kind === 'general' && x.title === AGENT_NAME);
-  if (!s) {
-    const id = (await chatApi.createSession('general', null, AGENT_NAME)).data.data.id;
-    await loadSessions();
-    s = sessions.value.find((x) => x.id === id);
-  }
-  if (s) await open(s);
+  await openCorePrinciple();
 }
 
 async function openStockCode(code: string) {
