@@ -4,11 +4,15 @@
     <aside class="rail">
       <div class="brand">股票小作手</div>
 
-      <!-- 置顶：早会 -->
+      <!-- 置顶 -->
       <div class="pinned">
-        <div class="pin-card soon">📈 今日操作方向（早会）<span class="soon-tag">即将开放</span>
-          <div class="muted">每天 8:00 由 agent 整合大盘/板块给出今日思路</div>
-        </div>
+        <!-- 早会 -->
+        <button v-if="meetings.morning" class="pin-btn" :class="{ active: active?.kind === 'morning' }" @click="openMeeting('morning')">
+          📈 今日操作方向（早会）
+        </button>
+        <button v-else class="pin-card gen" :disabled="genning === 'morning'" @click="genMeeting('morning')">
+          📈 生成今日早会{{ genning === 'morning' ? '…' : '' }}
+        </button>
 
         <button class="pin-btn" :class="{ active: active?.kind === 'core_principle' }" @click="openCorePrinciple">📜 核心原则（对话）</button>
 
@@ -19,7 +23,13 @@
           <button @click="freeQuery">查</button>
         </div>
 
-        <div class="pin-card soon">🌙 今日操作复盘（晚会）<span class="soon-tag">即将开放</span></div>
+        <!-- 晚会 -->
+        <button v-if="meetings.evening" class="pin-btn" :class="{ active: active?.kind === 'evening' }" @click="openMeeting('evening')">
+          🌙 今日操作复盘（晚会）
+        </button>
+        <button v-else class="pin-card gen" :disabled="genning === 'evening'" @click="genMeeting('evening')">
+          🌙 生成今日晚会{{ genning === 'evening' ? '…' : '' }}
+        </button>
       </div>
 
       <!-- 会话列表 -->
@@ -65,6 +75,10 @@
           </span>
         </div>
         <div v-if="analyzing" class="analyzing">正在按你的核心原则分析 {{ active.ref_id }} …</div>
+
+        <!-- 早会/晚会简报 -->
+        <div v-if="briefing" class="briefing">{{ briefing }}</div>
+
         <div class="msgs" ref="msgsEl">
           <div v-for="m in messages" :key="m.id" class="msg" :class="m.role">
             <div class="bubble">{{ m.content }}</div>
@@ -111,6 +125,7 @@ import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 import { chatApi, type ChatSession, type ChatMessage, type ChatKind } from '../api/chat';
 import { rulebookApi, type ProposeResult } from '../api/rulebook';
+import { meetingsApi, type Meeting } from '../api/meetings';
 
 const auth = useAuthStore();
 const router = useRouter();
@@ -125,6 +140,13 @@ const queryCode = ref('');
 const needsInit = ref(false);
 const analyzing = ref(false);
 const msgsEl = ref<HTMLElement | null>(null);
+const meetings = ref<{ morning: Meeting | null; evening: Meeting | null }>({ morning: null, evening: null });
+const genning = ref<'' | 'morning' | 'evening'>('');
+const briefing = computed(() => {
+  if (active.value?.kind === 'morning') return meetings.value.morning?.content || '';
+  if (active.value?.kind === 'evening') return meetings.value.evening?.content || '';
+  return '';
+});
 
 // 核心原则修改提议
 const proposal = ref<ProposeResult | null>(null);
@@ -218,6 +240,36 @@ async function openCorePrinciple() {
   }
   if (s) await open(s);
 }
+async function loadMeetings() {
+  try {
+    meetings.value = (await meetingsApi.today()).data.data;
+  } catch {
+    /* ignore */
+  }
+}
+async function genMeeting(kind: 'morning' | 'evening') {
+  genning.value = kind;
+  chatErr.value = '';
+  try {
+    await meetingsApi.generate(kind);
+    await loadMeetings();
+    await openMeeting(kind);
+  } catch (e: any) {
+    chatErr.value = e.response?.data?.message || '生成失败';
+  } finally {
+    genning.value = '';
+  }
+}
+async function openMeeting(kind: 'morning' | 'evening') {
+  let s = sessions.value.find((x) => x.kind === kind);
+  if (!s) {
+    const id = (await chatApi.createSession(kind, null, kind === 'morning' ? '早会讨论' : '晚会讨论')).data.data.id;
+    await loadSessions();
+    s = sessions.value.find((x) => x.id === id);
+  }
+  if (s) await open(s);
+}
+
 async function freeQuery() {
   const code = queryCode.value.trim();
   if (!code) return;
@@ -263,6 +315,7 @@ function logout() {
 onMounted(async () => {
   if (!auth.user) await auth.fetchMe().catch(() => {});
   await loadSessions();
+  await loadMeetings();
   try {
     const rb = (await rulebookApi.getActive()).data.data;
     needsInit.value = !rb;
@@ -299,6 +352,8 @@ onMounted(async () => {
 .title { font-weight: 600; padding-bottom: 8px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; }
 .stock-head { display: flex; gap: 8px; }
 .analyzing { color: #a76b00; font-size: 13px; padding: 8px 0; }
+.briefing { background: #f7faff; border: 1px solid #d6e4ff; border-radius: 8px; padding: 10px 12px; margin: 8px 0; white-space: pre-wrap; font-size: 13px; line-height: 1.6; }
+.pin-card.gen { background: #eef7ee; cursor: pointer; border: 1px dashed #b7d7b7; text-align: left; }
 .msgs { flex: 1; overflow-y: auto; padding: 12px 0; display: flex; flex-direction: column; gap: 10px; }
 .msg { display: flex; }
 .msg.user { justify-content: flex-end; }

@@ -15,6 +15,7 @@ import dataRoutes from './routes/data';
 import analysisRoutes from './routes/analysis';
 import agentRoutes from './routes/agent';
 import chatRoutes from './routes/chat';
+import meetingsRoutes from './routes/meetings';
 
 export function createApp(): express.Express {
   const app = express();
@@ -59,6 +60,7 @@ export function createApp(): express.Express {
   app.use('/api/analysis', analysisRoutes);
   app.use('/api/agent', agentRoutes);
   app.use('/api/chat', chatRoutes);
+  app.use('/api/meetings', meetingsRoutes);
 
   app.get('/health', (_req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
@@ -82,8 +84,10 @@ if (require.main === module) {
   const PORT = process.env.PORT || 3000;
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const { startNightlyCron } = require('./cron/nightly');
+  const { startMeetingsCron } = require('./cron/meetings');
   createApp().listen(PORT, () => {
     console.log(`[stock-agent] backend listening on :${PORT}`);
     startNightlyCron();
+    startMeetingsCron();
   });
 }

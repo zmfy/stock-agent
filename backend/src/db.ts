@@ -207,6 +207,17 @@ function initSchema(): void {
 
     CREATE INDEX IF NOT EXISTS idx_quote_daily_code ON quote_daily (code);
     CREATE INDEX IF NOT EXISTS idx_reports_user ON reports (user_id, created_at);
+    CREATE TABLE IF NOT EXISTS meetings (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      kind TEXT NOT NULL,
+      date TEXT NOT NULL,
+      content TEXT,
+      data TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(user_id, kind, date)
+    );
+
     CREATE INDEX IF NOT EXISTS idx_chat_sessions_user ON chat_sessions (user_id, kind);
     CREATE INDEX IF NOT EXISTS idx_chat_messages_session ON chat_messages (session_id, created_at);
   `);

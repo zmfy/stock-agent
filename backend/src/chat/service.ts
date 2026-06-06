@@ -6,6 +6,7 @@ import { chat } from '../ai/manager';
 import { getCorePersona } from '../agent/profiles-service';
 import { runAnalysis } from '../analysis/orchestrator';
 import { getLatestReportByCode } from '../analysis/report-service';
+import { getTodayContent } from '../meetings/service';
 
 export type ChatKind = 'general' | 'core_principle' | 'stock' | 'morning' | 'evening';
 
@@ -130,6 +131,10 @@ export async function postMessage(userId: string, sessionId: string, content: st
   let extra = opts.extraContext;
   if (!extra && session.kind === 'stock' && session.ref_id) {
     extra = reportContext(getLatestReportByCode(userId, session.ref_id));
+  }
+  if (!extra && (session.kind === 'morning' || session.kind === 'evening')) {
+    const mc = getTodayContent(userId, session.kind);
+    if (mc) extra = `今日${session.kind === 'morning' ? '早会' : '晚会'}内容：\n${mc}`;
   }
   const prompt = buildPrompt(persona, session.kind, history, extra);
   const aiCall = opts.aiCall || ((p: string) => defaultAiCall(userId, p));
