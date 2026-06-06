@@ -112,7 +112,22 @@ function initSchema(): void {
     CREATE INDEX IF NOT EXISTS idx_rulebook_user_active ON rulebook_versions (user_id, is_active);
     CREATE INDEX IF NOT EXISTS idx_gates_version ON gates (version_id);
     CREATE INDEX IF NOT EXISTS idx_soft_rules_version ON soft_rules (version_id);
+    CREATE TABLE IF NOT EXISTS plugins (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      plugin_key TEXT NOT NULL,
+      kind TEXT NOT NULL,
+      label TEXT,
+      source TEXT NOT NULL,
+      transport TEXT,
+      config TEXT,
+      enabled INTEGER DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(user_id, plugin_key)
+    );
+
     CREATE INDEX IF NOT EXISTS idx_ai_configs_user_active ON ai_configs (user_id, is_active);
+    CREATE INDEX IF NOT EXISTS idx_plugins_user_enabled ON plugins (user_id, enabled);
   `);
 
   migrate();

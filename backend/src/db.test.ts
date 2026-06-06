@@ -53,4 +53,13 @@ describe('getDb', () => {
       .map((r: { name: string }) => r.name);
     expect(tables).toContain('ai_configs');
   });
+
+  it('creates the plugins table', () => {
+    const { getDb } = require('./db');
+    const tables = getDb()
+      .prepare("SELECT name FROM sqlite_master WHERE type='table'")
+      .all()
+      .map((r: { name: string }) => r.name);
+    expect(tables).toContain('plugins');
+  });
 });

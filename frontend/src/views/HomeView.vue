@@ -5,6 +5,7 @@
     <nav class="nav">
       <router-link to="/rulebook">核心规则</router-link>
       <router-link to="/ai">AI 模型</router-link>
+      <router-link to="/plugins">能力插件</router-link>
       <router-link to="/settings">设置 / 修改密码</router-link>
       <button @click="logout">登出</button>
     </nav>

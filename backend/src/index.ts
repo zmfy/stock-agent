@@ -10,6 +10,7 @@ import authRoutes from './routes/auth';
 import settingsRoutes from './routes/settings';
 import rulebookRoutes from './routes/rulebook';
 import aiRoutes from './routes/ai';
+import pluginRoutes from './routes/plugins';
 
 export function createApp(): express.Express {
   const app = express();
@@ -49,6 +50,7 @@ export function createApp(): express.Express {
   app.use('/api/settings', settingsRoutes);
   app.use('/api/rulebook', rulebookRoutes);
   app.use('/api/ai', aiRoutes);
+  app.use('/api/plugins', pluginRoutes);
 
   app.get('/health', (_req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
