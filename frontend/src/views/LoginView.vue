@@ -11,14 +11,14 @@
         <svg class="art" viewBox="0 0 320 160" fill="none" xmlns="http://www.w3.org/2000/svg">
           <!-- K 线 -->
           <g opacity="0.95">
-            <line x1="40" y1="40" x2="40" y2="120" stroke="#7fe3d8" stroke-width="2"/>
-            <rect x="32" y="64" width="16" height="40" rx="2" fill="#ef6b6f"/>
-            <line x1="78" y1="30" x2="78" y2="118" stroke="#7fe3d8" stroke-width="2"/>
-            <rect x="70" y="50" width="16" height="44" rx="2" fill="#2fd1bf"/>
-            <line x1="116" y1="48" x2="116" y2="128" stroke="#7fe3d8" stroke-width="2"/>
-            <rect x="108" y="72" width="16" height="34" rx="2" fill="#ef6b6f"/>
-            <line x1="154" y1="24" x2="154" y2="110" stroke="#7fe3d8" stroke-width="2"/>
-            <rect x="146" y="40" width="16" height="48" rx="2" fill="#2fd1bf"/>
+            <line x1="40" y1="40" x2="40" y2="120" stroke="rgba(255,255,255,0.55)" stroke-width="2"/>
+            <rect x="32" y="64" width="16" height="40" rx="2" fill="#3fd6a0"/>
+            <line x1="78" y1="30" x2="78" y2="118" stroke="rgba(255,255,255,0.55)" stroke-width="2"/>
+            <rect x="70" y="50" width="16" height="44" rx="2" fill="#ffd36b"/>
+            <line x1="116" y1="48" x2="116" y2="128" stroke="rgba(255,255,255,0.55)" stroke-width="2"/>
+            <rect x="108" y="72" width="16" height="34" rx="2" fill="#3fd6a0"/>
+            <line x1="154" y1="24" x2="154" y2="110" stroke="rgba(255,255,255,0.55)" stroke-width="2"/>
+            <rect x="146" y="40" width="16" height="48" rx="2" fill="#ffd36b"/>
             <polyline points="40,70 78,58 116,80 154,46 200,30" stroke="#fff" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
             <circle cx="200" cy="30" r="4" fill="#fff"/>
           </g>
@@ -90,7 +90,7 @@ async function submit() {
 .login { display: flex; min-height: 100vh; }
 
 /* 左侧 hero */
-.hero { flex: 1.1; background: linear-gradient(150deg, #18b3a3 0%, #138e9e 55%, #1b2433 100%); color: #fff; display: flex; align-items: center; justify-content: center; padding: 40px; }
+.hero { flex: 1.1; background: linear-gradient(150deg, #f2615f 0%, #d8383d 48%, #5e161b 100%); color: #fff; display: flex; align-items: center; justify-content: center; padding: 40px; }
 .hero-in { max-width: 500px; }
 .logo { font-size: 22px; font-weight: 800; letter-spacing: 0.4px; }
 .slogan { font-size: 28px; line-height: 1.25; margin: 22px 0 12px; font-weight: 800; white-space: nowrap; }
@@ -99,14 +99,15 @@ async function submit() {
 .tag-mini { font-size: 13px; opacity: 0.85; margin-top: 4px; }
 
 /* 右侧表单 */
-.panel { flex: 1; display: flex; align-items: center; justify-content: center; padding: 40px; background: var(--bg); }
+.panel { flex: 1; display: flex; align-items: center; justify-content: center; padding: 40px; background: #f7f1f0; }
 .card { width: 100%; max-width: 360px; background: var(--surface); border-radius: 16px; box-shadow: var(--shadow-md); padding: 32px 28px; display: flex; flex-direction: column; gap: 14px; }
 .card h1 { margin: 0; font-size: 22px; }
 .hint { color: var(--muted); font-size: 13px; margin: 0 0 6px; }
 label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--text-soft); }
 input { padding: 10px 12px; font-size: 14px; }
-button { margin-top: 6px; background: var(--accent); color: #fff; border: none; border-radius: var(--radius-sm); padding: 11px; font-size: 15px; font-weight: 700; letter-spacing: 2px; transition: background 0.15s; }
-button:hover:not(:disabled) { background: var(--accent-600); }
+.card input:focus { border-color: #e5484d; box-shadow: 0 0 0 3px rgba(229, 72, 77, 0.15); }
+button { margin-top: 6px; background: #e5484d; color: #fff; border: none; border-radius: var(--radius-sm); padding: 11px; font-size: 15px; font-weight: 700; letter-spacing: 2px; transition: background 0.15s; }
+button:hover:not(:disabled) { background: #d23b40; }
 button:disabled { opacity: 0.6; cursor: not-allowed; }
 .err { color: var(--danger); font-size: 13px; margin: 0; }
 
