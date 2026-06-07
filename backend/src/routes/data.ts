@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import multer from 'multer';
-import { authMiddleware } from '../middleware/auth';
+import { authMiddleware, adminMiddleware } from '../middleware/auth';
 import { successResponse, errorResponse } from '../utils/response';
 import { QuoteRow } from '../types';
 import * as svc from '../data/service';
@@ -150,31 +150,33 @@ router.get('/stocks/search', (req: Request, res: Response) => {
   successResponse(res, svc.searchStocks(String(req.query.q || ''), 20));
 });
 
-// GET /api/data/stocks/sync-status — background sync progress + local count
-router.get('/stocks/sync-status', (_req: Request, res: Response) => {
-  successResponse(res, { ...(svc.getSyncStatus() || { state: 'idle' }), count: svc.countStocks() });
+// ---- unified job routes: /api/data/<job>/run|status|cancel|log ----
+const SHARED_JOBS = new Set(['stock_universe', 'eod']);
+function jobName(req: any): string | null { const j = String(req.params.job); return SHARED_JOBS.has(j) ? j : null; }
+
+router.post('/:job/run', async (req, res) => {
+  const job = jobName(req); if (!job) return errorResponse(res, 400, 'BAD_JOB', '未知任务');
+  if (!svc.canStartJob(job)) return errorResponse(res, 409, 'JOB_LOCKED', '已有用户在更新或今日已更新');
+  const u = (req as any).user;
+  const startedBy = u.username ?? u.userId;
+  if (job === 'stock_universe') svc.syncStockUniverse(u.userId, startedBy);
+  else svc.ingestEod(u.userId, { startedBy });
+  successResponse(res, { started: true });
 });
 
-// POST /api/data/stocks/sync — start an incremental background sync (returns immediately)
-router.post('/stocks/sync', (req: Request, res: Response) => {
-  void svc.syncStockUniverse(req.user!.userId); // fire-and-forget
-  successResponse(res, null, '已在后台开始同步股票库');
+router.get('/:job/status', (req, res) => {
+  const job = jobName(req); if (!job) return errorResponse(res, 400, 'BAD_JOB', '未知任务');
+  successResponse(res, svc.getSyncStatus(job) ?? { state: 'idle', last_success_at: null, cancel_requested: 0 });
 });
 
-// ---- EOD batch ingestion (本地行情库) ----
-// GET /api/data/eod/status — progress of the daily-quote ingestion job
-router.get('/eod/status', (_req: Request, res: Response) => {
-  successResponse(res, svc.getSyncStatus('eod') || { state: 'idle' });
+router.post('/:job/cancel', adminMiddleware, (req, res) => {
+  const job = jobName(req); if (!job) return errorResponse(res, 400, 'BAD_JOB', '未知任务');
+  svc.requestCancel(job); successResponse(res, { requested: true });
 });
 
-// POST /api/data/eod/ingest { days?, codes? } — start a background pull (returns immediately)
-router.post('/eod/ingest', (req: Request, res: Response) => {
-  const parsed = z
-    .object({ days: z.number().int().min(1).max(2000).optional(), codes: z.array(z.string()).optional() })
-    .safeParse(req.body ?? {});
-  if (!parsed.success) return errorResponse(res, 422, 'VALIDATION_ERROR', '参数校验失败');
-  void svc.ingestEod(req.user!.userId, parsed.data); // fire-and-forget
-  successResponse(res, null, '已在后台开始拉取行情数据');
+router.get('/:job/log', adminMiddleware, (req, res) => {
+  const job = jobName(req); if (!job) return errorResponse(res, 400, 'BAD_JOB', '未知任务');
+  successResponse(res, svc.getJobLog(job));
 });
 
 // GET /api/data/source — is the sidecar configured + healthy?

@@ -53,23 +53,21 @@ describe('data routes', () => {
     expect(snap.body.data._missing).toEqual(expect.arrayContaining(['roe_ttm', 'pe']));
   });
 
-  it('eod status starts idle and ingest with an empty universe reports an error', async () => {
+  it('eod status starts idle and run with an empty universe reports an error', async () => {
     const st0 = await request(app).get('/api/data/eod/status').set(h());
     expect(st0.status).toBe(200);
     expect(st0.body.data.state).toBe('idle');
 
     // No stock_names seeded in this test DB -> ingestEod short-circuits to an error state.
-    const ing = await request(app).post('/api/data/eod/ingest').set(h()).send({ days: 5 });
+    (global as any).fetch = jest.fn((u: string) =>
+      u.includes('/probe') ? Promise.resolve({ ok: true, json: async () => [] })
+      : Promise.resolve({ ok: true, json: async () => ({ source: null, rows: [] }) }));
+    const ing = await request(app).post('/api/data/eod/run').set(h());
     expect(ing.status).toBe(200);
     await new Promise((r) => setTimeout(r, 50));
     const st1 = await request(app).get('/api/data/eod/status').set(h());
     expect(st1.body.data.state).toBe('error');
     expect(st1.body.data.message).toContain('股票库');
-  });
-
-  it('eod ingest rejects an out-of-range days value', async () => {
-    const res = await request(app).post('/api/data/eod/ingest').set(h()).send({ days: 99999 });
-    expect(res.status).toBe(422);
   });
 
   it('source endpoint reports the built-in data source as configured', async () => {
@@ -85,5 +83,33 @@ describe('data routes', () => {
     const res = await request(app).get('/api/data/probe?kind=quote').set(h());
     expect(res.status).toBe(200);
     expect(res.body.data[0].key).toBe('tx');
+  });
+
+  it('POST /api/data/eod/run 触发；状态可查', async () => {
+    (global as any).fetch = jest.fn((u: string) =>
+      u.includes('/probe') ? Promise.resolve({ ok: true, json: async () => [] })
+      : Promise.resolve({ ok: true, json: async () => ({ source: null, rows: [] }) }));
+    const r1 = await request(app).post('/api/data/eod/run').set(h());
+    expect(r1.status).toBeLessThan(500);
+  });
+
+  it('GET /api/data/eod/status 返回富状态字段', async () => {
+    const res = await request(app).get('/api/data/eod/status').set(h());
+    expect(res.status).toBe(200);
+    expect(res.body.data).toHaveProperty('last_success_at');
+    expect(res.body.data).toHaveProperty('cancel_requested');
+  });
+
+  it('POST /api/data/eod/cancel 与 /log 需要 admin（admin token 可用）', async () => {
+    const res = await request(app).post('/api/data/eod/cancel').set(h());
+    expect(res.status).toBe(200);
+    const log = await request(app).get('/api/data/eod/log').set(h());
+    expect(log.status).toBe(200);
+    expect(Array.isArray(log.body.data)).toBe(true);
+  });
+
+  it('POST /api/data/foo/run → 400 未知任务', async () => {
+    const res = await request(app).post('/api/data/foo/run').set(h());
+    expect(res.status).toBe(400);
   });
 });
