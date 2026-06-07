@@ -45,6 +45,22 @@
     </section>
 
     <section class="card">
+      <h2>行情上游（探测择优）</h2>
+      <p class="hint">探测各行情数据源的可达性与延迟，择优使用。</p>
+      <div class="row">
+        <button @click="runProbe" :disabled="busy">探测</button>
+      </div>
+      <ul v-if="providers.length" class="probe-list">
+        <li v-for="p in providers" :key="p.key">
+          {{ p.label }}：<span :class="p.reachable ? 'probe-ok' : 'probe-bad'">{{ p.reachable ? '可达' : '不可达' }}</span>
+          <span v-if="p.latencyMs != null"> · {{ p.latencyMs }}ms</span>
+          <span v-if="p.error" class="probe-bad"> · {{ p.error }}</span>
+        </li>
+      </ul>
+      <p v-if="eodBreakdown" class="muted">本次来源：{{ eodBreakdown }}</p>
+    </section>
+
+    <section class="card">
       <h2>股票库（本地全量 A 股）</h2>
       <p class="hint">代码 + 名称 + 拼音首字母存本地，用于自由查询的快速搜索。后台同步，可手动触发增量同步（对比增删改，不全量重拉）。</p>
       <div class="row">
@@ -323,8 +339,16 @@ async function doStockSync() {
   }, 1500);
 }
 // ---- EOD (local quote) ingestion ----
-const eod = reactive({ state: 'idle', total: 0, done: 0, message: '' });
+const eod = reactive<{ state: string; total: number; done: number; message: string; updated_at?: string; source_breakdown?: Record<string, number> | null }>({ state: 'idle', total: 0, done: 0, message: '' });
 let eodPoll: ReturnType<typeof setInterval> | null = null;
+
+// ---- upstream probe ----
+const providers = ref<Array<{ key: string; label: string; reachable: boolean; latencyMs: number | null; error: string | null }>>([]);
+async function runProbe() { providers.value = await dataApi.probe('quote'); }
+const eodBreakdown = computed(() => {
+  const b = eod.source_breakdown; if (!b) return '';
+  return Object.entries(b).map(([k, v]) => `${k} ${v}%`).join('、');
+});
 const eodStateCn = computed(() => ({ idle: '未拉取', running: '拉取中', done: '已完成', error: '出错' }[eod.state] || eod.state));
 const eodPct = computed(() => (eod.total ? Math.round((eod.done / eod.total) * 100) : 0));
 async function loadEodStatus() {
@@ -348,6 +372,7 @@ onMounted(async () => {
   await loadSources();
   await loadSyncStatus();
   await loadEodStatus();
+  runProbe();
   try {
     news.value = (await dataApi.getNews()).data.data;
   } catch { /* ignore */ }
@@ -392,4 +417,8 @@ input { padding: 5px; }
 .chint { font-size: 12px; color: #666; margin-bottom: 4px; }
 .crow { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 13px; padding: 3px 0; }
 button:disabled { opacity: 0.5; }
+.probe-list { padding-left: 16px; margin: 8px 0; font-size: 13px; }
+.probe-list li { padding: 3px 0; }
+.probe-ok { color: #2a8a2a; font-weight: 600; }
+.probe-bad { color: #c00; font-weight: 600; }
 </style>
