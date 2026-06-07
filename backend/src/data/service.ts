@@ -2,6 +2,7 @@ import { getDb } from '../db';
 import { QuoteRow, StockSnapshot } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import { resolveSidecarBase, fetchFundamentals, fetchQuotes, fetchMarket, fetchName, fetchNews, fetchAllStocks, orderedProviders, fetchRealtime } from './sidecar';
+import { recordCollected } from './news-log';
 
 // ---- hot news ----
 export function listNews(limit = 30): Array<{ title: string; summary: string; published_at: string; fetched_at: string }> {
@@ -18,15 +19,7 @@ export async function refreshNews(userId: string, limit = 20): Promise<number> {
   if (!result || !result.rows.length) return 0;
   const { source: fetchSource, rows } = result;
   const srcVal = fetchSource ?? 'akshare';
-  const db = getDb();
-  const stmt = db.prepare(
-    `INSERT INTO news (id, title, summary, published_at, source, fetched_at) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-     ON CONFLICT(title, published_at) DO UPDATE SET summary=excluded.summary, source=excluded.source, fetched_at=CURRENT_TIMESTAMP`
-  );
-  const tx = db.transaction((items: typeof rows) => {
-    for (const n of items) stmt.run(uuidv4(), n.title, n.summary, n.published_at, srcVal);
-  });
-  tx(rows);
+  recordCollected(rows.map((n: any) => ({ title: n.title, content: n.content, source: srcVal, published_at: n.published_at })));
   return rows.length;
 }
 

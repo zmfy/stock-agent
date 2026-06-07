@@ -112,6 +112,17 @@ describe('data/service', () => {
     expect(snap.realtime?.price).toBe(10.5);
   });
 
+  it('refreshNews 写入 news 双日志', async () => {
+    const svc = require('./service');
+    require('./sources-service').ensureSeedGlobal?.();
+    (global as any).fetch = jest.fn((u: string) =>
+      u.includes('/news') ? Promise.resolve({ ok: true, json: async () => ({ source: 'em', rows: [{ title: '热点X', summary: 's', content: '正文X', published_at: '2026-06-07' }] }) })
+      : Promise.resolve({ ok: true, json: async () => ([]) }));
+    await svc.refreshNews('u1', 5);
+    const db = require('../db').getDb();
+    expect((db.prepare("SELECT content FROM news_content_log WHERE title='热点X'").get() as any).content).toBe('正文X');
+  });
+
   it('ingestEod 用 beginJob/finishJob 并在 cancel 时中止', async () => {
     const svc = require('./service');
     const db = require('../db').getDb();

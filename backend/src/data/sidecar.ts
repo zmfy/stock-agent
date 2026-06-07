@@ -93,11 +93,11 @@ export async function fetchMarket(base: string, order?: string[]): Promise<{ sou
   return { source: d?.source ?? null, data: { limit_up_count: num(data.limit_up_count), limit_down_count: num(data.limit_down_count), sse_ma20_slope: num(data.sse_ma20_slope) } };
 }
 
-export async function fetchNews(base: string, limit = 20, order?: string[]): Promise<{ source: string | null; rows: Array<{ title: string; summary: string; published_at: string }> } | null> {
+export async function fetchNews(base: string, limit = 20, order?: string[]): Promise<{ source: string | null; rows: Array<{ title: string; summary: string; content: string; published_at: string }> } | null> {
   const d = await getJson(`${base}/news?limit=${limit}${order && order.length ? `&order=${order.join(',')}` : ''}`);
   const arr = Array.isArray(d) ? d : d?.rows;
   if (!Array.isArray(arr)) return null;
-  return { source: Array.isArray(d) ? null : (d?.source ?? null), rows: arr.map((n: any) => ({ title: String(n.title ?? ''), summary: String(n.summary ?? ''), published_at: String(n.published_at ?? '') })).filter((n) => n.title) };
+  return { source: Array.isArray(d) ? null : (d?.source ?? null), rows: arr.map((n: any) => ({ title: String(n.title ?? ''), summary: String(n.summary ?? ''), content: String(n.content ?? n.summary ?? ''), published_at: String(n.published_at ?? '') })).filter((n) => n.title) };
 }
 
 export async function fetchAllStocks(base: string): Promise<Array<{ code: string; name: string; py: string }> | null> {
