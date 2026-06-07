@@ -177,6 +177,12 @@ export function listVersions(userId: string): RulebookVersion[] {
     .all(userId) as RulebookVersion[];
 }
 
+export function listVersionHistory(userId: string, limit = 5): Array<{ version_label: string; created_at: string; note: string }> {
+  return getDb()
+    .prepare('SELECT version_label, created_at, note FROM rulebook_versions WHERE user_id = ? ORDER BY created_at DESC, rowid DESC LIMIT ?')
+    .all(userId, limit) as any[];
+}
+
 function getVersionRaw(userId: string, versionId: string): FullRulebook | null {
   const version = getDb()
     .prepare('SELECT * FROM rulebook_versions WHERE id = ? AND user_id = ?')
