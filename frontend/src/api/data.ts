@@ -55,6 +55,7 @@ export const dataApi = {
   runJob: (job: 'stock_universe' | 'eod') => api.post(`/data/${job}/run`).then((r) => r.data),
   jobStatus: (job: 'stock_universe' | 'eod') => api.get(`/data/${job}/status`).then((r) => r.data.data),
   cancelJob: (job: 'stock_universe' | 'eod') => api.post(`/data/${job}/cancel`).then((r) => r.data),
+  forceStopJob: (job: 'stock_universe' | 'eod') => api.post(`/data/${job}/force-stop`).then((r) => r.data),
   jobLog: (job: 'stock_universe' | 'eod') => api.get(`/data/${job}/log`).then((r) => r.data.data as Array<{ ts: string; level: string; message: string }>),
   listSources: () => api.get<{ data: DataSource[] }>('/data/sources'),
   catalog: () => api.get<{ data: Array<{ name: string; base_url: string; note: string }> }>('/data/sources/catalog'),

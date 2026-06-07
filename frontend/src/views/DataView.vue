@@ -90,6 +90,11 @@
           v-if="isAdmin && jobs.stock_universe?.state === 'running'"
           @click="doCancel('stock_universe')"
         >取消</button>
+        <button
+          v-if="isAdmin && jobs.stock_universe?.state === 'running'"
+          class="danger"
+          @click="doForceStop('stock_universe')"
+        >⛔ 强制中止</button>
         <button v-if="isAdmin" @click="showLog('stock_universe')">查看日志</button>
       </div>
       <div v-if="jobs.stock_universe?.state === 'running'" class="muted">
@@ -119,6 +124,11 @@
           v-if="isAdmin && jobs.eod?.state === 'running'"
           @click="doCancel('eod')"
         >取消</button>
+        <button
+          v-if="isAdmin && jobs.eod?.state === 'running'"
+          class="danger"
+          @click="doForceStop('eod')"
+        >⛔ 强制中止</button>
         <button v-if="isAdmin" @click="showLog('eod')">查看日志</button>
       </div>
       <div v-if="jobs.eod?.state === 'running'" class="muted">
@@ -467,6 +477,11 @@ async function doCancel(job: 'stock_universe' | 'eod') {
   refreshJob(job);
 }
 
+async function doForceStop(job: 'stock_universe' | 'eod') {
+  try { await dataApi.forceStopJob(job); } catch { /* ignore */ }
+  await refreshJob(job);
+}
+
 async function showLog(job: 'stock_universe' | 'eod') {
   try { jobLogLines[job] = await dataApi.jobLog(job); } catch { /* ignore */ }
 }
@@ -551,4 +566,5 @@ button:disabled { opacity: 0.5; }
 .log-error .loglvl { color: #c00; }
 .log-warn .loglvl { color: #c80; }
 .log-info .loglvl { color: #2a8a2a; }
+.danger { color: #cf1322; border-color: #ffccc7; }
 </style>
