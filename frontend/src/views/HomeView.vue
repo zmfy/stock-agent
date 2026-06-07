@@ -78,6 +78,7 @@
               <div v-else-if="active && genErr[active.kind]" class="gen-banner err">
                 生成失败：{{ genErr[active.kind] }}（可再次点击对应按钮重试）
               </div>
+              <div v-if="briefing && briefingTime" class="briefing-time muted">🕐 生成于 {{ fmtCN(briefingTime) }}</div>
               <div v-if="briefing" class="briefing">{{ briefing }}</div>
 
               <template v-if="active?.kind === 'screen' && screen">
@@ -130,6 +131,7 @@
             <p v-if="proposal.delta.positionRulesChangedKeys.length">· 仓位规则改动：{{ proposal.delta.positionRulesChangedKeys.join('、') }}</p>
             <p v-if="noChange" class="muted">无实质改动</p>
             <p v-if="proposal.proposal.note" class="muted">理由：{{ proposal.proposal.note }}</p>
+            <p v-if="proposedAt" class="muted">🕐 {{ fmtCN(proposedAt) }}</p>
             <div class="ops">
               <button :disabled="applying || noChange" @click="applyProposal">采纳并升级到 {{ proposal.suggestedLabel }}</button>
               <button @click="proposal = null">放弃</button>
@@ -405,8 +407,17 @@ const briefing = computed(() => {
   return '';
 });
 
+// 纪要(早会/晚会/选股)的生成时间，供展示「生成于…」判断是否过时
+const briefingTime = computed<string | null>(() => {
+  if (active.value?.kind === 'morning') return meetings.value.morning?.created_at ?? null;
+  if (active.value?.kind === 'evening') return meetings.value.evening?.created_at ?? null;
+  if (active.value?.kind === 'screen') return screen.value?.created_at ?? null;
+  return null;
+});
+
 // 核心原则修改提议
 const proposal = ref<ProposeResult | null>(null);
+const proposedAt = ref<string>('');
 const proposing = ref(false);
 const applying = ref(false);
 const noChange = computed(() => {
@@ -428,6 +439,7 @@ async function propose() {
   chatErr.value = '';
   try {
     proposal.value = (await rulebookApi.propose({ sessionId: active.value.id })).data.data;
+    proposedAt.value = new Date().toISOString();
   } catch (e: any) {
     chatErr.value = e.response?.data?.message || '提议失败';
   } finally {
@@ -701,7 +713,7 @@ async function send() {
   input.value = '';
   chatErr.value = '';
   // optimistic
-  messages.value.push({ id: 'tmp', session_id: active.value.id, role: 'user', content: text, created_at: '' });
+  messages.value.push({ id: 'tmp', session_id: active.value.id, role: 'user', content: text, created_at: new Date().toISOString() });
   scrollDown();
   sending.value = true;
   try {
@@ -866,6 +878,7 @@ onMounted(async () => {
 .title { font-weight: 600; font-size: 15px; padding-bottom: 10px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
 .stock-head { display: flex; gap: 8px; }
 .analyzing { color: #a76b00; font-size: 13px; padding: 8px 0; }
+.briefing-time { font-size: 11px; margin: 2px 0 0; flex: 0 0 auto; }
 .briefing { background: #f7faff; border: 1px solid #d6e4ff; border-radius: 8px; padding: 10px 12px; margin: 8px 0; white-space: pre-wrap; font-size: 13px; line-height: 1.6; flex: 0 0 auto; max-height: 40vh; overflow-y: auto; }
 .gen-banner { background: #fffbe6; border: 1px solid #ffe58f; border-radius: 8px; padding: 8px 12px; margin: 8px 0; font-size: 13px; line-height: 1.6; flex: 0 0 auto; }
 .gen-banner.err { background: #fff1f0; border-color: #ffccc7; color: #cf1322; }
