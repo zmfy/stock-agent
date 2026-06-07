@@ -50,6 +50,10 @@
       <div class="row">
         <button @click="runProbe" :disabled="busy">探测</button>
       </div>
+      <div v-if="probeProgress" class="probe-progress">
+        探测中… {{ probeProgress.done }}/{{ probeProgress.total }}
+        <div class="bar"><div class="fill" :style="{ width: (probeProgress.total ? probeProgress.done / probeProgress.total * 100 : 0) + '%' }"></div></div>
+      </div>
       <ul v-if="providers.length" class="probe-list">
         <li v-for="p in providers" :key="p.key">
           {{ p.label }}：<span :class="p.reachable ? 'probe-ok' : 'probe-bad'">{{ p.reachable ? '可达' : '不可达' }}</span>
@@ -359,7 +363,23 @@ async function removeSource(s: DataSource) {
 
 // ---- upstream probe ----
 const providers = ref<Array<{ key: string; label: string; reachable: boolean; latencyMs: number | null; error: string | null }>>([]);
-async function runProbe() { providers.value = await dataApi.probe('quote'); }
+const probeProgress = ref<{ done: number; total: number } | null>(null);
+async function runProbe() {
+  busy.value = true;
+  providers.value = [];
+  try {
+    const list = await dataApi.probeList('quote');
+    probeProgress.value = { done: 0, total: list.length };
+    for (const it of list) {
+      const r = await dataApi.probeOne('quote', it.key);
+      providers.value.push(r ?? { key: it.key, label: it.label, reachable: false, latencyMs: null, error: '探测失败' });
+      probeProgress.value.done++;
+    }
+  } finally {
+    busy.value = false;
+    probeProgress.value = null;
+  }
+}
 
 // ---- shared job governance (stock_universe + eod) ----
 interface JobStatus {
@@ -485,6 +505,9 @@ button:disabled { opacity: 0.5; }
 .probe-list li { padding: 3px 0; }
 .probe-ok { color: #2a8a2a; font-weight: 600; }
 .probe-bad { color: #c00; font-weight: 600; }
+.probe-progress { margin: 6px 0; font-size: 13px; color: #666; }
+.probe-progress .bar { height: 6px; background: #eee; border-radius: 3px; overflow: hidden; margin-top: 4px; }
+.probe-progress .fill { height: 100%; background: var(--accent, #e5484d); transition: width .2s; }
 .logpanel { background: #f5f5f5; border: 1px solid #ddd; border-radius: 4px; padding: 8px; margin-top: 8px; max-height: 200px; overflow-y: auto; font-family: monospace; font-size: 12px; }
 .logline { padding: 2px 0; border-bottom: 1px solid #eee; }
 .logts { color: #999; }
