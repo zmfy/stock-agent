@@ -365,7 +365,7 @@ def quote(code: str, days: int = 120, order: str = ""):
 def realtime(code: str):
     code = code[-6:]
     rt = _timed(lambda: tdx.realtime(code), 6)
-    if rt and rt.get("price"):
+    if rt and rt.get("price") is not None:
         return {"source": "tdx-rt", "data": rt}
     def _fn():
         import easyquotation
