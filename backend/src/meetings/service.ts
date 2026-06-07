@@ -1,13 +1,14 @@
 import { v4 as uuidv4 } from 'uuid';
 import { getDb } from '../db';
 import { getActive } from '../rulebook/service';
-import { getLatestMarket, listNews } from '../data/service';
+import { getLatestMarket, listNews, refreshNews } from '../data/service';
 import { resolveSidecarBase, fetchHotSectors } from '../data/sidecar';
 import { getModelForRole } from '../ai/service';
 import { getProvider } from '../ai/providers';
 import { chat } from '../ai/manager';
 import { getCorePersona, listProfiles } from '../agent/profiles-service';
 import { skillDirectives } from '../plugins/service';
+import { recordCollected, listTitleLog, getContent, markAdopted } from '../data/news-log';
 
 export type MeetingKind = 'morning' | 'evening';
 
@@ -38,6 +39,20 @@ function newsText(): string {
   const ns = listNews(8);
   if (!ns.length) return '（暂无近期财经新闻）';
   return '近期财经要闻：\n' + ns.slice(0, 8).map((n) => `- ${n.title}`).join('\n');
+}
+
+function buildNewsWithIds(): { text: string; idMap: Record<string, string> } {
+  const rows = getDb().prepare('SELECT id, title FROM news_content_log ORDER BY collected_at DESC, rowid DESC LIMIT 8').all() as Array<{ id: string; title: string }>;
+  const idMap: Record<string, string> = {};
+  const lines = rows.map((r, i) => { const tag = `N${i + 1}`; idMap[tag] = r.id; return `[${tag}] ${r.title}`; });
+  return { text: lines.length ? '近期财经要闻：\n' + lines.join('\n') : '（暂无近期财经新闻）', idMap };
+}
+
+function parseAdopt(coreOut: string): { tags: string[]; clean: string } {
+  const m = /__ADOPT__\s*([N\d,\s]+)/.exec(coreOut);
+  const tags = m ? m[1].split(',').map((s) => s.trim()).filter(Boolean) : [];
+  const clean = coreOut.replace(/\n?__ADOPT__\s*[N\d,\s]+/g, '').trim();
+  return { tags, clean };
 }
 
 function rulebookText(userId: string): string {
@@ -124,7 +139,9 @@ ${rulebook}
 2）今日操作思路（偏防守还是进攻、重点关注什么）
 3）**今日可能走强的板块**：即使今天不操作，也要明确列出 2-4 个你判断今日可能走强的板块（板块名 + 一句理由），作为复盘对照。最后用一行「今日可能走强板块：A、B、C」收尾。
 并务必说明：你主要采纳了哪位子助手的哪条结论作为依据（点名「数据员/分析师/情绪面」）。
-要求：简洁、可执行、不预测点位。中文、分点输出。`;
+要求：简洁、可执行、不预测点位。中文、分点输出。
+
+若你引用了上面某几条新闻作为研判依据，请在回答最后另起一行输出：__ADOPT__ 逗号分隔的编号（如 __ADOPT__ N1,N3）；没有引用就不要输出该行。`;
 }
 
 // 晚会·数据员：今日收盘实际表现 + 今日实际走强板块
@@ -190,7 +207,9 @@ ${market}
 1）今日早会研判是否成立（成功/失败，结合收盘）；
 2）**早会预测的板块走强，哪些命中、哪些落空**——逐个点评对错；
 3）今日经验总结，以及是否建议调整核心原则。
-并说明你主要采纳了哪位子助手的哪条结论。中文、分点输出。`;
+并说明你主要采纳了哪位子助手的哪条结论。中文、分点输出。
+
+若你引用了上面某几条新闻作为研判依据，请在回答最后另起一行输出：__ADOPT__ 逗号分隔的编号（如 __ADOPT__ N1,N3）；没有引用就不要输出该行。`;
 }
 
 async function defaultAiCall(userId: string, prompt: string, role: string): Promise<string> {
@@ -216,21 +235,31 @@ function upsert(userId: string, kind: MeetingKind, content: string, data: any): 
 
 export interface GenOpts {
   aiCall?: (prompt: string, role: string) => Promise<string>;
+  fetchNews?: () => Promise<void>;
 }
 
 // 早会 = 多 agent 讨论：数据员→分析师→情绪面 三位子助手分别汇报，来财综合研判并指出依据。
 export async function generateMorning(userId: string, opts: GenOpts = {}): Promise<any> {
+  // 1. 采集新闻入双日志
+  await (opts.fetchNews ? opts.fetchNews() : refreshNews(userId).then(() => {}).catch(() => {}));
+
   const persona = getCorePersona(userId);
   const mkt = marketText();
   const rbText = rulebookText(userId);
   const sec = await sectorText(userId);
-  const news = newsText();
+  const { text: news, idMap } = buildNewsWithIds();
   const aiCall = opts.aiCall || ((p: string, role: string) => defaultAiCall(userId, p, role));
 
   const dataOut = (await aiCall(buildMorningDataPrompt(personaOf(userId, 'data'), mkt.text, sec.text, news), 'data')).trim();
   const analysisOut = (await aiCall(buildMorningAnalysisPrompt(personaOf(userId, 'analysis'), mkt.text, rbText, dataOut), 'analysis')).trim();
   const qualOut = (await aiCall(buildMorningQualPrompt(personaOf(userId, 'qualitative'), mkt.text, sec.text, news), 'qualitative')).trim();
-  const coreOut = (await aiCall(buildMorningSynthPrompt(persona, mkt.text, rbText, dataOut, analysisOut, qualOut, skillDirectives(userId)), 'core')).trim();
+  const rawCoreOut = (await aiCall(buildMorningSynthPrompt(persona, mkt.text, rbText, dataOut, analysisOut, qualOut, skillDirectives(userId)), 'core')).trim();
+
+  // 2. 解析 __ADOPT__，标记并留痕
+  const { tags, clean: coreOut } = parseAdopt(rawCoreOut);
+  const adoptedIds = tags.map((t) => idMap[t]).filter(Boolean);
+  markAdopted(adoptedIds);
+  const adopted_news = adoptedIds.map((id) => ({ content_id: id, title: getContent(id)?.title || '' }));
 
   const content = [
     `🗣 早会讨论 · ${today()}`,
@@ -249,15 +278,19 @@ export async function generateMorning(userId: string, opts: GenOpts = {}): Promi
     coreOut,
   ].join('\n');
 
-  return upsert(userId, 'morning', content, { market: mkt.data, sectors: sec.sectors, discussion: { data: dataOut, analysis: analysisOut, qualitative: qualOut, core: coreOut } });
+  return upsert(userId, 'morning', content, { market: mkt.data, sectors: sec.sectors, discussion: { data: dataOut, analysis: analysisOut, qualitative: qualOut, core: coreOut }, adopted_news });
 }
 
 // 晚会 = 多 agent 复盘讨论：数据员(今日实际)→分析师(对错判断)→复盘员(总结建议)→来财综合。
 export async function generateEvening(userId: string, opts: GenOpts = {}): Promise<any> {
+  // 1. 采集新闻入双日志
+  await (opts.fetchNews ? opts.fetchNews() : refreshNews(userId).then(() => {}).catch(() => {}));
+
   const persona = getCorePersona(userId);
   const mkt = marketText();
   const rbText = rulebookText(userId);
   const sec = await sectorText(userId);
+  const { text: news, idMap } = buildNewsWithIds();
   const morning = getMorningOfToday(userId)?.content ?? null;
   const ops = todaysReports(userId);
   const aiCall = opts.aiCall || ((p: string, role: string) => defaultAiCall(userId, p, role));
@@ -265,7 +298,13 @@ export async function generateEvening(userId: string, opts: GenOpts = {}): Promi
   const dataOut = (await aiCall(buildEveningDataPrompt(personaOf(userId, 'data'), mkt.text, sec.text), 'data')).trim();
   const analysisOut = (await aiCall(buildEveningAnalysisPrompt(personaOf(userId, 'analysis'), morning, dataOut), 'analysis')).trim();
   const reviewOut = (await aiCall(buildEveningReviewPrompt(personaOf(userId, 'review'), rbText, analysisOut, ops), 'review')).trim();
-  const coreOut = (await aiCall(buildEveningSynthPrompt(persona, mkt.text, morning, dataOut, analysisOut, reviewOut, skillDirectives(userId)), 'core')).trim();
+  const rawCoreOut = (await aiCall(buildEveningSynthPrompt(persona, mkt.text, morning, dataOut, analysisOut, reviewOut, skillDirectives(userId)), 'core')).trim();
+
+  // 2. 解析 __ADOPT__，标记并留痕
+  const { tags, clean: coreOut } = parseAdopt(rawCoreOut);
+  const adoptedIds = tags.map((t) => idMap[t]).filter(Boolean);
+  markAdopted(adoptedIds);
+  const adopted_news = adoptedIds.map((id) => ({ content_id: id, title: getContent(id)?.title || '' }));
 
   const content = [
     `🗣 晚会复盘 · ${today()}`,
@@ -284,7 +323,7 @@ export async function generateEvening(userId: string, opts: GenOpts = {}): Promi
     coreOut,
   ].join('\n');
 
-  return upsert(userId, 'evening', content, { market: mkt.data, sectors: sec.sectors, ops, discussion: { data: dataOut, analysis: analysisOut, review: reviewOut, core: coreOut } });
+  return upsert(userId, 'evening', content, { market: mkt.data, sectors: sec.sectors, ops, discussion: { data: dataOut, analysis: analysisOut, review: reviewOut, core: coreOut }, adopted_news });
 }
 
 export function getToday(userId: string): { morning: any | null; evening: any | null } {
