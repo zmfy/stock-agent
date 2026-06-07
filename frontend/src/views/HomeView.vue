@@ -73,6 +73,25 @@
               <div v-if="analyzing" class="analyzing">正在按你的核心原则分析 {{ active.ref_id }} …</div>
               <div v-if="briefing" class="briefing">{{ briefing }}</div>
 
+              <template v-if="active?.kind === 'screen' && screen">
+                <div class="screen-box">
+                  <button class="fold" @click="screenHistOpen = !screenHistOpen">{{ screenHistOpen ? '▾' : '▸' }} 历史选股记录（{{ screenHistory.length }}）</button>
+                  <div v-if="screenHistOpen" class="screen-hist">
+                    <div v-for="(h, i) in screenHistory" :key="i" class="sh-row">
+                      <div class="muted">{{ (h.created_at || '').slice(0,16) }} · {{ h.note }}</div>
+                      <div v-for="p in h.picks" :key="p.code" class="sh-pick" @click="openStockCode(p.code)">{{ p.name || p.code }} <span class="muted">{{ p.code }} · {{ p.reason }}</span></div>
+                      <div v-if="!h.picks.length" class="muted">（本次无入选）</div>
+                    </div>
+                  </div>
+                  <div class="screen-results">
+                    <div v-for="r in screen.results" :key="r.code" class="srow" @click="openStockCode(r.code)">
+                      <span class="badge2" :class="r.aPass ? 'a' : r.bPass ? 'b' : 'no'">{{ r.aPass ? 'A' : r.bPass ? 'B' : '—' }}</span>
+                      {{ r.name || r.code }} <span class="muted">{{ r.code }} · {{ r.reason }}</span>
+                    </div>
+                  </div>
+                </div>
+              </template>
+
               <div v-if="adoptedNews.length" class="adopted-news-box">
                 <div class="an-head">来财采用的新闻</div>
                 <ul class="an-list">
@@ -125,26 +144,14 @@
 
             <!-- 早会 -->
             <button v-if="meetings.morning" class="ops-btn" :class="{ active: active?.kind === 'morning' }" @click="openMeeting('morning')">📈 今日操作方向（早会）</button>
-            <button v-else class="ops-btn dashed" :disabled="genning === 'morning'" @click="genMeeting('morning')">📈 生成今日早会{{ genning === 'morning' ? '…' : '' }}</button>
+            <button v-else class="ops-btn dashed" :disabled="genning === 'morning'" @click="genMeeting('morning')"><span v-if="genning === 'morning'" class="spinner"></span>📈 生成今日早会</button>
 
             <!-- 晚会 -->
             <button v-if="meetings.evening" class="ops-btn" :class="{ active: active?.kind === 'evening' }" @click="openMeeting('evening')">🌙 今日操作复盘（晚会）</button>
-            <button v-else class="ops-btn dashed" :disabled="genning === 'evening'" @click="genMeeting('evening')">🌙 生成今日晚会{{ genning === 'evening' ? '…' : '' }}</button>
+            <button v-else class="ops-btn dashed" :disabled="genning === 'evening'" @click="genMeeting('evening')"><span v-if="genning === 'evening'" class="spinner"></span>🌙 生成今日晚会</button>
 
             <!-- 选股 -->
-            <div class="screen-sect">
-              <button class="ops-btn" :disabled="screening" @click="runScreen">🔍 {{ screening ? '选股中…' : '按核心原则选股' }}</button>
-              <button v-if="screen" class="fold" @click="screenOpen = !screenOpen">{{ screenOpen ? '▾' : '▸' }} 选股结果（{{ screen.results.length }}）</button>
-              <div v-if="screen && screenOpen" class="screen-list">
-                <div class="snote muted">{{ screen.note }}</div>
-                <div v-if="screen.discussion" class="screen-disc">{{ screen.discussion }}</div>
-                <div v-for="r in screen.results" :key="r.code" class="srow" @click="openStockCode(r.code)">
-                  <span class="badge2" :class="r.aPass ? 'a' : r.bPass ? 'b' : 'no'">{{ r.aPass ? 'A' : r.bPass ? 'B' : '—' }}</span>
-                  {{ r.name || r.code }} <span class="muted">{{ r.code }} · {{ r.passed }}/{{ r.total }}</span>
-                </div>
-                <div v-if="!screen.results.length" class="muted">无符合条件的股票</div>
-              </div>
-            </div>
+            <button class="ops-btn" :disabled="screening" @click="runScreen"><span v-if="screening" class="spinner"></span>🔍 {{ screening ? '选股中…' : '按核心原则选股' }}</button>
 
             <!-- 核心原则讨论 / 更换模板（合并入口） -->
             <button class="ops-btn" :class="{ active: active?.kind === 'core_principle' }" @click="openPrincipleAndTemplates">📜 核心原则讨论 / 更换模板</button>
@@ -182,7 +189,7 @@
             <template v-if="active?.kind === 'core_principle'">
               <div class="propose-bar">
                 <button class="propose-btn" :disabled="proposing" @click="propose">
-                  {{ proposing ? 'agent 拟定中…' : '🛠 根据本次讨论，让 agent 提议修改规则' }}
+                  <span v-if="proposing" class="spinner"></span>{{ proposing ? 'agent 拟定中…' : '🛠 根据本次讨论，让 agent 提议修改规则' }}
                 </button>
               </div>
 
@@ -247,7 +254,8 @@ const meetings = ref<{ morning: Meeting | null; evening: Meeting | null }>({ mor
 const genning = ref<'' | 'morning' | 'evening'>('');
 const screen = ref<ScreenRun | null>(null);
 const screening = ref(false);
-const screenOpen = ref(true);
+const screenHistory = ref<Array<{ created_at: string; note: string; picks: Array<{ code: string; name: string | null; reason: string }> }>>([]);
+const screenHistOpen = ref(false);
 const isMobile = typeof window !== 'undefined' && window.innerWidth <= 768;
 const opsOpen = ref(!isMobile); // 右侧操作框是否展开（手机默认收起，避免遮挡）
 const railOpen = ref(false); // 移动端左栏抽屉
@@ -325,6 +333,7 @@ const briefing = computed(() => {
   if (active.value?.kind === 'morning') return meetings.value.morning?.content || '';
   if (active.value?.kind === 'evening') return meetings.value.evening?.content || '';
   if (active.value?.kind === 'core_principle') return buildCpBriefing(activeRulebook.value);
+  if (active.value?.kind === 'screen') return screen.value ? (screen.value.note + (screen.value.discussion ? '\n\n' + screen.value.discussion : '')) : '点右侧「按核心原则选股」开始';
   return '';
 });
 
@@ -388,11 +397,13 @@ function fmtTime(ts: string) {
   return isNaN(d.getTime()) ? ts : d.toLocaleString('zh-CN', { hour12: false });
 }
 function kindIcon(k: ChatKind) {
-  return { general: '💬', core_principle: '📜', stock: '📊', morning: '📈', evening: '🌙' }[k] || '💬';
+  const icons: Record<ChatKind, string> = { general: '💬', core_principle: '📜', stock: '📊', morning: '📈', evening: '🌙', screen: '🔍' };
+  return icons[k] || '💬';
 }
 function sessionLabel(s: ChatSession) {
   if (s.kind === 'core_principle') return '核心原则探讨';
   if (s.kind === 'stock') return `个股 ${s.ref_id || ''}`;
+  if (s.kind === 'screen') return '选股讨论';
   return '新对话';
 }
 
@@ -410,6 +421,17 @@ async function open(s: ChatSession) {
   // A freshly opened stock session auto-runs the rule-based analysis as its opener.
   if (s.kind === 'stock' && messages.value.length === 0) {
     await doAnalyze(s);
+  }
+  // When opening a screen session, ensure screen data is loaded.
+  if (s.kind === 'screen') {
+    if (!screen.value) {
+      try {
+        screen.value = (await screenApi.latest()).data.data;
+      } catch {
+        /* ignore */
+      }
+    }
+    await loadScreenHistory();
   }
 }
 
@@ -535,12 +557,29 @@ async function openStockCode(code: string) {
   }
   if (s) await open(s);
 }
+async function loadScreenHistory() {
+  try {
+    screenHistory.value = await screenApi.history(20);
+  } catch {
+    /* ignore */
+  }
+}
+async function openScreen() {
+  let s = sessions.value.find((x) => x.kind === 'screen');
+  if (!s) {
+    const id = (await chatApi.createSession('screen', null, '选股讨论')).data.data.id;
+    await loadSessions();
+    s = sessions.value.find((x) => x.id === id);
+  }
+  if (s) await open(s);
+}
 async function runScreen() {
   screening.value = true;
   chatErr.value = '';
   try {
     screen.value = (await screenApi.run({})).data.data;
-    screenOpen.value = true;
+    await openScreen();
+    await loadScreenHistory();
   } catch (e: any) {
     chatErr.value = e.response?.data?.message || '选股失败';
   } finally {
@@ -722,11 +761,7 @@ onMounted(async () => {
 .analyzing { color: #a76b00; font-size: 13px; padding: 8px 0; }
 .briefing { background: #f7faff; border: 1px solid #d6e4ff; border-radius: 8px; padding: 10px 12px; margin: 8px 0; white-space: pre-wrap; font-size: 13px; line-height: 1.6; flex: 0 0 auto; max-height: 40vh; overflow-y: auto; }
 .pin-card.gen { background: #eef7ee; cursor: pointer; border: 1px dashed #b7d7b7; text-align: left; }
-.screen-sect { display: flex; flex-direction: column; gap: 4px; }
 .fold { text-align: left; background: none; border: none; color: #666; font-size: 12px; cursor: pointer; padding: 2px 4px; }
-.screen-list { max-height: 340px; overflow-y: auto; border: 1px solid #eee; border-radius: 6px; padding: 4px; }
-.snote { padding: 2px 4px; }
-.screen-disc { white-space: pre-wrap; font-size: 12px; line-height: 1.55; color: var(--text-soft); background: var(--surface-2); border: 1px solid var(--border-soft); border-radius: 6px; padding: 6px 8px; margin: 4px 0; }
 .srow { padding: 4px 6px; border-radius: 4px; cursor: pointer; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .srow:hover { background: #f3f3f3; }
 .badge2 { display: inline-block; width: 16px; text-align: center; border-radius: 4px; font-size: 11px; margin-right: 4px; }
@@ -775,4 +810,13 @@ onMounted(async () => {
 .an-content { margin-top: 8px; border-top: 1px dashed #b7d7b7; padding-top: 8px; }
 .an-content-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: 13px; margin-bottom: 4px; }
 .an-content p { font-size: 12px; line-height: 1.65; white-space: pre-wrap; margin: 0; color: #444; }
+.screen-box { background: #f7faff; border: 1px solid #d6e4ff; border-radius: 8px; padding: 8px 12px; margin: 6px 0; flex: 0 0 auto; }
+.screen-results { margin-top: 6px; }
+.screen-hist { margin: 6px 0; border-top: 1px dashed #d6e4ff; padding-top: 6px; max-height: 260px; overflow-y: auto; }
+.sh-row { margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid #eef2fa; }
+.sh-row:last-child { border-bottom: none; margin-bottom: 0; }
+.sh-pick { padding: 3px 6px; border-radius: 4px; cursor: pointer; font-size: 12px; display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.sh-pick:hover { background: #e8f0fe; }
+.spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: spin 0.6s linear infinite; vertical-align: -1px; margin-right: 4px; }
+@keyframes spin { to { transform: rotate(360deg); } }
 </style>

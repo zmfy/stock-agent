@@ -10,8 +10,9 @@ import { skillDirectives } from '../plugins/service';
 import { getLatestReportByCode } from '../analysis/report-service';
 import { getTodayContent } from '../meetings/service';
 import { getActive, listVersionHistory } from '../rulebook/service';
+import { getLatest as getLatestScreen } from '../screen/service';
 
-export type ChatKind = 'general' | 'core_principle' | 'stock' | 'morning' | 'evening';
+export type ChatKind = 'general' | 'core_principle' | 'stock' | 'morning' | 'evening' | 'screen';
 
 export interface ChatMessage {
   id: string;
@@ -27,6 +28,7 @@ const KIND_FRAMING: Record<ChatKind, string> = {
   stock: '针对某只股票，结合核心原则与已算出的门槛结果与用户讨论。',
   morning: '盘前早会：基于大盘与板块信息给出今日操作方向。',
   evening: '盘后晚会：复盘今日操作，总结成败、找原因。',
+  screen: '按核心原则的选股讨论：解释本次选股结果与依据，回答关于入选/未入选个股的追问；不替用户做买卖决定。',
 };
 
 export function createSession(userId: string, kind: ChatKind, refId?: string | null, title?: string): string {
@@ -177,6 +179,13 @@ export async function postMessage(userId: string, sessionId: string, content: st
   if (!extra && (session.kind === 'morning' || session.kind === 'evening')) {
     const mc = getTodayContent(userId, session.kind);
     if (mc) extra = `今日${session.kind === 'morning' ? '早会' : '晚会'}内容：\n${mc}`;
+  }
+  if (!extra && session.kind === 'screen') {
+    const s = getLatestScreen(userId);
+    if (s) {
+      const top = s.results.slice(0, 12).map((r: any) => `${r.code} ${r.name ?? ''} ${r.aPass || r.bPass ? '入选' : '未入选'} · ${r.reason ?? ''}`).join('\n');
+      extra = `本次选股范围：${s.note}\n讨论纪要：${s.discussion || '（无）'}\n候选与结果：\n${top}`;
+    }
   }
   if (!extra && session.kind === 'core_principle') {
     const rb = getActive(userId);
