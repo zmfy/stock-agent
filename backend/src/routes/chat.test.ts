@@ -124,6 +124,14 @@ describe('chat routes', () => {
     expect(created.title).toBe('个股 999998'); // falls back; analyzeStockSession will fill via sidecar/AI later
   });
 
+  it("accepts the 'screen' kind (选股讨论会话) — route enum must match ChatKind", async () => {
+    const s = await request(app).post('/api/chat/sessions').set(h(tok)).send({ kind: 'screen', title: '选股讨论' });
+    expect(s.status).toBe(201);
+    const list = await request(app).get('/api/chat/sessions').set(h(tok));
+    const created = list.body.data.find((x: any) => x.id === s.body.data.id);
+    expect(created.kind).toBe('screen');
+  });
+
   it('clear-all deletes every session for the user', async () => {
     await request(app).post('/api/chat/sessions').set(h(tok)).send({ kind: 'general' });
     const before = await request(app).get('/api/chat/sessions').set(h(tok));

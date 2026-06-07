@@ -7,7 +7,8 @@ import * as chat from '../chat/service';
 const router = Router();
 router.use(authMiddleware);
 
-const KINDS = ['general', 'core_principle', 'stock', 'morning', 'evening'] as const;
+// Keep in sync with ChatKind in ../chat/service.ts — a missing kind here makes createSession 422.
+const KINDS = ['general', 'core_principle', 'stock', 'morning', 'evening', 'screen'] as const;
 
 // POST /api/chat/sessions
 router.post('/sessions', (req: Request, res: Response) => {
