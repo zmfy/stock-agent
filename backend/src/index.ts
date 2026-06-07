@@ -96,9 +96,11 @@ if (require.main === module) {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const { startNightlyCron } = require('./cron/nightly');
   const { startMeetingsCron } = require('./cron/meetings');
+  const { startSharedDataCron } = require('./cron/shared-data');
   createApp().listen(PORT, () => {
     console.log(`[stock-agent] backend listening on :${PORT}`);
     startNightlyCron();
     startMeetingsCron();
+    startSharedDataCron();
   });
 }
