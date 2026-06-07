@@ -60,7 +60,21 @@ def test_parse_f10_empty():
     assert parse_f10_indicators("") is None
     assert parse_f10_indicators("no table here") is None
 
+def test_set_get_server():
+    from tdx import set_server, get_server
+    set_server('1.2.3.4', 7709)
+    assert get_server() == {'addr': '1.2.3.4', 'port': 7709}
+    set_server('', 0)
+    assert get_server() is None
+
+def test_list_servers():
+    from tdx import list_servers
+    s = list_servers()
+    assert len(s) > 100
+    assert all('addr' in x and 'port' in x and 'site' in x for x in s[:3])
+
 if __name__ == "__main__":
     test_cash_dividend(); test_split(); test_no_events()
     test_parse_f10(); test_parse_f10_empty()
+    test_set_get_server(); test_list_servers();
     print("ALL PASS")

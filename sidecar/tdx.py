@@ -2,16 +2,22 @@
 # 注意：不使用 mootdx 内置 adjust（其 qfq 在新版 pandas 下报 fillna(method=) 错误）。
 import re
 import threading
+import time
+from concurrent.futures import ThreadPoolExecutor
 from mootdx.quotes import Quotes
 
 _lock = threading.Lock()
 _client = None
+_server = None  # (addr, port) 选定服务器；None = 自动 bestip
 
 
 def _get_client():
     global _client
     if _client is None:
-        _client = Quotes.factory(market="std")  # 内部 bestip 选最快服务器，缓存于实例
+        if _server:
+            _client = Quotes.factory(market="std", server=_server, bestip=False)
+        else:
+            _client = Quotes.factory(market="std")  # 自动 bestip
     return _client
 
 
@@ -240,3 +246,50 @@ def realtime(code):
             "time": str(r.get("servertime") or ""),
         }
     return _call(fn)
+
+
+def list_servers():
+    """142 个通达信行情服务器 [{site,addr,port}]（静态列表，无网络）。"""
+    from mootdx.server import hosts
+    return [{"site": h.get("site"), "addr": h.get("addr"), "port": int(h.get("port"))} for h in hosts.get("HQ", [])]
+
+
+def _probe_server(h):
+    t0 = time.perf_counter()
+    try:
+        c = Quotes.factory(market="std", server=(h["addr"], int(h["port"])), bestip=False, timeout=2, raise_exception=True)
+        n = c.stock_count(market=1)
+        ok = bool(n and int(n) > 0)
+        try:
+            c.close()
+        except Exception:
+            pass
+        return {"site": h["site"], "addr": h["addr"], "port": int(h["port"]),
+                "ok": ok, "latency_ms": round((time.perf_counter() - t0) * 1000, 1) if ok else None}
+    except Exception:
+        return {"site": h["site"], "addr": h["addr"], "port": int(h["port"]), "ok": False, "latency_ms": None}
+
+
+def test_servers():
+    """并行测全部服务器（真实查询校验+延迟），按 可用→延迟 排序。约 10-20s。"""
+    servers = list_servers()
+    out = []
+    with ThreadPoolExecutor(max_workers=24) as ex:
+        for r in ex.map(_probe_server, servers):
+            out.append(r)
+    out.sort(key=lambda x: (not x["ok"], x["latency_ms"] if x["latency_ms"] is not None else 9e9))
+    return out
+
+
+def get_server():
+    return {"addr": _server[0], "port": _server[1]} if _server else None
+
+
+def set_server(addr, port):
+    """addr 空 → 自动 bestip；否则 pin (addr,port)。重置客户端即时生效。"""
+    global _server
+    if addr and str(addr).strip():
+        _server = (str(addr).strip(), int(port))
+    else:
+        _server = None
+    _reset()
