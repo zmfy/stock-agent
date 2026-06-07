@@ -6,7 +6,7 @@ import { successResponse, errorResponse } from '../utils/response';
 import { QuoteRow } from '../types';
 import * as svc from '../data/service';
 import * as sources from '../data/sources-service';
-import { resolveSidecarBase, pingHealth } from '../data/sidecar';
+import { resolveSidecarBase, pingHealth, probe } from '../data/sidecar';
 
 const router = Router();
 router.use(authMiddleware);
@@ -182,6 +182,14 @@ router.get('/source', async (req: Request, res: Response) => {
   const base = resolveSidecarBase(req.user!.userId);
   const healthy = base ? await pingHealth(base) : false;
   successResponse(res, { sidecarConfigured: !!base, base, sidecarHealthy: healthy });
+});
+
+// GET /api/data/probe?kind=quote — probe each upstream provider's reachability
+router.get('/probe', async (req: Request, res: Response) => {
+  const base = resolveSidecarBase(req.user!.userId);
+  if (!base) return successResponse(res, []);
+  const kind = String(req.query.kind || 'quote');
+  successResponse(res, await probe(base, kind));
 });
 
 export default router;
