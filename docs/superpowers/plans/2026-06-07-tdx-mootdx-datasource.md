@@ -296,24 +296,20 @@ def _is_a_stock(market, code):
 
 
 def stocks():
-    """全 A 股 [{code,name}]（py 由 main.py 补）。分页拉取底层证券列表。"""
+    """全 A 股 [{code,name}]（py 由 main.py 补）。
+    mootdx 0.11.7 `c.stocks(market)` 返回全量 DataFrame（列 code/name/...，含指数/基金/B股），
+    按代码前缀筛出 A 股。market 0=深 1=沪。"""
     def fn(c):
         out = []
-        api = c.client  # mootdx 暴露的 pytdx TdxHq_API
         for market in (0, 1):
-            start = 0
-            while True:
-                batch = api.get_security_list(market, start)
-                if not batch:
-                    break
-                for it in batch:
-                    code = str(it.get("code", ""))
-                    name = str(it.get("name", "")).strip()
-                    if len(code) == 6 and _is_a_stock(market, code):
-                        out.append({"code": code, "name": name})
-                if len(batch) < 1000:
-                    break
-                start += len(batch)
+            df = c.stocks(market=market)
+            if df is None or len(df) == 0:
+                continue
+            for _, r in df.iterrows():
+                code = str(r.get("code", ""))
+                name = str(r.get("name", "")).strip()
+                if len(code) == 6 and _is_a_stock(market, code):
+                    out.append({"code": code, "name": name})
         return out or None
     return _call(fn)
 
@@ -334,7 +330,7 @@ def realtime(code):
     return _call(fn)
 ```
 
-> 注：`stocks()` 用 `c.client.get_security_list`（mootdx 暴露的 pytdx 底层）分页拉全量；若该属性名在所装 mootdx 版本不同，执行时用 selfcheck 验证并改用对应入口（Task 6 会校验数量 >4000）。`realtime` 字段名以实测为准（Task 6 打印核对）。
+> 注：mootdx **0.11.7 实测 API**（已核对）：`c.stocks(market=N)`→DataFrame(列 code/name/...)、`c.quotes(symbol)`→DataFrame(列 price/last_close/open/high/low/vol/servertime)、`c.bars(symbol,frequency=9,offset)`、`c.xdxr(symbol)`、`c.finance(symbol)` 均存在。mootdx 0.11.x 底层用 `tdxpy`(非 pytdx)，**不要**用 `c.client.get_security_list`。Task 6 selfcheck 会校验 stocks 数量 >4000。
 
 - [ ] **Step 3: 语法检查（仍无网络，确认可导入解析）**
 
