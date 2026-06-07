@@ -1,7 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { getDb } from '../db';
 import { getActive } from '../rulebook/service';
-import { getLatestMarket, listNews, refreshNews } from '../data/service';
+import { getLatestMarket, refreshNews } from '../data/service';
 import { resolveSidecarBase, fetchHotSectors } from '../data/sidecar';
 import { getModelForRole } from '../ai/service';
 import { getProvider } from '../ai/providers';
@@ -35,11 +35,6 @@ async function sectorText(userId: string): Promise<{ text: string; sectors: stri
   return { text, sectors };
 }
 
-function newsText(): string {
-  const ns = listNews(8);
-  if (!ns.length) return '（暂无近期财经新闻）';
-  return '近期财经要闻：\n' + ns.slice(0, 8).map((n) => `- ${n.title}`).join('\n');
-}
 
 function buildNewsWithIds(): { text: string; idMap: Record<string, string> } {
   const rows = getDb().prepare('SELECT id, title FROM news_content_log ORDER BY collected_at DESC, rowid DESC LIMIT 8').all() as Array<{ id: string; title: string }>;

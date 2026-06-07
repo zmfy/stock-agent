@@ -197,7 +197,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue';
-import { dataApi, type StockSnapshot, type NewsItem, type DataSource } from '../api/data';
+import { dataApi, type StockSnapshot, type DataSource } from '../api/data';
 import StockPicker from '../components/StockPicker.vue';
 import { useAuthStore } from '../stores/auth';
 
@@ -283,7 +283,6 @@ async function loadSource() {
   } catch { /* ignore */ }
 }
 
-const news = ref<NewsItem[]>([]);
 const collectMsg = ref('');
 const collectOk = ref(false);
 const showTdxHelp = ref(false);
@@ -464,9 +463,6 @@ onMounted(async () => {
   await refreshJob('stock_universe');
   await refreshJob('eod');
   runProbe();
-  try {
-    news.value = (await dataApi.getNews()).data.data;
-  } catch { /* ignore */ }
   loadNewsLog();
   jobTimer = setInterval(() => {
     (['stock_universe', 'eod'] as const).forEach((j) => {
@@ -495,11 +491,6 @@ input { padding: 5px; }
 .snap tr.miss td { color: #c08; }
 .err { color: #c00; }
 .ok-msg { color: #2a8a2a; }
-.news { margin-top: 10px; max-height: 320px; overflow-y: auto; }
-.nitem { border-top: 1px solid #eee; padding: 8px 0; }
-.ntitle { font-size: 14px; font-weight: 600; }
-.nmeta { font-size: 11px; color: #999; }
-.nsum { font-size: 13px; color: #555; margin-top: 2px; }
 .news-log { list-style: none; padding: 0; margin: 10px 0 0; max-height: 320px; overflow-y: auto; }
 .news-log li { padding: 5px 0; border-top: 1px solid #eee; font-size: 13px; }
 .news-log a { color: #34699a; text-decoration: none; }
