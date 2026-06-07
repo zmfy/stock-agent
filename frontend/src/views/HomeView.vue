@@ -275,7 +275,7 @@ async function applyCompose() {
   try {
     await rulebookApi.applyCompose(orderedKeys.value, active.value?.id);
     activeRulebook.value = (await rulebookApi.getActive()).data.data;
-    tplMsg.value = '已换入组合模板，已清空本次讨论记忆，重新开始';
+    tplMsg.value = '已换入组合模板。下次进入核心原则讨论将重新开始';
     composeRes.value = null;
     tplSelected.value = [];
   } catch (e: any) {

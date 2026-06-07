@@ -195,13 +195,17 @@ router.post('/apply', async (req: Request, res: Response) => {
   const parsed = applySchema.safeParse(req.body);
   if (!parsed.success) return errorResponse(res, 422, 'VALIDATION_ERROR', parsed.error.errors[0]?.message || '参数校验失败');
   const p = parsed.data.proposal;
-  const rb = await applyProposal(
-    req.user!.userId,
-    { persona: p.persona, note: p.note ?? '规则调整', gates: p.gates as any, softRules: p.softRules as any, positionRules: p.positionRules },
-    parsed.data.versionLabel,
-    parsed.data.sessionId
-  );
-  successResponse(res, rb, '已采纳并升级版本', 201);
+  try {
+    const rb = await applyProposal(
+      req.user!.userId,
+      { persona: p.persona, note: p.note ?? '规则调整', gates: p.gates as any, softRules: p.softRules as any, positionRules: p.positionRules },
+      parsed.data.versionLabel,
+      parsed.data.sessionId
+    );
+    successResponse(res, rb, '已采纳并升级版本', 201);
+  } catch (e: any) {
+    return errorResponse(res, 400, 'BUSINESS_CONFLICT', e.message || '采纳失败');
+  }
 });
 
 export default router;
