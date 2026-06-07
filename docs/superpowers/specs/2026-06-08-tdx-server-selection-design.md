@@ -20,6 +20,7 @@
 - 「测速」：并行测**全部 142 个**服务器（真实 TDX 查询验证 + 延迟），按「可用 + 延迟」排序展示。
 - 用户可选「自动选最快(bestip)」或 pin 某个具体服务器；选择**持久化**（后端 settings），sidecar 重启后由后端重新应用。
 - 仅 admin 可改（非 admin 只读当前）。
+- 数据源标签里**通达信卡片置顶**并标注为**主力源**；原 HTTP「数据源管理」降到其后，标注为**交叉验证 / 备选**。
 
 ## Non-goals
 
@@ -80,13 +81,18 @@ tdxGetServer: () => api.get('/data/tdx/server').then(r => r.data.data as { serve
 tdxSetServer: (addr: string, port: number | null) => api.post('/data/tdx/server', { addr, port }).then(r => r.data),
 ```
 
-### 前端 `DataView.vue`（数据源标签新卡片）
+### 前端 `DataView.vue`（数据源标签：卡片重排 + 主次说明）
 
-- 「通达信行情服务器」卡片：
-  - 显示当前：`tdxGetServer()` → 空="自动选最快(bestip)"，否则显示 "addr:port"。
-  - 「⚡测速(约 10-20s)」按钮(admin)：loading → `tdxTestServers()` → 表格列出 `site / addr:port / 延迟 / 可用✓✗`（可用置顶、按延迟排序；可只展示前 ~30 + 当前）。
-  - 每行（admin）可「选用」；顶部一个「自动选最快」选项。点选 → `tdxSetServer(...)` → 刷新当前显示。
-  - 非 admin：只读显示当前 + 列表（不显示选用按钮），或仅显示当前。
+**卡片顺序**（数据源标签自上而下）：
+1. **「通达信行情服务器」卡片（置顶，主力源）** —— 顶部一句说明：`通达信(TDX)是行情/实时/列表/基本面的主力数据源。` 然后：
+   - 显示当前：`tdxGetServer()` → 空="自动选最快(bestip)"，否则显示 "addr:port"。
+   - 「⚡测速(约 10-20s)」按钮(admin)：loading → `tdxTestServers()` → 表格列出 `site / addr:port / 延迟 / 可用✓✗`（可用置顶、按延迟排序；可只展示前 ~30 + 当前）。
+   - 每行（admin）可「选用」；顶部一个「自动选最快」选项。点选 → `tdxSetServer(...)` → 刷新当前显示。
+   - 非 admin：只读显示当前 + 列表（不显示选用按钮），或仅显示当前。
+2. **「行情上游探测」卡片**（原位置，保持）。
+3. **「数据源管理」卡片（移到通达信之后）** —— 顶部加一句说明（hint）：`以下为交叉验证与备选数据源（仅在主力源缺失时补充/校验）；主力行情请用上方的通达信。` 其余功能不变。
+
+即：原本「数据源管理」在最上，现在把「通达信行情服务器」插在最前作主力源，「数据源管理」降到其后并标注为交叉验证/备选。
 
 ## Testing
 
@@ -101,3 +107,4 @@ tdxSetServer: (addr: string, port: number | null) => api.post('/data/tdx/server'
 - 单独「通达信行情服务器」卡片，不进 data_sources 表。
 - 选择持久化于后端 settings，启动时重推 sidecar。
 - 仅 admin 可改。
+- 卡片顺序：通达信(主力，置顶) → 行情上游探测 → 数据源管理(交叉验证/备选，附说明)。
