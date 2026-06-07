@@ -24,8 +24,30 @@
     </nav>
 
     <div v-show="tab === 'source'">
+      <section class="card">
+        <h2>通达信行情服务器（主力源）</h2>
+        <p class="hint">通达信(TDX)是行情 / 实时 / 列表 / 基本面的<b>主力数据源</b>。当前：<b>{{ tdxCurrent || '自动选最快(bestip)' }}</b></p>
+        <div v-if="isAdmin" class="row">
+          <button @click="testTdx" :disabled="tdxTesting">{{ tdxTesting ? '测速中…(约 10-20s)' : '⚡ 测速全部服务器' }}</button>
+          <button @click="pickTdx('', 0)">自动选最快</button>
+        </div>
+        <table v-if="tdxServers.length" class="srctable">
+          <thead><tr><th>服务器</th><th>地址</th><th>延迟</th><th>状态</th><th v-if="isAdmin">操作</th></tr></thead>
+          <tbody>
+            <tr v-for="s in tdxServers.slice(0, 30)" :key="s.addr + ':' + s.port">
+              <td>{{ s.site }}</td>
+              <td class="url">{{ s.addr }}:{{ s.port }}</td>
+              <td>{{ s.latency_ms != null ? s.latency_ms + 'ms' : '—' }}</td>
+              <td><span :class="s.ok ? 'probe-ok' : 'probe-bad'">{{ s.ok ? '可用' : '不可用' }}</span></td>
+              <td v-if="isAdmin"><button v-if="s.ok" @click="pickTdx(s.addr, s.port)">选用</button></td>
+            </tr>
+          </tbody>
+        </table>
+        <p v-if="tdxServers.length" class="hint">仅显示前 30（已按可用+延迟排序）。</p>
+      </section>
     <section class="card">
       <h2>数据源管理</h2>
+      <p class="hint">以下为<b>交叉验证与备选</b>数据源（仅在主力源缺失时补充/校验）；主力行情请用上方的通达信。</p>
       <p class="hint">推荐用内置源；也可添加你自己的数据服务（同接口的 HTTP 地址）。优先级数字越小越优先；多个源会用于交叉验证。</p>
       <table class="srctable">
         <thead><tr><th>启用</th><th>名称</th><th>地址</th><th>优先级</th><th>操作</th></tr></thead>
@@ -168,6 +190,7 @@
     <div v-show="tab === 'tools'">
     <section class="card">
       <h2>上传行情 CSV（通达信导出）</h2>
+      <p class="hint">仅在<b>极端情况</b>（数据源都取不到）或需导入<b>特殊 / 自有数据</b>时使用；日常行情走通达信主力源。</p>
       <p class="hint">支持中英文表头（代码/日期/开盘/最高/最低/收盘/成交量），日期可为 20260601 或 2026-06-01。无代码列时可在下方填写。</p>
       <button class="linklike" @click="showTdxHelp = !showTdxHelp">{{ showTdxHelp ? '▾' : '▸' }} 通达信数据怎么导入？（帮助说明）</button>
       <div v-if="showTdxHelp" class="tdxhelp">
@@ -399,6 +422,21 @@ async function removeSource(s: DataSource) {
   }
 }
 
+// ---- TDX server management ----
+const tdxCurrent = ref('');
+const tdxServers = ref<Array<{ site: string; addr: string; port: number; ok: boolean; latency_ms: number | null }>>([]);
+const tdxTesting = ref(false);
+async function loadTdxCurrent() {
+  try { tdxCurrent.value = await dataApi.tdxGetServer(); } catch { /* ignore */ }
+}
+async function testTdx() {
+  tdxTesting.value = true;
+  try { tdxServers.value = await dataApi.tdxTestServers(); } catch { /* ignore */ } finally { tdxTesting.value = false; }
+}
+async function pickTdx(addr: string, port: number) {
+  try { tdxCurrent.value = await dataApi.tdxSetServer(addr, port); } catch { /* ignore */ }
+}
+
 // ---- upstream probe ----
 const providers = ref<Array<{ key: string; label: string; reachable: boolean; latencyMs: number | null; error: string | null }>>([]);
 const probeProgress = ref<{ done: number; total: number } | null>(null);
@@ -496,6 +534,7 @@ onBeforeUnmount(() => { if (jobTimer) clearInterval(jobTimer); });
 onMounted(async () => {
   await loadSource();
   await loadSources();
+  loadTdxCurrent();
   await refreshJob('stock_universe');
   await refreshJob('eod');
   runProbe();
