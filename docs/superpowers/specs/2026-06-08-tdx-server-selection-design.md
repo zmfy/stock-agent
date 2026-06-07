@@ -94,6 +94,8 @@ tdxSetServer: (addr: string, port: number | null) => api.post('/data/tdx/server'
 
 即：原本「数据源管理」在最上，现在把「通达信行情服务器」插在最前作主力源，「数据源管理」降到其后并标注为交叉验证/备选。
 
+**另：CSV 上传卡片（在「工具」标签）加用途说明**（hint）：`仅在极端情况(数据源都取不到)或需导入特殊/自有数据时使用；日常行情走上方的通达信主力源。` 其余上传功能不变。这样形成清晰的源层级：通达信(主力) → HTTP 数据源(交叉验证/备选) → CSV 上传(极端兜底/特殊数据)。
+
 ## Testing
 
 - **sidecar**：`tdx.list_servers()` 返回 ~142；`tdx.test_servers()` 返回带 ok/latency 且至少有若干 ok（实连，selfcheck 脚本里加一项或单跑）；`set_server('','')` → `get_server()` None；`set_server(addr,port)` → `get_server()` 匹配且 `bars_qfq` 仍能取数（pin 到一个 ok 服务器）。这些需网络，归入手动/ selfcheck。
