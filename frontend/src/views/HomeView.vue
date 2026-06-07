@@ -698,7 +698,7 @@ onMounted(async () => {
 .title { font-weight: 600; font-size: 15px; padding-bottom: 10px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
 .stock-head { display: flex; gap: 8px; }
 .analyzing { color: #a76b00; font-size: 13px; padding: 8px 0; }
-.briefing { background: #f7faff; border: 1px solid #d6e4ff; border-radius: 8px; padding: 10px 12px; margin: 8px 0; white-space: pre-wrap; font-size: 13px; line-height: 1.6; }
+.briefing { background: #f7faff; border: 1px solid #d6e4ff; border-radius: 8px; padding: 10px 12px; margin: 8px 0; white-space: pre-wrap; font-size: 13px; line-height: 1.6; flex: 0 0 auto; max-height: 40vh; overflow-y: auto; }
 .pin-card.gen { background: #eef7ee; cursor: pointer; border: 1px dashed #b7d7b7; text-align: left; }
 .screen-sect { display: flex; flex-direction: column; gap: 4px; }
 .fold { text-align: left; background: none; border: none; color: #666; font-size: 12px; cursor: pointer; padding: 2px 4px; }
@@ -711,7 +711,7 @@ onMounted(async () => {
 .badge2.a { background: #d8e6ff; color: #34699a; }
 .badge2.b { background: #fde2e2; color: #c0392b; }
 .badge2.no { background: #eee; color: #aaa; }
-.msgs { flex: 1; overflow-y: auto; padding: 12px 0; display: flex; flex-direction: column; gap: 10px; }
+.msgs { flex: 1; min-height: 0; overflow-y: auto; padding: 12px 0; display: flex; flex-direction: column; gap: 10px; }
 .msg { display: flex; flex-direction: column; align-items: flex-start; }
 .msg.user { align-items: flex-end; }
 .bubble { max-width: 75%; padding: 9px 13px; border-radius: 12px; white-space: pre-wrap; line-height: 1.55; font-size: 14px; box-shadow: var(--shadow-sm); }
