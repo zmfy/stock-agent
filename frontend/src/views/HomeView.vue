@@ -205,7 +205,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, nextTick, onMounted } from 'vue';
+import { ref, reactive, computed, nextTick, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 import { chatApi, type ChatSession, type ChatMessage, type ChatKind } from '../api/chat';
@@ -251,6 +251,10 @@ const needsInit = ref(false);
 const analyzing = ref(false);
 const msgsEl = ref<HTMLElement | null>(null);
 const meetings = ref<{ morning: Meeting | null; evening: Meeting | null }>({ morning: null, evening: null });
+// 正在后台生成的会话种类（morning/evening/screen）——SPA 内切换不丢
+const generating = reactive(new Set<'morning' | 'evening' | 'screen'>());
+// 后台生成失败信息，按 kind 记录
+const genErr = reactive<Record<string, string>>({});
 const genning = ref<'' | 'morning' | 'evening'>('');
 const screen = ref<ScreenRun | null>(null);
 const screening = ref(false);
