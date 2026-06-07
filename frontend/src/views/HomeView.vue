@@ -13,6 +13,7 @@
             @click="open(s)" @mouseenter="startHover(s.id)" @mouseleave="endHover">
           <span class="kind">{{ kindIcon(s.kind) }}</span>
           <span class="stitle">{{ s.title || sessionLabel(s) }}</span>
+          <span v-if="generating.has(s.kind as any)" class="spinner sess-spin"></span>
           <button class="pin" :class="{ on: s.pinned === 1 }" :title="s.pinned === 1 ? '取消置顶' : '置顶'" @click.stop="togglePin(s)">📌</button>
           <button v-show="hoverDelId === s.id" class="del" title="删除会话（分析历史保留）" @click.stop="removeSession(s)">×</button>
         </li>
@@ -71,6 +72,12 @@
                 </span>
               </div>
               <div v-if="analyzing" class="analyzing">正在按你的核心原则分析 {{ active.ref_id }} …</div>
+              <div v-if="active && generating.has(active.kind as any)" class="gen-banner">
+                ⏳ 正在生成，可能需要一会儿。你可以先去别处，稍后回到本会话查看结果。
+              </div>
+              <div v-else-if="active && genErr[active.kind]" class="gen-banner err">
+                生成失败：{{ genErr[active.kind] }}（可再次点击对应按钮重试）
+              </div>
               <div v-if="briefing" class="briefing">{{ briefing }}</div>
 
               <template v-if="active?.kind === 'screen' && screen">
@@ -144,14 +151,14 @@
 
             <!-- 早会 -->
             <button v-if="meetings.morning" class="ops-btn" :class="{ active: active?.kind === 'morning' }" @click="openMeeting('morning')">📈 今日操作方向（早会）</button>
-            <button v-else class="ops-btn dashed" :disabled="genning === 'morning'" @click="genMeeting('morning')"><span v-if="genning === 'morning'" class="spinner"></span>📈 生成今日早会</button>
+            <button v-else class="ops-btn dashed" @click="genMeeting('morning')">📈 生成今日早会</button>
 
             <!-- 晚会 -->
             <button v-if="meetings.evening" class="ops-btn" :class="{ active: active?.kind === 'evening' }" @click="openMeeting('evening')">🌙 今日操作复盘（晚会）</button>
-            <button v-else class="ops-btn dashed" :disabled="genning === 'evening'" @click="genMeeting('evening')"><span v-if="genning === 'evening'" class="spinner"></span>🌙 生成今日晚会</button>
+            <button v-else class="ops-btn dashed" @click="genMeeting('evening')">🌙 生成今日晚会</button>
 
             <!-- 选股 -->
-            <button class="ops-btn" :disabled="screening" @click="runScreen"><span v-if="screening" class="spinner"></span>🔍 {{ screening ? '选股中…' : '按核心原则选股' }}</button>
+            <button class="ops-btn" @click="runScreen">🔍 按核心原则选股</button>
 
             <!-- 核心原则讨论 / 更换模板（合并入口） -->
             <button class="ops-btn" :class="{ active: active?.kind === 'core_principle' }" @click="openPrincipleAndTemplates">📜 核心原则讨论 / 更换模板</button>
@@ -781,6 +788,9 @@ onMounted(async () => {
 .stock-head { display: flex; gap: 8px; }
 .analyzing { color: #a76b00; font-size: 13px; padding: 8px 0; }
 .briefing { background: #f7faff; border: 1px solid #d6e4ff; border-radius: 8px; padding: 10px 12px; margin: 8px 0; white-space: pre-wrap; font-size: 13px; line-height: 1.6; flex: 0 0 auto; max-height: 40vh; overflow-y: auto; }
+.gen-banner { background: #fffbe6; border: 1px solid #ffe58f; border-radius: 8px; padding: 8px 12px; margin: 8px 0; font-size: 13px; line-height: 1.6; flex: 0 0 auto; }
+.gen-banner.err { background: #fff1f0; border-color: #ffccc7; color: #cf1322; }
+.sess-spin { margin-left: 4px; }
 .pin-card.gen { background: #eef7ee; cursor: pointer; border: 1px dashed #b7d7b7; text-align: left; }
 .fold { text-align: left; background: none; border: none; color: #666; font-size: 12px; cursor: pointer; padding: 2px 4px; }
 .srow { padding: 4px 6px; border-radius: 4px; cursor: pointer; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
