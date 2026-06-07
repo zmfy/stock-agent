@@ -27,7 +27,8 @@ router.get('/latest', (req: Request, res: Response) => {
 
 // GET /api/screen/history?limit=20
 router.get('/history', (req: Request, res: Response) => {
-  successResponse(res, svc.getHistory(req.user!.userId, Number(req.query.limit) || 20));
+  const limit = Math.max(1, Math.min(100, Number(req.query.limit) || 20));
+  successResponse(res, svc.getHistory(req.user!.userId, limit));
 });
 
 export default router;

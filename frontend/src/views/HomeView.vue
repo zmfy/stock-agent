@@ -423,11 +423,13 @@ async function open(s: ChatSession) {
     await doAnalyze(s);
   }
   // When opening a screen session, ensure screen data is loaded.
-  if (s.kind === 'screen' && !screen.value) {
-    try {
-      screen.value = (await screenApi.latest()).data.data;
-    } catch {
-      /* ignore */
+  if (s.kind === 'screen') {
+    if (!screen.value) {
+      try {
+        screen.value = (await screenApi.latest()).data.data;
+      } catch {
+        /* ignore */
+      }
     }
     await loadScreenHistory();
   }
@@ -759,11 +761,7 @@ onMounted(async () => {
 .analyzing { color: #a76b00; font-size: 13px; padding: 8px 0; }
 .briefing { background: #f7faff; border: 1px solid #d6e4ff; border-radius: 8px; padding: 10px 12px; margin: 8px 0; white-space: pre-wrap; font-size: 13px; line-height: 1.6; flex: 0 0 auto; max-height: 40vh; overflow-y: auto; }
 .pin-card.gen { background: #eef7ee; cursor: pointer; border: 1px dashed #b7d7b7; text-align: left; }
-.screen-sect { display: flex; flex-direction: column; gap: 4px; }
 .fold { text-align: left; background: none; border: none; color: #666; font-size: 12px; cursor: pointer; padding: 2px 4px; }
-.screen-list { max-height: 340px; overflow-y: auto; border: 1px solid #eee; border-radius: 6px; padding: 4px; }
-.snote { padding: 2px 4px; }
-.screen-disc { white-space: pre-wrap; font-size: 12px; line-height: 1.55; color: var(--text-soft); background: var(--surface-2); border: 1px solid var(--border-soft); border-radius: 6px; padding: 6px 8px; margin: 4px 0; }
 .srow { padding: 4px 6px; border-radius: 4px; cursor: pointer; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .srow:hover { background: #f3f3f3; }
 .badge2 { display: inline-block; width: 16px; text-align: center; border-radius: 4px; font-size: 11px; margin-right: 4px; }
