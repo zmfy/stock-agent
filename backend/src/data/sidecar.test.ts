@@ -66,4 +66,15 @@ describe('data/sidecar client', () => {
     expect((await sc.fetchNews('http://x', 3)).source).toBe('em');
     expect((await sc.fetchFundamentals('http://x', '600519')).source).toBe('baostock');
   });
+
+  it('probeList 返回 provider 列表；probeOne 返回单条', async () => {
+    const sc = require('./sidecar');
+    (global as any).fetch = jest.fn((u: string) =>
+      u.includes('/probe/list')
+        ? Promise.resolve({ ok: true, json: async () => [{ key: 'sina', label: '新浪' }, { key: 'tx', label: '腾讯' }] })
+        : Promise.resolve({ ok: true, json: async () => [{ key: 'sina', label: '新浪', reachable: true, latency_ms: 100, error: null }] }));
+    expect((await sc.probeList('http://x', 'quote')).map((p: any) => p.key)).toEqual(['sina', 'tx']);
+    const one = await sc.probeOne('http://x', 'quote', 'sina');
+    expect(one.key).toBe('sina'); expect(one.latencyMs).toBe(100);
+  });
 });

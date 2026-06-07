@@ -36,14 +36,28 @@ export async function fetchFundamentals(base: string, code: string, order?: stri
 
 export interface ProbeResult { key: string; label: string; reachable: boolean; latencyMs: number | null; error: string | null }
 
-export async function probe(base: string, kind: string): Promise<ProbeResult[]> {
-  const data = await getJson(`${base}/probe?kind=${encodeURIComponent(kind)}`);
+export async function probe(base: string, kind: string, provider = ''): Promise<ProbeResult[]> {
+  const url = `${base}/probe?kind=${encodeURIComponent(kind)}${provider ? `&provider=${encodeURIComponent(provider)}` : ''}`;
+  const data = await getJson(url);
   if (!Array.isArray(data)) return [];
   return data.map((p: any) => ({
     key: String(p.key), label: String(p.label ?? p.key),
     reachable: !!p.reachable, latencyMs: p.latency_ms == null ? null : Number(p.latency_ms),
     error: p.error == null ? null : String(p.error),
   }));
+}
+
+export async function probeList(base: string, kind: string): Promise<Array<{ key: string; label: string }>> {
+  const data = await getJson(`${base}/probe/list?kind=${encodeURIComponent(kind)}`);
+  if (!Array.isArray(data)) return [];
+  return data.map((p: any) => ({ key: String(p.key), label: String(p.label ?? p.key) }));
+}
+
+export async function probeOne(base: string, kind: string, provider: string): Promise<ProbeResult | null> {
+  const data = await getJson(`${base}/probe?kind=${encodeURIComponent(kind)}&provider=${encodeURIComponent(provider)}`);
+  if (!Array.isArray(data) || !data[0]) return null;
+  const p = data[0];
+  return { key: String(p.key), label: String(p.label ?? p.key), reachable: !!p.reachable, latencyMs: p.latency_ms == null ? null : Number(p.latency_ms), error: p.error == null ? null : String(p.error) };
 }
 
 export async function orderedProviders(base: string, kind: string): Promise<string[]> {
