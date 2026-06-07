@@ -54,4 +54,19 @@ describe('screen service', () => {
     expect(latest.results.length).toBe(2);
     expect(latest.results[0].code).toBe('600001');
   });
+
+  it('screenCode 给出确定性入选原因', async () => {
+    const r = await svc.screenCode(USER, '600001');
+    expect(typeof r.reason).toBe('string');
+    expect(r.reason.length).toBeGreaterThan(0);
+    expect(r.aPass || r.bPass ? r.reason.includes('通过') : r.reason.includes('未入选')).toBe(true);
+  });
+
+  it('getHistory 返回最近选股(含 picks)', async () => {
+    await svc.runScreen(USER, { codes: ['600001'] });
+    const h = svc.getHistory(USER, 5);
+    expect(Array.isArray(h)).toBe(true);
+    expect(h[0]).toHaveProperty('created_at');
+    expect(h[0]).toHaveProperty('picks');
+  });
 });

@@ -8,6 +8,7 @@ export interface ScreenResult {
   passed: number;
   total: number;
   failed: string[];
+  reason?: string;
 }
 
 export interface ScreenRun {

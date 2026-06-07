@@ -61,6 +61,7 @@ export interface ScreenResult {
   passed: number;
   total: number;
   failed: string[];
+  reason: string;
 }
 
 export async function screenCode(userId: string, code: string): Promise<ScreenResult> {
@@ -75,7 +76,17 @@ export async function screenCode(userId: string, code: string): Promise<ScreenRe
   const bPass = bVetoGates.length > 0 && bVetoGates.every((g) => g.status === 'pass');
   const passed = ev.gateResults.filter((g) => g.status === 'pass').length;
   const failed = ev.gateResults.filter((g) => g.status === 'fail').map((g) => g.gate_key);
-  return { code, name: snap.name, aPass, bPass, passed, total: ev.gateResults.length, failed };
+  const selected = aPass || bPass;
+  let reason: string;
+  if (selected) {
+    const sys = aPass ? 'A' : 'B';
+    const passedLabels = ev.gateResults.filter((g) => g.system === sys && g.status === 'pass').map((g) => g.label);
+    reason = `入选（${sys} 系统）：通过 ${passedLabels.join('、') || '（无明确门槛）'}`;
+  } else {
+    const blockers = ev.gateResults.filter((g) => g.veto === 1 && g.status !== 'pass').map((g) => `${g.label}${g.status === 'unknown' ? '(数据缺失)' : '(未达标)'}`);
+    reason = `未入选：${blockers.join('、') || '无符合系统'}`;
+  }
+  return { code, name: snap.name, aPass, bPass, passed, total: ev.gateResults.length, failed, reason };
 }
 
 export async function screenCodes(userId: string, codes: string[]): Promise<ScreenResult[]> {
@@ -145,4 +156,14 @@ export function getLatest(userId: string): { note: string; results: ScreenResult
     results = [];
   }
   return { note: row.source_note, results, discussion: row.discussion || '', created_at: row.created_at };
+}
+
+export function getHistory(userId: string, limit = 20): Array<{ created_at: string; note: string; picks: Array<{ code: string; name: string | null; reason: string }> }> {
+  const rows = getDb().prepare('SELECT source_note, results, created_at FROM screenings WHERE user_id = ? ORDER BY created_at DESC LIMIT ?').all(userId, limit) as Array<{ source_note: string; results: string; created_at: string }>;
+  return rows.map((r) => {
+    let parsed: ScreenResult[] = [];
+    try { parsed = JSON.parse(r.results); } catch { /* ignore */ }
+    const picks = parsed.filter((x) => x.aPass || x.bPass).map((x) => ({ code: x.code, name: x.name, reason: x.reason || '' }));
+    return { created_at: r.created_at, note: r.source_note, picks };
+  });
 }

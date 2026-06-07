@@ -25,4 +25,9 @@ router.get('/latest', (req: Request, res: Response) => {
   successResponse(res, svc.getLatest(req.user!.userId));
 });
 
+// GET /api/screen/history?limit=20
+router.get('/history', (req: Request, res: Response) => {
+  successResponse(res, svc.getHistory(req.user!.userId, Number(req.query.limit) || 20));
+});
+
 export default router;
