@@ -53,7 +53,7 @@ def qfq_adjust(bars, events):
                 prev_close = b["close"]
             else:
                 break
-        if not prev_close:
+        if prev_close is None or prev_close == 0:
             continue
         cash = (e.get("fenhong") or 0) / 10.0
         song = (e.get("songzhuangu") or 0) / 10.0
@@ -119,6 +119,7 @@ def _latest_raw_close(code):
 
 def finance_fundamentals(code):
     """用 finance() + 当前价算 roe_ttm/pe/pb/ps/net_profit。"""
+    price = _latest_raw_close(code)   # 先取价（独立 _call，避免嵌套加锁死锁）
     def fn(c):
         fin = c.finance(symbol=code)
         if fin is None or len(fin) == 0:
@@ -129,7 +130,6 @@ def finance_fundamentals(code):
         rev = _f(row.get("zhuyingshouru"))
         profit = _f(row.get("jinglirun"))
         bvps = _f(row.get("meigujingzichan"))
-        price = _latest_raw_close(code)
         out = {}
         if profit and eq:
             out["roe_ttm"] = round(profit / eq * 100, 2)
