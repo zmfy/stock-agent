@@ -1,8 +1,20 @@
+import { getModelForRole } from '../ai/service';
+import { getProvider } from '../ai/providers';
+import { chat } from '../ai/manager';
+
 export interface ReasonInput {
   persona: string;
   discussion: string;
   changeDesc: string;
   aiCall: (prompt: string) => Promise<string>;
+}
+
+/** Shared AI-call helper for "reason summary" usage in service.ts and propose-service.ts. */
+export async function reasonAiCall(userId: string, prompt: string): Promise<string> {
+  const cfg = getModelForRole(userId, 'review') || getModelForRole(userId, 'core');
+  if (!cfg) throw new Error('NO_MODEL');
+  const style = getProvider(cfg.provider)?.apiStyle || 'openai';
+  return chat(style, { baseUrl: cfg.baseUrl, model: cfg.model, apiKey: cfg.apiKey }, prompt, 4000);
 }
 
 export async function summarizeChangeReason(input: ReasonInput): Promise<string> {

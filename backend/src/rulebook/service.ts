@@ -4,6 +4,8 @@ import { BASELINE_V3, Baseline, SeedGate, SeedSoftRule } from './baseline-v3';
 import { getTemplate } from './templates';
 import { composeTemplates } from './compose';
 import { FullRulebook, Gate, RulebookVersion, SoftRule } from '../types';
+import { summarizeChangeReason, reasonAiCall } from './memory';
+import { getMessages } from '../chat/service';
 
 interface VersionPayload {
   versionLabel: string;
@@ -128,13 +130,33 @@ export function instantiateTemplate(userId: string, templateKey?: string): FullR
 }
 
 // Compose multiple templates (keys order = priority) and switch to the result.
-export function applyComposedTemplates(userId: string, keys: string[]): FullRulebook {
+export async function applyComposedTemplates(
+  userId: string,
+  keys: string[],
+  sessionId?: string,
+  aiCall?: (p: string) => Promise<string>
+): Promise<FullRulebook> {
   const composed = composeTemplates(keys);
   const active = getActive(userId);
+  const changeDesc = composed.conflict
+    ? `组合多套系统（${composed.systems.map((s) => s.letter + '=' + s.label).join('、')}）`
+    : `合并模板：${composed.systems[0]?.label}`;
+  let note = changeDesc;
+  if (sessionId) {
+    const discussion = getMessages(userId, sessionId)
+      .map((m: any) => `${m.role === 'user' ? '用户' : '助手'}：${m.content}`)
+      .join('\n');
+    note = await summarizeChangeReason({
+      persona: active?.version.persona || '',
+      discussion,
+      changeDesc,
+      aiCall: aiCall || ((p) => reasonAiCall(userId, p)),
+    });
+  }
   const created = createVersion(userId, {
     versionLabel: composed.baseline.versionLabel,
     persona: composed.baseline.persona,
-    note: composed.conflict ? `组合多套系统（${composed.systems.map((s) => s.letter + '=' + s.label).join('、')}）` : `合并模板：${composed.systems[0]?.label}`,
+    note,
     parentVersionId: active?.version.id ?? null,
     author: 'user',
     gates: composed.baseline.gates,
@@ -146,14 +168,32 @@ export function applyComposedTemplates(userId: string, keys: string[]): FullRule
 }
 
 // Switch the active rulebook to a template: create a NEW version from it and activate.
-export function applyTemplateAsVersion(userId: string, templateKey: string): FullRulebook {
+export async function applyTemplateAsVersion(
+  userId: string,
+  templateKey: string,
+  sessionId?: string,
+  aiCall?: (p: string) => Promise<string>
+): Promise<FullRulebook> {
   const tpl = getTemplate(templateKey);
   if (!tpl) throw new Error('UNKNOWN_TEMPLATE');
   const active = getActive(userId);
+  const changeDesc = `换入模板：${tpl.label}`;
+  let note = changeDesc;
+  if (sessionId) {
+    const discussion = getMessages(userId, sessionId)
+      .map((m: any) => `${m.role === 'user' ? '用户' : '助手'}：${m.content}`)
+      .join('\n');
+    note = await summarizeChangeReason({
+      persona: active?.version.persona || '',
+      discussion,
+      changeDesc,
+      aiCall: aiCall || ((p) => reasonAiCall(userId, p)),
+    });
+  }
   const created = createVersion(userId, {
     versionLabel: tpl.baseline.versionLabel,
     persona: tpl.baseline.persona,
-    note: `换入模板：${tpl.label}`,
+    note,
     parentVersionId: active?.version.id ?? null,
     author: 'user',
     gates: tpl.baseline.gates,

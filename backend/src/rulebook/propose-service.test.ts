@@ -1,11 +1,14 @@
 import path from 'path';
 import os from 'os';
 import fs from 'fs';
+import { v4 as uuidv4 } from 'uuid';
 
 process.env.DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'sa-propose-'));
 
 const ps = require('./propose-service');
 const rb = require('./service');
+const chat = require('../chat/service');
+const { getDb } = require('../db');
 const USER = 'u-prop';
 
 beforeAll(() => {
@@ -59,7 +62,7 @@ describe('applyProposal', () => {
     const r = await ps.proposeChange(USER, '把 ROE 放宽到 8', {
       aiCall: aiPatch({ note: '放宽ROE', gate_updates: [{ gate_key: 'roe_ttm', threshold: 8 }] }),
     });
-    const applied = ps.applyProposal(USER, r.proposal, r.suggestedLabel);
+    const applied = await ps.applyProposal(USER, r.proposal, r.suggestedLabel);
     expect(applied.version.version_label).toBe('V3.1');
     expect(applied.version.author).toBe('agent');
     expect(applied.version.is_active).toBe(1);
@@ -68,5 +71,28 @@ describe('applyProposal', () => {
     expect(active.gates.find((g: any) => g.gate_key === 'roe_ttm').threshold).toBe(8);
     // old V3.0 retained in history
     expect(rb.listVersions(USER).some((v: any) => v.version_label === 'V3.0')).toBe(true);
+  });
+
+  it('applyProposal 带 sessionId 把 AI 总结的理由写进 note', async () => {
+    // baseline: apply value-quality template
+    await rb.applyTemplateAsVersion(USER, 'value-quality');
+    // create a core_principle session
+    const sid = chat.createSession(USER, 'core_principle', null, '讨论');
+    // insert a user message directly so discussion is non-empty
+    const db = getDb();
+    db.prepare('INSERT INTO chat_messages (id, session_id, role, content) VALUES (?, ?, ?, ?)').run(
+      uuidv4(), sid, 'user', '我觉得龙头稀缺，想放宽门槛'
+    );
+    const active = rb.getActive(USER);
+    const proposal = {
+      persona: active.version.persona,
+      note: '机械理由',
+      gates: active.gates,
+      softRules: active.softRules,
+      positionRules: active.positionRules,
+    };
+    const out = await ps.applyProposal(USER, proposal, 'V9.9', sid, async () => '因为龙头稀缺要放宽');
+    expect(rb.getActive(USER).version.note).toContain('龙头稀缺');
+    expect(out.version.version_label).toBe('V9.9');
   });
 });

@@ -129,24 +129,24 @@ router.post('/compose-preview', (req: Request, res: Response) => {
   }
 });
 
-// POST /api/rulebook/apply-compose { keys } — keys order = priority; switch to the composed rulebook
-router.post('/apply-compose', (req: Request, res: Response) => {
-  const parsed = z.object({ keys: z.array(z.string()).min(1) }).safeParse(req.body);
+// POST /api/rulebook/apply-compose { keys, sessionId? } — keys order = priority; switch to the composed rulebook
+router.post('/apply-compose', async (req: Request, res: Response) => {
+  const parsed = z.object({ keys: z.array(z.string()).min(1), sessionId: z.string().optional() }).safeParse(req.body);
   if (!parsed.success) return errorResponse(res, 422, 'VALIDATION_ERROR', '请选择至少一个模板');
   try {
-    const rb = svc.applyComposedTemplates(req.user!.userId, parsed.data.keys);
+    const rb = await svc.applyComposedTemplates(req.user!.userId, parsed.data.keys, parsed.data.sessionId);
     successResponse(res, rb, '已换入组合模板为当前核心原则', 201);
   } catch (e: any) {
     return errorResponse(res, 400, 'BUSINESS_CONFLICT', e.message || '换入失败');
   }
 });
 
-// POST /api/rulebook/apply-template { template } — switch active rulebook to a template (new version)
-router.post('/apply-template', (req: Request, res: Response) => {
-  const parsed = z.object({ template: z.string().min(1) }).safeParse(req.body);
+// POST /api/rulebook/apply-template { template, sessionId? } — switch active rulebook to a template (new version)
+router.post('/apply-template', async (req: Request, res: Response) => {
+  const parsed = z.object({ template: z.string().min(1), sessionId: z.string().optional() }).safeParse(req.body);
   if (!parsed.success) return errorResponse(res, 422, 'VALIDATION_ERROR', '请选择模板');
   try {
-    const rb = svc.applyTemplateAsVersion(req.user!.userId, parsed.data.template);
+    const rb = await svc.applyTemplateAsVersion(req.user!.userId, parsed.data.template, parsed.data.sessionId);
     successResponse(res, rb, '已换入模板为当前核心原则', 201);
   } catch (e: any) {
     if (e.message === 'UNKNOWN_TEMPLATE') return errorResponse(res, 422, 'VALIDATION_ERROR', '未知模板');
@@ -180,6 +180,7 @@ router.post('/propose', async (req: Request, res: Response) => {
 
 const applySchema = z.object({
   versionLabel: z.string().min(1).max(40),
+  sessionId: z.string().optional(),
   proposal: z.object({
     persona: z.string(),
     note: z.string().optional(),
@@ -189,12 +190,17 @@ const applySchema = z.object({
   }),
 });
 
-// POST /api/rulebook/apply { versionLabel, proposal } — user confirms -> create + activate
-router.post('/apply', (req: Request, res: Response) => {
+// POST /api/rulebook/apply { versionLabel, sessionId?, proposal } — user confirms -> create + activate
+router.post('/apply', async (req: Request, res: Response) => {
   const parsed = applySchema.safeParse(req.body);
   if (!parsed.success) return errorResponse(res, 422, 'VALIDATION_ERROR', parsed.error.errors[0]?.message || '参数校验失败');
   const p = parsed.data.proposal;
-  const rb = applyProposal(req.user!.userId, { persona: p.persona, note: p.note ?? '规则调整', gates: p.gates as any, softRules: p.softRules as any, positionRules: p.positionRules }, parsed.data.versionLabel);
+  const rb = await applyProposal(
+    req.user!.userId,
+    { persona: p.persona, note: p.note ?? '规则调整', gates: p.gates as any, softRules: p.softRules as any, positionRules: p.positionRules },
+    parsed.data.versionLabel,
+    parsed.data.sessionId
+  );
   successResponse(res, rb, '已采纳并升级版本', 201);
 });
 
