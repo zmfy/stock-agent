@@ -1,7 +1,7 @@
 import { getDb } from '../db';
 import { QuoteRow, StockSnapshot } from '../types';
 import { v4 as uuidv4 } from 'uuid';
-import { resolveSidecarBase, fetchFundamentals, fetchQuotes, fetchMarket, fetchName, fetchNews, fetchAllStocks } from './sidecar';
+import { resolveSidecarBase, fetchFundamentals, fetchQuotes, fetchMarket, fetchName, fetchNews, fetchAllStocks, orderedProviders } from './sidecar';
 
 // ---- hot news ----
 export function listNews(limit = 30): Array<{ title: string; summary: string; published_at: string; fetched_at: string }> {
@@ -28,17 +28,23 @@ export async function refreshNews(userId: string, limit = 20): Promise<number> {
 }
 
 // ---- background jobs: status helpers (keyed by job name) ----
-function setSync(job: string, state: string, total: number, done: number, message: string): void {
+function setSync(job: string, state: string, total: number, done: number, message: string, breakdown?: Record<string, number>): void {
+  const msg = breakdown ? `${message} __SRC__${JSON.stringify(breakdown)}` : message;
   getDb()
     .prepare(
       `INSERT INTO sync_status (job, state, total, done, message, updated_at) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
        ON CONFLICT(job) DO UPDATE SET state=excluded.state, total=excluded.total, done=excluded.done, message=excluded.message, updated_at=CURRENT_TIMESTAMP`
     )
-    .run(job, state, total, done, message);
+    .run(job, state, total, done, msg);
 }
 
-export function getSyncStatus(job = 'stock_universe'): { state: string; total: number; done: number; message: string; updated_at: string } | null {
-  return (getDb().prepare('SELECT state, total, done, message, updated_at FROM sync_status WHERE job = ?').get(job) as any) ?? null;
+export function getSyncStatus(job = 'stock_universe'): any | null {
+  const row = getDb().prepare('SELECT state, total, done, message, updated_at FROM sync_status WHERE job = ?').get(job) as any;
+  if (!row) return null;
+  let source_breakdown: Record<string, number> | null = null;
+  const m = /__SRC__(\{.*\})\s*$/.exec(row.message || '');
+  if (m) { try { source_breakdown = JSON.parse(m[1]); } catch { /* ignore */ } row.message = row.message.replace(/__SRC__\{.*\}\s*$/, '').trim(); }
+  return { ...row, source_breakdown };
 }
 
 // ---- EOD batch ingestion: pull daily quotes for the whole local universe into the cache ----
@@ -58,13 +64,17 @@ export async function ingestEod(userId: string, opts: { days?: number; codes?: s
     return;
   }
   setSync('eod', 'running', codes.length, 0, `开始拉取 ${codes.length} 只股票近 ${days} 天行情…`);
+  const order = await orderedProviders(base, 'quote');
+  const bySource: Record<string, number> = {};
   let ok = 0;
   let fail = 0;
   for (let i = 0; i < codes.length; i++) {
     try {
-      const q = await fetchQuotes(base, codes[i], days);
-      if (q && q.rows.length) {
-        cacheQuotes(q.rows, 'eod');
+      const res = await fetchQuotes(base, codes[i], days, order);
+      if (res && res.rows.length) {
+        const src = res.source ?? 'unknown';
+        cacheQuotes(res.rows, src);
+        bySource[src] = (bySource[src] ?? 0) + 1;
         ok++;
       } else fail++;
     } catch {
@@ -75,7 +85,10 @@ export async function ingestEod(userId: string, opts: { days?: number; codes?: s
     }
     await new Promise((res) => setImmediate(res));
   }
-  setSync('eod', 'done', codes.length, codes.length, `完成：成功 ${ok}、失败 ${fail}（失败的可再次「手动更新」补漏）`);
+  const denom = ok || 1;
+  const breakdown: Record<string, number> = {};
+  for (const k of Object.keys(bySource)) breakdown[k] = Math.round((bySource[k] / denom) * 100);
+  setSync('eod', 'done', codes.length, codes.length, `完成：成功 ${ok}、失败 ${fail}`, breakdown);
 }
 
 export function countStocks(): number {
