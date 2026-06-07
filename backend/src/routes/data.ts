@@ -7,6 +7,7 @@ import { QuoteRow } from '../types';
 import * as svc from '../data/service';
 import * as sources from '../data/sources-service';
 import { resolveSidecarBase, pingHealth, probe, probeList, probeOne } from '../data/sidecar';
+import { listTitleLog, getContent } from '../data/news-log';
 
 const router = Router();
 router.use(authMiddleware);
@@ -98,6 +99,18 @@ router.get('/news', (_req: Request, res: Response) => {
 router.post('/news/refresh', async (req: Request, res: Response) => {
   const n = await svc.refreshNews(req.user!.userId);
   successResponse(res, { inserted: n, news: svc.listNews() }, n ? '已采集热点新闻' : '未取到新闻（数据源不可用或未启用 AkShare 插件）');
+});
+
+// GET /api/data/news/log?limit= — title-level collection log
+router.get('/news/log', (req: Request, res: Response) => {
+  successResponse(res, listTitleLog(Number(req.query.limit) || 50));
+});
+
+// GET /api/data/news/content/:id — full content for a single collected item
+router.get('/news/content/:id', (req: Request, res: Response) => {
+  const c = getContent(req.params.id);
+  if (!c) return errorResponse(res, 404, 'NOT_FOUND', '内容已清理或不存在');
+  successResponse(res, c);
 });
 
 // ---- data source management (global: any user reads, admin writes) ----
