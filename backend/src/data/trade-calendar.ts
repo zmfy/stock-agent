@@ -1,11 +1,6 @@
 import { getDb } from '../db';
 import { resolveSidecarBase, fetchTradeDates } from './sidecar';
 
-// 北京日历日 YYYY-MM-DD
-function beijingToday(): string {
-  return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Shanghai' });
-}
-
 // 从 sidecar 拉全量 A 股交易日，覆盖写入 trade_calendar 表。返回写入条数（0=拉取失败/无源）。
 export async function syncTradeCalendar(userId: string): Promise<number> {
   const base = resolveSidecarBase(userId);
@@ -65,5 +60,3 @@ export function lastTradingDayBefore(date: string): string {
   }
   return date;
 }
-
-export { beijingToday };
