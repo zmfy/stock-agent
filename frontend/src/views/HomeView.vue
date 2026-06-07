@@ -13,7 +13,7 @@
             @click="open(s)" @mouseenter="startHover(s.id)" @mouseleave="endHover">
           <span class="kind">{{ kindIcon(s.kind) }}</span>
           <span class="stitle">{{ s.title || sessionLabel(s) }}</span>
-          <span v-if="generating.has(s.kind as any)" class="spinner sess-spin"></span>
+          <span v-if="generating.has(s.kind)" class="spinner sess-spin"></span>
           <button class="pin" :class="{ on: s.pinned === 1 }" :title="s.pinned === 1 ? '取消置顶' : '置顶'" @click.stop="togglePin(s)">📌</button>
           <button v-show="hoverDelId === s.id" class="del" title="删除会话（分析历史保留）" @click.stop="removeSession(s)">×</button>
         </li>
@@ -72,7 +72,7 @@
                 </span>
               </div>
               <div v-if="analyzing" class="analyzing">正在按你的核心原则分析 {{ active.ref_id }} …</div>
-              <div v-if="active && generating.has(active.kind as any)" class="gen-banner">
+              <div v-if="active && generating.has(active.kind)" class="gen-banner">
                 ⏳ 正在生成，可能需要一会儿。你可以先去别处，稍后回到本会话查看结果。
               </div>
               <div v-else-if="active && genErr[active.kind]" class="gen-banner err">
@@ -259,7 +259,7 @@ const analyzing = ref(false);
 const msgsEl = ref<HTMLElement | null>(null);
 const meetings = ref<{ morning: Meeting | null; evening: Meeting | null }>({ morning: null, evening: null });
 // 正在后台生成的会话种类（morning/evening/screen）——SPA 内切换不丢
-const generating = reactive(new Set<'morning' | 'evening' | 'screen'>());
+const generating = reactive(new Set<string>());
 // 后台生成失败信息，按 kind 记录
 const genErr = reactive<Record<string, string>>({});
 const screen = ref<ScreenRun | null>(null);
@@ -526,8 +526,14 @@ async function genMeeting(kind: 'morning' | 'evening') {
     return;
   }
   delete genErr[kind];
-  await openMeeting(kind); // 立即打开会话窗口（不等生成）
-  generating.add(kind);
+  generating.add(kind); // 同步置位，早于任何 await，关闭重复触发窗口
+  try {
+    await openMeeting(kind); // 立即打开会话窗口（不等生成）
+  } catch (e: any) {
+    genErr[kind] = e.response?.data?.message || '打开会话失败';
+    generating.delete(kind);
+    return;
+  }
   // 不 await：后台生成，完成后刷新 meetings.value，briefing 靠响应式自动更新
   meetingsApi
     .generate(kind)
@@ -596,8 +602,14 @@ async function runScreen() {
     return;
   }
   delete genErr['screen'];
-  await openScreen(); // 立即打开选股会话窗口（不等选股结果）
-  generating.add('screen');
+  generating.add('screen'); // 同步置位，早于任何 await，关闭重复触发窗口
+  try {
+    await openScreen(); // 立即打开选股会话窗口（不等选股结果）
+  } catch (e: any) {
+    genErr['screen'] = e.response?.data?.message || '打开会话失败';
+    generating.delete('screen');
+    return;
+  }
   // 不 await：后台选股，完成后刷新 screen.value + 历史，briefing 靠响应式自动更新
   screenApi
     .run({})
