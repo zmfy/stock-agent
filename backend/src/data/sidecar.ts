@@ -16,15 +16,21 @@ export function resolveSidecarBase(userId: string): string | null {
   return null;
 }
 
-async function getJson(url: string): Promise<any | null> {
+async function getJson(url: string, timeoutMs = 30000): Promise<any | null> {
   try {
     // bound it so a blocked/slow data source never hangs the app
-    const resp = await fetch(url, { signal: AbortSignal.timeout(30000) });
+    const resp = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
     if (!resp.ok) return null;
     return await resp.json();
   } catch {
     return null;
   }
+}
+
+export async function fetchRealtime(base: string, code: string): Promise<{ source: string | null; data: Record<string, unknown> } | null> {
+  const d = await getJson(`${base}/realtime/${code}`, 500);
+  if (!d || !d.data) return null;
+  return { source: d.source ?? null, data: d.data };
 }
 
 export async function fetchFundamentals(base: string, code: string, order?: string[]): Promise<{ source: string | null; data: Record<string, unknown> } | null> {

@@ -77,4 +77,10 @@ describe('data/sidecar client', () => {
     const one = await sc.probeOne('http://x', 'quote', 'sina');
     expect(one.key).toBe('sina'); expect(one.latencyMs).toBe(100);
   });
+
+  it('fetchRealtime 解析 {source, data}', async () => {
+    (global as any).fetch = jest.fn(() => Promise.resolve({ ok: true, json: async () => ({ source: 'sina-rt', data: { price: 1688.5, name: '贵州茅台', time: '2026-06-07 15:00:00' } }) }));
+    const r = await require('./sidecar').fetchRealtime('http://x', '600519');
+    expect(r.source).toBe('sina-rt'); expect(r.data.price).toBe(1688.5);
+  });
 });

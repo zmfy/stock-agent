@@ -101,6 +101,17 @@ describe('data/service', () => {
     expect(JSON.stringify(st.source_breakdown)).toContain('tx');
   });
 
+  it('getStockSnapshot 带 realtime 现价(best-effort)', async () => {
+    const svc = require('./service');
+    require('./sources-service').ensureSeedGlobal?.();
+    (global as any).fetch = jest.fn((u: string) =>
+      u.includes('/realtime') ? Promise.resolve({ ok: true, json: async () => ({ source: 'sina-rt', data: { price: 10.5, time: 't' } }) })
+      : Promise.resolve({ ok: true, json: async () => ({ source: null, rows: [], data: {} }) }));
+    const snap = await svc.getStockSnapshot('u1', '600519');
+    expect(snap).toHaveProperty('realtime');
+    expect(snap.realtime?.price).toBe(10.5);
+  });
+
   it('ingestEod 用 beginJob/finishJob 并在 cancel 时中止', async () => {
     const svc = require('./service');
     const db = require('../db').getDb();
