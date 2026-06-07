@@ -5,14 +5,25 @@
       <router-link to="/">返回</router-link>
     </header>
 
-    <section class="banner" :class="source.sidecarHealthy ? 'ok' : 'warn'">
-      <template v-if="source.sidecarConfigured">
-        数据源（AkShare）：{{ source.base }} —
-        <b>{{ source.sidecarHealthy ? '在线' : '离线/不可达' }}</b>
-      </template>
-      <template v-else>未启用 AkShare 数据源插件（可在「能力插件」启用）。仍可手动上传 CSV 行情。</template>
+    <section class="overview">
+      <span class="ov-item" :class="source.sidecarHealthy ? 'ok' : 'warn'">
+        <b>●</b>
+        <template v-if="source.sidecarConfigured">数据源 {{ source.sidecarHealthy ? '在线' : '离线' }}</template>
+        <template v-else>未启用数据源</template>
+      </span>
+      <span class="ov-item">股票库 {{ (jobs.stock_universe?.last_success_at || '—').slice(0, 10) }}</span>
+      <span class="ov-item">行情 {{ (jobs.eod?.last_success_at || '—').slice(0, 10) }}</span>
+      <span v-if="anySyncing" class="ov-item syncing">⟳ 同步中…</span>
+      <span v-if="!source.sidecarConfigured" class="ov-hint">可在「能力插件」启用 AkShare；仍可手动上传 CSV。</span>
     </section>
 
+    <nav class="subtabs">
+      <button :class="{ active: tab === 'source' }" @click="tab = 'source'">数据源</button>
+      <button :class="{ active: tab === 'sync' }" @click="tab = 'sync'">同步状态</button>
+      <button :class="{ active: tab === 'tools' }" @click="tab = 'tools'">工具</button>
+    </nav>
+
+    <div v-show="tab === 'source'">
     <section class="card">
       <h2>数据源管理</h2>
       <p class="hint">推荐用内置源；也可添加你自己的数据服务（同接口的 HTTP 地址）。优先级数字越小越优先；多个源会用于交叉验证。</p>
@@ -62,7 +73,9 @@
         </li>
       </ul>
     </section>
+    </div>
 
+    <div v-show="tab === 'sync'">
     <section class="card">
       <h2>股票库（本地全量 A 股）</h2>
       <p class="hint">代码 + 名称 + 拼音首字母存本地，用于自由查询的快速搜索。后台同步，可手动触发更新（增量对比增删改）。</p>
@@ -140,7 +153,9 @@
         <p>{{ openNews.content || '（无正文）' }}</p>
       </div>
     </section>
+    </div>
 
+    <div v-show="tab === 'tools'">
     <section class="card">
       <h2>上传行情 CSV（通达信导出）</h2>
       <p class="hint">支持中英文表头（代码/日期/开盘/最高/最低/收盘/成交量），日期可为 20260601 或 2026-06-01。无代码列时可在下方填写。</p>
@@ -192,6 +207,7 @@
       <p v-if="snap && snap._missing.length" class="hint">缺失字段：{{ snap._missing.join('、') }}（上传 CSV 或启用数据源后可补全）。</p>
       <p v-if="lookupMsg" class="err">{{ lookupMsg }}</p>
     </section>
+    </div>
   </div>
 </template>
 
@@ -408,6 +424,10 @@ interface JobStatus {
   source_breakdown: Record<string, number> | null;
 }
 const jobs = reactive<Record<string, JobStatus | null>>({ stock_universe: null, eod: null });
+const tab = ref<'source' | 'sync' | 'tools'>('source'); // 二级标签：数据源 / 同步状态 / 工具
+const anySyncing = computed(
+  () => jobs.stock_universe?.state === 'running' || jobs.eod?.state === 'running'
+);
 const jobLogLines = reactive<Record<string, Array<{ ts: string; level: string; message: string }>>>({ stock_universe: [], eod: [] });
 let jobTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -475,9 +495,15 @@ onMounted(async () => {
 <style scoped>
 .data { max-width: 720px; margin: 24px auto; padding: 0 16px; }
 .bar { display: flex; justify-content: space-between; align-items: baseline; }
-.banner { padding: 8px 12px; border-radius: 6px; margin-top: 12px; font-size: 13px; }
-.banner.ok { background: #f3faf3; border: 1px solid #cce8cc; }
-.banner.warn { background: #fff7e6; border: 1px solid #ffe0a3; }
+.overview { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; padding: 10px 14px; background: #f7faff; border: 1px solid #d6e4ff; border-radius: 8px; margin-top: 12px; font-size: 13px; }
+.ov-item { color: #334; }
+.ov-item.ok b { color: #389e0d; }
+.ov-item.warn b { color: #cf1322; }
+.ov-item.syncing { color: #1677ff; }
+.ov-hint { color: #888; margin-left: auto; }
+.subtabs { display: flex; gap: 6px; margin: 12px 0 4px; border-bottom: 1px solid #eee; }
+.subtabs button { border: none; background: none; padding: 8px 16px; font-size: 14px; cursor: pointer; color: #555; border-bottom: 2px solid transparent; }
+.subtabs button.active { color: #1677ff; border-bottom-color: #1677ff; font-weight: 600; }
 .card { border: 1px solid #e5e5e5; border-radius: 8px; padding: 16px; margin-top: 16px; }
 .hint { color: #777; font-size: 12px; }
 .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
