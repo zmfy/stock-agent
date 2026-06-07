@@ -165,6 +165,10 @@
         <StockPicker placeholder="代码 / 名称 / 拼音，选中即查询" @pick="onPickSnapshot" />
         <button @click="refresh" :disabled="busy">刷新数据源</button>
       </div>
+      <div v-if="snap?.realtime" class="rt">
+          实时现价：<b>{{ snap.realtime.price }}</b>
+          <span class="muted" v-if="snap.realtime.time"> @ {{ snap.realtime.time }}（{{ snap.realtime.source }}）</span>
+        </div>
       <table v-if="snap" class="snap">
         <tbody>
           <tr><th>代码 / 名称</th><td>{{ snap.code }} {{ snap.name || '' }}</td></tr>

@@ -17,6 +17,7 @@ export interface StockSnapshot {
   limit_up_count: number | null;
   limit_down_count: number | null;
   sse_ma20_slope: number | null;
+  realtime?: { price: number; time: string; source: string | null } | null;
   _missing: string[];
   sources?: {
     quote: { source: string; date: string; fetched_at: string } | null;
