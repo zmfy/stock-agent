@@ -129,7 +129,7 @@ describe('data routes', () => {
     expect(ok.status).toBe(200);
     expect(ok.body.data.state).toBe('idle');
     expect(svc.getSyncStatus('eod').cancel_requested).toBe(1);
-    expect(svc.canRun('eod')).toBe(true);
+    expect(svc.canStartJob('eod')).toBe(true);
     const bad = await request(app).post('/api/data/nope/force-stop').set(h());
     expect(bad.status).toBe(400);
   });

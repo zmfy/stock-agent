@@ -119,9 +119,6 @@ export function canStartJob(job: string): boolean {
   return true;
 }
 
-/** Alias for canStartJob (backwards-compat shorthand). */
-export const canRun = canStartJob;
-
 // ---- EOD batch ingestion: pull daily quotes for the whole local universe into the cache ----
 export async function ingestEod(userId: string, opts: { days?: number; codes?: string[]; startedBy?: string } = {}): Promise<void> {
   if (getSyncStatus('eod')?.state === 'running') return;
