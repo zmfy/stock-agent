@@ -17,6 +17,7 @@ socket.setdefaulttimeout(20)
 
 from fastapi import FastAPI
 import akshare as ak
+import tdx
 
 app = FastAPI(title="stock-agent akshare sidecar")
 
@@ -128,7 +129,10 @@ except Exception:
 
 @app.get("/stocks")
 def stocks_all():
-    """全量 A 股 code+name+拼音首字母（静态、低失效性，供本地缓存与搜索）。"""
+    """全量 A 股 code+name+拼音首字母（TDX 优先，akshare 兜底）。"""
+    lst = _timed(lambda: tdx.stocks(), 20)
+    if lst:
+        return [{"code": s["code"], "name": s["name"], "py": _py_initials(s["name"])} for s in lst]
     try:
         df = ak.stock_info_a_code_name()
         out = []
@@ -267,7 +271,9 @@ def _quote_sina(code, days):
     return [{"date": str(r.get("date")), "open": _f(r.get("open")), "high": _f(r.get("high")), "low": _f(r.get("low")), "close": _f(r.get("close")), "volume": _f(r.get("volume"))} for _, r in df.iterrows()]
 def _quote_baostock(code, days): return _bs_quote(code, days)
 
+def _quote_tdx(code, days): return tdx.bars_qfq(code, days)
 QUOTE_PROVIDERS = [
+    {"key": "tdx",      "label": "通达信",   "fn": _quote_tdx},
     {"key": "tx",       "label": "腾讯",     "fn": _quote_tx},
     {"key": "sina",     "label": "新浪",     "fn": _quote_sina},
     {"key": "em",       "label": "东方财富", "fn": _quote_em},
@@ -293,9 +299,11 @@ def _news_provider(fn_name):
         return rows or None
     return _f
 
+def _fund_tdx(code, _days=0): return tdx.finance_fundamentals(code)
 PROVIDERS = {
     "quote": QUOTE_PROVIDERS,
     "fundamentals": [
+        {"key": "tdx",      "label": "通达信",   "fn": _fund_tdx},
         {"key": "baostock", "label": "BaoStock", "fn": _fund_baostock},
         {"key": "em",       "label": "东方财富", "fn": _fund_em},
     ],
@@ -356,6 +364,9 @@ def quote(code: str, days: int = 120, order: str = ""):
 @app.get("/realtime/{code}")
 def realtime(code: str):
     code = code[-6:]
+    rt = _timed(lambda: tdx.realtime(code), 6)
+    if rt and rt.get("price"):
+        return {"source": "tdx-rt", "data": rt}
     def _fn():
         import easyquotation
         eq = easyquotation.use("sina")
@@ -364,10 +375,8 @@ def realtime(code: str):
         if not row:
             return None
         return {
-            "price": _f(row.get("now")),
-            "open": _f(row.get("open")),
-            "high": _f(row.get("high")),
-            "low": _f(row.get("low")),
+            "price": _f(row.get("now")), "open": _f(row.get("open")),
+            "high": _f(row.get("high")), "low": _f(row.get("low")),
             "prev_close": _f(row.get("close")),
             "volume": _f(row.get("volume") or row.get("turnover")),
             "name": row.get("name"),
