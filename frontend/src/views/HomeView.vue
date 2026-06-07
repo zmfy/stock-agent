@@ -262,9 +262,7 @@ const meetings = ref<{ morning: Meeting | null; evening: Meeting | null }>({ mor
 const generating = reactive(new Set<'morning' | 'evening' | 'screen'>());
 // 后台生成失败信息，按 kind 记录
 const genErr = reactive<Record<string, string>>({});
-const genning = ref<'' | 'morning' | 'evening'>('');
 const screen = ref<ScreenRun | null>(null);
-const screening = ref(false);
 const screenHistory = ref<Array<{ created_at: string; note: string; picks: Array<{ code: string; name: string | null; reason: string }> }>>([]);
 const screenHistOpen = ref(false);
 const isMobile = typeof window !== 'undefined' && window.innerWidth <= 768;
