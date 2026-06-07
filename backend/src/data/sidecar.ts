@@ -1,15 +1,19 @@
 import { getEnabledCapabilities } from '../plugins/service';
-import { primaryBase } from './sources-service';
+import { primaryBaseGlobal } from './sources-service';
 import { QuoteRow } from '../types';
 
-// Resolve the primary data source: data-source manager first, then the akshare-data plugin (back-compat).
+// Resolve the primary data source: global sources first, then the akshare-data plugin (back-compat).
+// userId may be empty string (cron context) — global primary works without a userId.
 export function resolveSidecarBase(userId: string): string | null {
-  const fromSources = primaryBase(userId);
+  const fromSources = primaryBaseGlobal();
   if (fromSources) return fromSources;
-  const caps = getEnabledCapabilities(userId);
-  const ak = caps.mcp.find((m) => m.key === 'akshare-data');
-  const url = ak?.config?.url;
-  return typeof url === 'string' && url ? url.replace(/\/+$/, '') : null;
+  if (userId) {
+    const caps = getEnabledCapabilities(userId);
+    const ak = caps.mcp.find((m) => m.key === 'akshare-data');
+    const url = ak?.config?.url;
+    if (typeof url === 'string' && url) return url.replace(/\/+$/, '');
+  }
+  return null;
 }
 
 async function getJson(url: string): Promise<any | null> {

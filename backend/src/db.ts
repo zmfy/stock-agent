@@ -375,6 +375,9 @@ function migrate(): void {
     id INTEGER PRIMARY KEY AUTOINCREMENT, job TEXT NOT NULL, ts DATETIME DEFAULT CURRENT_TIMESTAMP, level TEXT, message TEXT
   )`);
   db.exec('CREATE INDEX IF NOT EXISTS idx_sync_log_job ON sync_log (job, id)');
+  // Dedup data_sources: keep one row per base_url (idempotent)
+  const dsHas = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='data_sources'").get();
+  if (dsHas) db.exec(`DELETE FROM data_sources WHERE id NOT IN (SELECT MIN(rowid) FROM data_sources GROUP BY base_url)`);
 }
 
 // Seed a default admin account on first init so an invite-only system is reachable.

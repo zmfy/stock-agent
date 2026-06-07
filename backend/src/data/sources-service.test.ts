@@ -44,4 +44,16 @@ describe('data sources', () => {
     svc.deleteSource(A, custom.id);
     expect(svc.listSources(A)).toHaveLength(1);
   });
+
+  it('全局：任何用户看到同一套源；去重；primaryBaseGlobal 可用', () => {
+    const svc = require('./sources-service');
+    svc.ensureSeedGlobal();
+    expect(svc.listSourcesGlobal().length).toBeGreaterThan(0);
+    expect(typeof svc.primaryBaseGlobal()).toBe('string');
+    const id = svc.addSourceGlobal({ name: '自定义', base_url: 'http://custom:8000' });
+    expect(svc.listSourcesGlobal().some((s: any) => s.id === id)).toBe(true);
+    svc.updateSourceGlobal(id, { enabled: 0 });
+    svc.deleteSourceGlobal(id);
+    expect(svc.listSourcesGlobal().some((s: any) => s.id === id)).toBe(false);
+  });
 });

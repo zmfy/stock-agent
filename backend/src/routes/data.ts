@@ -100,48 +100,40 @@ router.post('/news/refresh', async (req: Request, res: Response) => {
   successResponse(res, { inserted: n, news: svc.listNews() }, n ? '已采集热点新闻' : '未取到新闻（数据源不可用或未启用 AkShare 插件）');
 });
 
-// ---- data source management ----
-// GET /api/data/sources — recommended (built-in) + custom sources, priority order
-router.get('/sources', (req: Request, res: Response) => {
-  successResponse(res, sources.listSources(req.user!.userId));
+// ---- data source management (global: any user reads, admin writes) ----
+// GET /api/data/sources — global source list (seed on first access)
+router.get('/sources', (_req: Request, res: Response) => {
+  sources.ensureSeedGlobal();
+  successResponse(res, sources.listSourcesGlobal());
 });
 
-// GET /api/data/sources/catalog — recommended sources not yet added
-router.get('/sources/catalog', (req: Request, res: Response) => {
-  successResponse(res, sources.catalog(req.user!.userId));
+// GET /api/data/sources/catalog — recommended sources not yet added globally
+router.get('/sources/catalog', (_req: Request, res: Response) => {
+  successResponse(res, sources.catalogGlobal());
 });
 
-// POST /api/data/sources { name, baseUrl, priority? }
-router.post('/sources', (req: Request, res: Response) => {
-  const parsed = z.object({ name: z.string().min(1).max(60), baseUrl: z.string().url(), priority: z.number().int().optional() }).safeParse(req.body);
+// POST /api/data/sources { name, base_url, priority? }  — admin only
+router.post('/sources', adminMiddleware, (req: Request, res: Response) => {
+  const parsed = z.object({ name: z.string().min(1).max(60), base_url: z.string().url(), priority: z.number().int().optional() }).safeParse(req.body);
   if (!parsed.success) return errorResponse(res, 422, 'VALIDATION_ERROR', '请填写名称和合法的地址(http/https)');
-  sources.addSource(req.user!.userId, parsed.data);
-  successResponse(res, null, '已添加数据源', 201);
+  const id = sources.addSourceGlobal(parsed.data);
+  successResponse(res, { id }, '已添加数据源', 201);
 });
 
-// PUT /api/data/sources/:id
-router.put('/sources/:id', (req: Request, res: Response) => {
+// PUT /api/data/sources/:id — admin only
+router.put('/sources/:id', adminMiddleware, (req: Request, res: Response) => {
   const parsed = z
-    .object({ name: z.string().optional(), baseUrl: z.string().url().optional(), enabled: z.boolean().optional(), priority: z.number().int().optional() })
+    .object({ name: z.string().optional(), base_url: z.string().url().optional(), enabled: z.number().int().optional(), priority: z.number().int().optional() })
     .safeParse(req.body);
   if (!parsed.success) return errorResponse(res, 422, 'VALIDATION_ERROR', '参数校验失败');
-  try {
-    sources.updateSource(req.user!.userId, req.params.id, parsed.data);
-    successResponse(res, null, '已更新');
-  } catch {
-    errorResponse(res, 404, 'RESOURCE_NOT_FOUND', '数据源不存在');
-  }
+  sources.updateSourceGlobal(req.params.id, parsed.data);
+  successResponse(res, null, '已更新');
 });
 
-// DELETE /api/data/sources/:id
-router.delete('/sources/:id', (req: Request, res: Response) => {
-  try {
-    sources.deleteSource(req.user!.userId, req.params.id);
-    successResponse(res, null, '已删除');
-  } catch (e: any) {
-    if (e.message === 'BUILTIN') return errorResponse(res, 400, 'BUSINESS_CONFLICT', '内置数据源不可删除（可停用）');
-    errorResponse(res, 400, 'BUSINESS_CONFLICT', '删除失败');
-  }
+// DELETE /api/data/sources/:id — admin only
+router.delete('/sources/:id', adminMiddleware, (req: Request, res: Response) => {
+  sources.deleteSourceGlobal(req.params.id);
+  successResponse(res, null, '已删除');
 });
 
 // ---- stock universe (local code+name+pinyin) ----
