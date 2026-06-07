@@ -585,17 +585,27 @@ async function openScreen() {
   if (s) await open(s);
 }
 async function runScreen() {
-  screening.value = true;
-  chatErr.value = '';
-  try {
-    screen.value = (await screenApi.run({})).data.data;
+  // 已在后台选股中：只切回选股会话，不重复触发
+  if (generating.has('screen')) {
     await openScreen();
-    await loadScreenHistory();
-  } catch (e: any) {
-    chatErr.value = e.response?.data?.message || '选股失败';
-  } finally {
-    screening.value = false;
+    return;
   }
+  delete genErr['screen'];
+  await openScreen(); // 立即打开选股会话窗口（不等选股结果）
+  generating.add('screen');
+  // 不 await：后台选股，完成后刷新 screen.value + 历史，briefing 靠响应式自动更新
+  screenApi
+    .run({})
+    .then((r) => {
+      screen.value = r.data.data;
+      return loadScreenHistory();
+    })
+    .catch((e: any) => {
+      genErr['screen'] = e.response?.data?.message || '选股失败';
+    })
+    .finally(() => {
+      generating.delete('screen');
+    });
 }
 
 async function send() {
