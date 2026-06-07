@@ -87,11 +87,11 @@ export const rulebookApi = {
   applyTemplate: (template: string) => api.post<{ data: FullRulebook }>('/rulebook/apply-template', { template }),
   composePreview: (keys: string[]) =>
     api.post<{ data: { conflict: boolean; conflictFields: string[]; systems: Array<{ letter: string; key: string; label: string; gateCount: number }>; versionLabel: string } }>('/rulebook/compose-preview', { keys }),
-  applyCompose: (keys: string[]) => api.post<{ data: FullRulebook }>('/rulebook/apply-compose', { keys }),
+  applyCompose: (keys: string[], sessionId?: string) => api.post<{ data: FullRulebook }>('/rulebook/apply-compose', { keys, sessionId }),
   propose: (body: { instruction?: string; sessionId?: string }) =>
     api.post<{ data: ProposeResult }>('/rulebook/propose', body),
-  apply: (versionLabel: string, proposal: any) =>
-    api.post<{ data: FullRulebook }>('/rulebook/apply', { versionLabel, proposal }),
+  apply: (versionLabel: string, proposal: any, sessionId?: string) =>
+    api.post<{ data: FullRulebook }>('/rulebook/apply', { versionLabel, proposal, sessionId }),
 };
 
 export interface ProposeResult {

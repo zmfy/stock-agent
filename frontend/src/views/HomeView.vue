@@ -273,14 +273,9 @@ async function applyCompose() {
   if (!orderedKeys.value.length) return;
   if (!confirm('换入为当前核心原则？会新建一个版本并设为当前使用（旧版本保留可回滚）。')) return;
   try {
-    await rulebookApi.applyCompose(orderedKeys.value);
+    await rulebookApi.applyCompose(orderedKeys.value, active.value?.id);
     activeRulebook.value = (await rulebookApi.getActive()).data.data;
-    // 换模板后清空本会话记忆，重新开始讨论
-    if (active.value) {
-      await chatApi.clearMessages(active.value.id);
-      messages.value = [];
-    }
-    tplMsg.value = '已换入组合模板，已清空本次讨论记忆，重新开始';
+    tplMsg.value = '已换入组合模板。下次进入核心原则讨论将重新开始';
     composeRes.value = null;
     tplSelected.value = [];
   } catch (e: any) {
@@ -303,8 +298,9 @@ function buildCpBriefing(rb: FullRulebook | null): string {
     .join('\n\n');
   const prio = (rb.positionRules as any)?.system_priority;
   const prioLine = Array.isArray(prio) && prio.length > 1 ? `\n系统优先级：${prio.join(' > ')}\n` : '';
+  const changed = rb.version.created_at ? `（最后更换：${rb.version.created_at.slice(0, 10)}）` : '';
   return (
-    `【当前使用的核心原则 ${rb.version.version_label}】\n` +
+    `【当前使用的核心原则 ${rb.version.version_label}${changed}】\n` +
     `人设：${rb.version.persona}\n${prioLine}\n` +
     `${blocks}\n\n` +
     `———\n你想优化哪一方面？例如：放宽/收紧某条门槛、增删条件、调整仓位或止损、修改人设。\n` +
@@ -345,7 +341,7 @@ async function applyProposal() {
   applying.value = true;
   try {
     const label = proposal.value.suggestedLabel;
-    await rulebookApi.apply(label, proposal.value.proposal);
+    await rulebookApi.apply(label, proposal.value.proposal, active.value?.id);
     proposal.value = null;
     activeRulebook.value = (await rulebookApi.getActive()).data.data;
     messages.value.push({
@@ -457,7 +453,11 @@ async function openCorePrinciple() {
     await loadSessions();
     s = sessions.value.find((x) => x.id === id);
   }
-  if (s) await open(s);
+  if (s) {
+    await chatApi.clearMessages(s.id);
+    await open(s);
+    messages.value = [];
+  }
 }
 async function loadMeetings() {
   try {

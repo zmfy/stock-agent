@@ -4,6 +4,8 @@ import { getActive, createVersion, activateVersion } from './service';
 import { getModelForRole } from '../ai/service';
 import { getProvider } from '../ai/providers';
 import { chat } from '../ai/manager';
+import { summarizeChangeReason } from './memory';
+import { getMessages } from '../chat/service';
 
 export interface ProposalPayload {
   persona: string;
@@ -207,12 +209,30 @@ export async function proposeChange(
   };
 }
 
-export function applyProposal(userId: string, proposal: ProposalPayload, versionLabel: string): FullRulebook {
+export async function applyProposal(
+  userId: string,
+  proposal: ProposalPayload,
+  versionLabel: string,
+  sessionId?: string,
+  aiCall?: (p: string) => Promise<string>
+): Promise<FullRulebook> {
   const active = getActive(userId);
+  let note = proposal.note || '规则调整';
+  if (sessionId) {
+    const discussion = getMessages(userId, sessionId)
+      .map((m: any) => `${m.role === 'user' ? '用户' : '助手'}：${m.content}`)
+      .join('\n');
+    note = await summarizeChangeReason({
+      persona: active?.version.persona || '',
+      discussion,
+      changeDesc: proposal.note || '规则调整',
+      aiCall: aiCall || ((p) => defaultAiCall(userId, p)),
+    });
+  }
   const created = createVersion(userId, {
     versionLabel,
     persona: proposal.persona || active?.version.persona || '',
-    note: proposal.note || '规则调整',
+    note,
     parentVersionId: active?.version.id ?? null,
     author: 'agent',
     gates: proposal.gates,
