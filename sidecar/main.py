@@ -6,6 +6,7 @@ reports the rest as `_missing`. AkShare call→field mappings may need tuning on
 real run; keep them isolated so one broken endpoint never sinks the whole response.
 """
 from datetime import datetime
+import time
 
 import socket
 from concurrent.futures import ThreadPoolExecutor
@@ -202,28 +203,22 @@ def _ak_fund(code: str) -> dict:
 
 
 @app.get("/fundamentals/{code}")
-def fundamentals(code: str):
+def fundamentals(code: str, order: str = ""):
     code = code[-6:]
-    out: dict = {}
-    try:
-        out["name"] = stock_name(code).get("name")
-    except Exception:
-        pass
-
-    # BaoStock primary (bounded so a blocked source never hangs the request)
-    bsd = _timed(lambda: _bs_fund(code), 10) or {}
-    for k, v in bsd.items():
-        if v is not None:
-            out[k] = v
-
-    # AkShare fallback only for fields still missing
-    if out.get("roe_ttm") is None or out.get("net_profit") is None or out.get("turnover_rate") is None:
-        akd = _timed(lambda: _ak_fund(code), 10) or {}
-        for k in ("roe_ttm", "net_profit", "turnover_rate"):
-            if out.get(k) is None and akd.get(k) is not None:
-                out[k] = akd[k]
-
-    return out
+    merged: dict = {}
+    first_source = None
+    for reg in _order_providers("fundamentals", order):
+        data = _timed(lambda r=reg: r["fn"](code, 0), 10)
+        if not isinstance(data, dict):
+            continue
+        contributed = False
+        for k, v in data.items():
+            if merged.get(k) is None and v is not None:
+                merged[k] = v
+                contributed = True
+        if first_source is None and contributed:
+            first_source = reg["key"]
+    return {"source": first_source, "data": merged}
 
 
 def _bs_quote(code: str, days: int):
@@ -252,36 +247,102 @@ def _ak_quote(code: str, days: int):
         return None
 
 
+# 每类数据的候选上游 provider。fetch(code/None, days) 返回标准化结果或 None。
+def _quote_em(code, days):   return _ak_quote(code, days)            # 东方财富 stock_zh_a_hist
+def _quote_tx(code, days):
+    df = ak.stock_zh_a_hist_tx(symbol=_mkt_prefix(code)).tail(days)
+    return [{"date": str(r.get("date")), "open": _f(r.get("open")), "high": _f(r.get("high")), "low": _f(r.get("low")), "close": _f(r.get("close")), "volume": _f(r.get("amount"))} for _, r in df.iterrows()]
+def _quote_sina(code, days):
+    df = ak.stock_zh_a_daily(symbol=_mkt_prefix(code), adjust="qfq").tail(days)
+    return [{"date": str(r.get("date")), "open": _f(r.get("open")), "high": _f(r.get("high")), "low": _f(r.get("low")), "close": _f(r.get("close")), "volume": _f(r.get("volume"))} for _, r in df.iterrows()]
+def _quote_baostock(code, days): return _bs_quote(code, days)
+
+QUOTE_PROVIDERS = [
+    {"key": "tx",       "label": "腾讯",     "fn": _quote_tx},
+    {"key": "sina",     "label": "新浪",     "fn": _quote_sina},
+    {"key": "em",       "label": "东方财富", "fn": _quote_em},
+    {"key": "baostock", "label": "BaoStock", "fn": _quote_baostock},
+]
+
+def _fund_baostock(code, days): return _bs_fund(code)
+def _fund_em(code, days):       return _ak_fund(code)
+def _sentiment_em(_code, _days):
+    return _market_sentiment_em()   # 抽出现有 /market/sentiment 主体
+def _news_provider(fn_name):
+    def _f(_code, limit):
+        f = getattr(ak, fn_name, None)
+        if not f: return None
+        df = f()
+        rows = []
+        for _, r in df.head(limit or 20).iterrows():
+            title = r.get("标题") or r.get("内容") or r.get("summary")
+            ts = r.get("发布时间") or r.get("时间") or r.get("datetime") or r.get("publish_time") or ""
+            summary = r.get("摘要") or r.get("内容") or ""
+            if title:
+                rows.append({"title": str(title), "summary": str(summary)[:200], "published_at": str(ts)})
+        return rows or None
+    return _f
+
+PROVIDERS = {
+    "quote": QUOTE_PROVIDERS,
+    "fundamentals": [
+        {"key": "baostock", "label": "BaoStock", "fn": _fund_baostock},
+        {"key": "em",       "label": "东方财富", "fn": _fund_em},
+    ],
+    "sentiment": [
+        {"key": "em", "label": "东方财富", "fn": _sentiment_em},
+    ],
+    "news": [
+        {"key": "em",   "label": "东方财富", "fn": _news_provider("stock_info_global_em")},
+        {"key": "cjzc", "label": "财经早餐", "fn": _news_provider("stock_info_cjzc_em")},
+        {"key": "cls",  "label": "财联社",   "fn": _news_provider("stock_info_global_cls")},
+    ],
+}
+
+def _order_providers(kind, order):
+    regs = PROVIDERS.get(kind, [])
+    if not order:
+        return regs
+    want = [k for k in order.split(",") if k]
+    by_key = {r["key"]: r for r in regs}
+    picked = [by_key[k] for k in want if k in by_key]
+    return picked or regs
+
+def _probe_one(reg, kind):
+    t0 = time.time()
+    try:
+        if kind in ("quote", "fundamentals"):
+            data = _timed(lambda: reg["fn"]("600519", 5), 8)
+        else:
+            data = _timed(lambda: reg["fn"](None, 5), 8)
+        ok = bool(data)
+        return {"key": reg["key"], "label": reg["label"], "reachable": ok, "latency_ms": int((time.time() - t0) * 1000) if ok else None, "error": None if ok else "空/超时"}
+    except Exception as e:
+        return {"key": reg["key"], "label": reg["label"], "reachable": False, "latency_ms": None, "error": str(e)[:120]}
+
+
+@app.get("/probe")
+def probe(kind: str = "quote"):
+    return [_probe_one(reg, kind) for reg in PROVIDERS.get(kind, [])]
+
+
 @app.get("/quote/{code}")
-def quote(code: str, days: int = 120):
+def quote(code: str, days: int = 120, order: str = ""):
     code = code[-6:]
-    rows = _timed(lambda: _bs_quote(code, days), 10)  # BaoStock primary (reliable EOD)
-    if rows:
-        return rows
-    return _timed(lambda: _ak_quote(code, days), 10) or []  # AkShare fallback
+    for reg in _order_providers("quote", order):
+        rows = _timed(lambda r=reg: r["fn"](code, days), 10)
+        if rows:
+            return {"source": reg["key"], "rows": rows}
+    return {"source": None, "rows": []}
 
 
 @app.get("/news")
-def news(limit: int = 20):
-    """热点财经快讯，best-effort across a few AkShare sources."""
-    for fn in ("stock_info_global_em", "stock_info_cjzc_em", "stock_info_global_cls"):
-        f = getattr(ak, fn, None)
-        if not f:
-            continue
-        try:
-            df = f()
-            rows = []
-            for _, r in df.head(limit).iterrows():
-                title = r.get("标题") or r.get("内容") or r.get("summary")
-                ts = r.get("发布时间") or r.get("时间") or r.get("datetime") or r.get("publish_time") or ""
-                summary = r.get("摘要") or r.get("内容") or ""
-                if title:
-                    rows.append({"title": str(title), "summary": str(summary)[:200], "published_at": str(ts)})
-            if rows:
-                return rows
-        except Exception:
-            continue
-    return []
+def news(limit: int = 20, order: str = ""):
+    for reg in _order_providers("news", order):
+        rows = _timed(lambda r=reg: r["fn"](None, limit), 10)
+        if rows:
+            return {"source": reg["key"], "rows": rows}
+    return {"source": None, "rows": []}
 
 
 @app.get("/sectors/hot")
@@ -340,8 +401,7 @@ def provider_name(code: str):
     return stock_name(code)
 
 
-@app.get("/market/sentiment")
-def market_sentiment():
+def _market_sentiment_em() -> dict | None:
     out = {"limit_up_count": None, "limit_down_count": None, "sse_ma20_slope": None}
     today = datetime.now().strftime("%Y%m%d")
     try:
@@ -360,4 +420,16 @@ def market_sentiment():
         out["sse_ma20_slope"] = round(ma_today - ma_prev, 4)
     except Exception:
         pass
+    # Return None when every field is None so probe/route treats total failure as unreachable.
+    if out["limit_up_count"] is None and out["limit_down_count"] is None and out["sse_ma20_slope"] is None:
+        return None
     return out
+
+
+@app.get("/market/sentiment")
+def market_sentiment(order: str = ""):
+    for reg in _order_providers("sentiment", order):
+        data = _timed(lambda r=reg: r["fn"](None, 0), 10)
+        if data:
+            return {"source": reg["key"], "data": data}
+    return {"source": None, "data": {}}

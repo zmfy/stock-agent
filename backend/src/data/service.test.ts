@@ -59,4 +59,21 @@ describe('data/service', () => {
     expect(svc.searchStocks('zlkj').map((r: any) => r.code)).toContain('300348'); // first candidate still works
     expect(svc.searchStocks('300348').map((r: any) => r.code)).toContain('300348'); // by code
   });
+
+  it('ingestEod 探测择优、按真实来源缓存并写占比', async () => {
+    const svc = require('./service');
+    const db = require('../db').getDb();
+    db.prepare("INSERT OR IGNORE INTO stock_names (code, name) VALUES ('600519','贵州茅台'),('000001','平安银行')").run();
+    require('./sources-service').ensureSeed?.('u1');
+    (global as any).fetch = jest.fn((url: string) => {
+      if (url.includes('/probe')) return Promise.resolve({ ok: true, json: async () => [{ key: 'tx', label: '腾讯', reachable: true, latency_ms: 100, error: null }] });
+      return Promise.resolve({ ok: true, json: async () => ({ source: 'tx', rows: [{ date: '2026-06-01', open: 1, high: 1, low: 1, close: 1, volume: 1 }] }) });
+    });
+    await svc.ingestEod('u1', { days: 5 });
+    const st = svc.getSyncStatus('eod');
+    expect(st.state).toBe('done');
+    const row = db.prepare("SELECT source FROM quote_daily WHERE code='600519' LIMIT 1").get();
+    expect(row.source).toBe('tx');
+    expect(JSON.stringify(st.source_breakdown)).toContain('tx');
+  });
 });

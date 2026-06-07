@@ -79,4 +79,11 @@ describe('data routes', () => {
     expect(res.body.data.sidecarConfigured).toBe(true); // built-in data source is seeded
     expect(res.body.data.sidecarHealthy).toBe(false);
   });
+
+  it('GET /api/data/probe 返回各 provider 状态', async () => {
+    (global as any).fetch = jest.fn(() => Promise.resolve({ ok: true, json: async () => [{ key: 'tx', label: '腾讯', reachable: true, latency_ms: 90, error: null }] }));
+    const res = await request(app).get('/api/data/probe?kind=quote').set(h());
+    expect(res.status).toBe(200);
+    expect(res.body.data[0].key).toBe('tx');
+  });
 });

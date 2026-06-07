@@ -1,7 +1,7 @@
 import { getDb } from '../db';
 import { QuoteRow, StockSnapshot } from '../types';
 import { v4 as uuidv4 } from 'uuid';
-import { resolveSidecarBase, fetchFundamentals, fetchQuotes, fetchMarket, fetchName, fetchNews, fetchAllStocks } from './sidecar';
+import { resolveSidecarBase, fetchFundamentals, fetchQuotes, fetchMarket, fetchName, fetchNews, fetchAllStocks, orderedProviders } from './sidecar';
 
 // ---- hot news ----
 export function listNews(limit = 30): Array<{ title: string; summary: string; published_at: string; fetched_at: string }> {
@@ -13,32 +13,41 @@ export function listNews(limit = 30): Array<{ title: string; summary: string; pu
 export async function refreshNews(userId: string, limit = 20): Promise<number> {
   const base = resolveSidecarBase(userId);
   if (!base) return 0;
-  const items = await fetchNews(base, limit);
-  if (!items || !items.length) return 0;
+  const order = await safeOrder(base, 'news');
+  const result = await fetchNews(base, limit, order);
+  if (!result || !result.rows.length) return 0;
+  const { source: fetchSource, rows } = result;
+  const srcVal = fetchSource ?? 'akshare';
   const db = getDb();
   const stmt = db.prepare(
-    `INSERT INTO news (id, title, summary, published_at, source, fetched_at) VALUES (?, ?, ?, ?, 'akshare', CURRENT_TIMESTAMP)
-     ON CONFLICT(title, published_at) DO UPDATE SET summary=excluded.summary, fetched_at=CURRENT_TIMESTAMP`
+    `INSERT INTO news (id, title, summary, published_at, source, fetched_at) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+     ON CONFLICT(title, published_at) DO UPDATE SET summary=excluded.summary, source=excluded.source, fetched_at=CURRENT_TIMESTAMP`
   );
-  const tx = db.transaction((rows: typeof items) => {
-    for (const n of rows) stmt.run(uuidv4(), n.title, n.summary, n.published_at);
+  const tx = db.transaction((items: typeof rows) => {
+    for (const n of items) stmt.run(uuidv4(), n.title, n.summary, n.published_at, srcVal);
   });
-  tx(items);
-  return items.length;
+  tx(rows);
+  return rows.length;
 }
 
 // ---- background jobs: status helpers (keyed by job name) ----
-function setSync(job: string, state: string, total: number, done: number, message: string): void {
+function setSync(job: string, state: string, total: number, done: number, message: string, breakdown?: Record<string, number>): void {
+  const msg = breakdown ? `${message} __SRC__${JSON.stringify(breakdown)}` : message;
   getDb()
     .prepare(
       `INSERT INTO sync_status (job, state, total, done, message, updated_at) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
        ON CONFLICT(job) DO UPDATE SET state=excluded.state, total=excluded.total, done=excluded.done, message=excluded.message, updated_at=CURRENT_TIMESTAMP`
     )
-    .run(job, state, total, done, message);
+    .run(job, state, total, done, msg);
 }
 
-export function getSyncStatus(job = 'stock_universe'): { state: string; total: number; done: number; message: string; updated_at: string } | null {
-  return (getDb().prepare('SELECT state, total, done, message, updated_at FROM sync_status WHERE job = ?').get(job) as any) ?? null;
+export function getSyncStatus(job = 'stock_universe'): any | null {
+  const row = getDb().prepare('SELECT state, total, done, message, updated_at FROM sync_status WHERE job = ?').get(job) as any;
+  if (!row) return null;
+  let source_breakdown: Record<string, number> | null = null;
+  const m = /__SRC__(\{.*\})\s*$/.exec(row.message || '');
+  if (m) { try { source_breakdown = JSON.parse(m[1]); } catch { /* ignore */ } row.message = row.message.replace(/__SRC__\{.*\}\s*$/, '').trim(); }
+  return { ...row, source_breakdown };
 }
 
 // ---- EOD batch ingestion: pull daily quotes for the whole local universe into the cache ----
@@ -58,13 +67,17 @@ export async function ingestEod(userId: string, opts: { days?: number; codes?: s
     return;
   }
   setSync('eod', 'running', codes.length, 0, `开始拉取 ${codes.length} 只股票近 ${days} 天行情…`);
+  const order = await orderedProviders(base, 'quote');
+  const bySource: Record<string, number> = {};
   let ok = 0;
   let fail = 0;
   for (let i = 0; i < codes.length; i++) {
     try {
-      const q = await fetchQuotes(base, codes[i], days);
-      if (q && q.length) {
-        cacheQuotes(q, 'eod');
+      const res = await fetchQuotes(base, codes[i], days, order);
+      if (res && res.rows.length) {
+        const src = res.source ?? 'unknown';
+        cacheQuotes(res.rows, src);
+        bySource[src] = (bySource[src] ?? 0) + 1;
         ok++;
       } else fail++;
     } catch {
@@ -75,7 +88,10 @@ export async function ingestEod(userId: string, opts: { days?: number; codes?: s
     }
     await new Promise((res) => setImmediate(res));
   }
-  setSync('eod', 'done', codes.length, codes.length, `完成：成功 ${ok}、失败 ${fail}（失败的可再次「手动更新」补漏）`);
+  const denom = ok || 1;
+  const breakdown: Record<string, number> = {};
+  for (const k of Object.keys(bySource)) breakdown[k] = Math.round((bySource[k] / denom) * 100);
+  setSync('eod', 'done', codes.length, codes.length, `完成：成功 ${ok}、失败 ${fail}`, breakdown);
 }
 
 export function countStocks(): number {
@@ -290,20 +306,34 @@ export function listCachedCodes(): string[] {
 
 // ---- refresh from sidecar (graceful) ----
 
-export async function refreshStock(userId: string, code: string): Promise<void> {
-  const base = resolveSidecarBase(userId);
-  if (!base) return;
-  const [f, q] = await Promise.all([fetchFundamentals(base, code), fetchQuotes(base, code, 120)]);
-  if (f) cacheFundamentals(code, today(), f, 'akshare');
-  if (q && q.length) cacheQuotes(q, 'akshare');
+/** Probe-ordered list with a tight timeout so a slow probe never blocks a refresh. */
+async function safeOrder(base: string, kind: string, ms = 2000): Promise<string[]> {
+  try {
+    return await Promise.race([
+      orderedProviders(base, kind),
+      new Promise<string[]>((res) => setTimeout(() => res([]), ms)),
+    ]);
+  } catch {
+    return [];
+  }
 }
 
-export async function refreshMarket(userId: string): Promise<boolean> {
+export async function refreshStock(userId: string, code: string, order?: string[]): Promise<void> {
+  const base = resolveSidecarBase(userId);
+  if (!base) return;
+  const ord = order ?? (await safeOrder(base, 'fundamentals'));
+  const [f, q] = await Promise.all([fetchFundamentals(base, code, ord), fetchQuotes(base, code, 120)]);
+  if (f) cacheFundamentals(code, today(), f.data, f.source ?? 'akshare');
+  if (q && q.rows.length) cacheQuotes(q.rows, q.source ?? 'akshare');
+}
+
+export async function refreshMarket(userId: string, order?: string[]): Promise<boolean> {
   const base = resolveSidecarBase(userId);
   if (!base) return false;
-  const m = await fetchMarket(base);
+  const ord = order ?? (await safeOrder(base, 'sentiment'));
+  const m = await fetchMarket(base, ord);
   if (!m) return false;
-  cacheMarket(today(), m, 'akshare');
+  cacheMarket(today(), m.data, m.source ?? 'akshare');
   return true;
 }
 
@@ -311,13 +341,14 @@ export async function refreshMarket(userId: string): Promise<boolean> {
 
 export async function getStockSnapshot(userId: string, code: string): Promise<StockSnapshot> {
   // If we have no quotes/fundamentals cached for this code, try a refresh (best-effort).
+  // Pass explicit empty order so on-demand snapshot path skips the probe round-trip.
   const haveQuotes = recentCloses(code, 1).length > 0;
   const haveFund = !!latestFundamentals(code);
   if (!haveQuotes || !haveFund) {
-    await refreshStock(userId, code).catch(() => {});
+    await refreshStock(userId, code, []).catch(() => {});
   }
   if (!latestMarket()) {
-    await refreshMarket(userId).catch(() => {});
+    await refreshMarket(userId, []).catch(() => {});
   }
 
   const f = latestFundamentals(code) || {};
