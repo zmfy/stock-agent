@@ -515,17 +515,24 @@ async function loadMeetings() {
   }
 }
 async function genMeeting(kind: 'morning' | 'evening') {
-  genning.value = kind;
-  chatErr.value = '';
-  try {
-    await meetingsApi.generate(kind);
-    await loadMeetings();
+  // 已在后台生成中：只切回该会话，不重复触发
+  if (generating.has(kind)) {
     await openMeeting(kind);
-  } catch (e: any) {
-    chatErr.value = e.response?.data?.message || '生成失败';
-  } finally {
-    genning.value = '';
+    return;
   }
+  delete genErr[kind];
+  await openMeeting(kind); // 立即打开会话窗口（不等生成）
+  generating.add(kind);
+  // 不 await：后台生成，完成后刷新 meetings.value，briefing 靠响应式自动更新
+  meetingsApi
+    .generate(kind)
+    .then(() => loadMeetings())
+    .catch((e: any) => {
+      genErr[kind] = e.response?.data?.message || '生成失败';
+    })
+    .finally(() => {
+      generating.delete(kind);
+    });
 }
 async function openMeeting(kind: 'morning' | 'evening') {
   let s = sessions.value.find((x) => x.kind === kind);
