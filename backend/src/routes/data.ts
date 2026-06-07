@@ -188,6 +188,12 @@ router.post('/:job/cancel', adminMiddleware, (req, res) => {
   svc.requestCancel(job); successResponse(res, { requested: true });
 });
 
+router.post('/:job/force-stop', adminMiddleware, (req, res) => {
+  const job = jobName(req); if (!job) return errorResponse(res, 400, 'BAD_JOB', '未知任务');
+  svc.forceStopJob(job);
+  successResponse(res, svc.getSyncStatus(job) ?? { state: 'idle', cancel_requested: 0 });
+});
+
 router.get('/:job/log', adminMiddleware, (req, res) => {
   const job = jobName(req); if (!job) return errorResponse(res, 400, 'BAD_JOB', '未知任务');
   successResponse(res, svc.getJobLog(job));

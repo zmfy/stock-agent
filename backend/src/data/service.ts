@@ -83,6 +83,18 @@ export function requestCancel(job: string): void {
   jobLog(job, 'warn', '收到取消请求');
 }
 
+// 管理员强制中止：无视是否有活线程，把状态打回 idle（清进度条+解锁重跑），
+// 并置 cancel_requested=1，让万一还存活的循环下一轮检查时自行退出。
+export function forceStopJob(job: string): void {
+  getDb()
+    .prepare(
+      `UPDATE sync_status SET state='idle', message='已被管理员强制中止',
+         cancel_requested=1, finished_at=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP
+       WHERE job=?`
+    )
+    .run(job);
+}
+
 export function isCancelRequested(job: string): boolean {
   const r = getDb().prepare('SELECT cancel_requested FROM sync_status WHERE job=?').get(job) as any;
   return !!(r && r.cancel_requested);
@@ -106,6 +118,9 @@ export function canStartJob(job: string): boolean {
   }
   return true;
 }
+
+/** Alias for canStartJob (backwards-compat shorthand). */
+export const canRun = canStartJob;
 
 // ---- EOD batch ingestion: pull daily quotes for the whole local universe into the cache ----
 export async function ingestEod(userId: string, opts: { days?: number; codes?: string[]; startedBy?: string } = {}): Promise<void> {

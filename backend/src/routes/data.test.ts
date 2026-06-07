@@ -119,6 +119,21 @@ describe('data routes', () => {
     expect(Array.isArray(log.body.data)).toBe(true);
   });
 
+  it('admin 强制中止把 running 重置为 idle；非 admin 403', async () => {
+    const svc = require('../data/service');
+    svc.beginJob('eod', 'tester', 10);
+    expect(svc.getSyncStatus('eod').state).toBe('running');
+    const forbidden = await request(app).post('/api/data/eod/force-stop').set(uh());
+    expect(forbidden.status).toBe(403);
+    const ok = await request(app).post('/api/data/eod/force-stop').set(h());
+    expect(ok.status).toBe(200);
+    expect(ok.body.data.state).toBe('idle');
+    expect(svc.getSyncStatus('eod').cancel_requested).toBe(1);
+    expect(svc.canRun('eod')).toBe(true);
+    const bad = await request(app).post('/api/data/nope/force-stop').set(h());
+    expect(bad.status).toBe(400);
+  });
+
   it('POST /api/data/foo/run → 400 未知任务', async () => {
     const res = await request(app).post('/api/data/foo/run').set(h());
     expect(res.status).toBe(400);
