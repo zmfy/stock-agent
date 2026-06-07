@@ -57,33 +57,64 @@
           <span v-if="p.error" class="probe-bad"> · {{ p.error }}</span>
         </li>
       </ul>
-      <p v-if="eodBreakdown" class="muted">本次来源：{{ eodBreakdown }}</p>
     </section>
 
     <section class="card">
       <h2>股票库（本地全量 A 股）</h2>
-      <p class="hint">代码 + 名称 + 拼音首字母存本地，用于自由查询的快速搜索。后台同步，可手动触发增量同步（对比增删改，不全量重拉）。</p>
+      <p class="hint">代码 + 名称 + 拼音首字母存本地，用于自由查询的快速搜索。后台同步，可手动触发更新（增量对比增删改）。</p>
       <div class="row">
-        <span>本地：<b>{{ sync.count }}</b> 只 · 状态：{{ syncStateCn }}</span>
-        <button @click="doStockSync" :disabled="sync.state === 'running'">{{ sync.state === 'running' ? '同步中…' : '重新同步（增量）' }}</button>
+        <span>最后成功：{{ jobs.stock_universe?.last_success_at || '—' }}</span>
+        <button
+          @click="doRun('stock_universe')"
+          :disabled="!canRun('stock_universe')"
+          :title="runDisabledTitle('stock_universe')"
+        >立即更新</button>
+        <button
+          v-if="isAdmin && jobs.stock_universe?.state === 'running'"
+          @click="doCancel('stock_universe')"
+        >取消</button>
+        <button v-if="isAdmin" @click="showLog('stock_universe')">查看日志</button>
       </div>
-      <div v-if="sync.state === 'running'" class="muted">{{ sync.message }}（{{ sync.done }}/{{ sync.total }}）</div>
-      <div v-else-if="sync.message" class="muted">{{ sync.message }}</div>
+      <div v-if="jobs.stock_universe?.state === 'running'" class="muted">
+        {{ jobs.stock_universe.message }}（{{ jobs.stock_universe.done }}/{{ jobs.stock_universe.total }}）
+        <div class="pbar"><i :style="{ width: jobPct('stock_universe') + '%' }"></i></div>
+      </div>
+      <div v-else-if="jobs.stock_universe?.error" class="err">{{ jobs.stock_universe.error }}</div>
+      <div v-if="jobs.stock_universe?.source_breakdown" class="muted">来源占比：{{ pct(jobs.stock_universe.source_breakdown) }}</div>
+      <div v-if="jobLogLines.stock_universe.length" class="logpanel">
+        <div v-for="(l, i) in jobLogLines.stock_universe" :key="i" :class="['logline', 'log-' + l.level]">
+          <span class="logts">{{ l.ts }}</span> <span class="loglvl">{{ l.level }}</span> {{ l.message }}
+        </div>
+      </div>
     </section>
 
     <section class="card">
       <h2>行情数据（本地）</h2>
-      <p class="hint">后台批量把全量 A 股的日线行情拉到本地缓存，分析时直接读本地、不再实时联网。每天晚上自动增量更新；漏取或没取下来的可手动补漏。</p>
+      <p class="hint">后台批量把全量 A 股的日线行情拉到本地缓存，分析时直接读本地、不再实时联网。每天晚上自动增量更新；可手动触发。</p>
       <div class="row">
-        <span>状态：{{ eodStateCn }}</span>
-        <button @click="doEod(250)" :disabled="eod.state === 'running'">首次拉取历史（约一年）</button>
-        <button @click="doEod(10)" :disabled="eod.state === 'running'">更新最近 / 补漏</button>
+        <span>最后成功：{{ jobs.eod?.last_success_at || '—' }}</span>
+        <button
+          @click="doRun('eod')"
+          :disabled="!canRun('eod')"
+          :title="runDisabledTitle('eod')"
+        >立即更新</button>
+        <button
+          v-if="isAdmin && jobs.eod?.state === 'running'"
+          @click="doCancel('eod')"
+        >取消</button>
+        <button v-if="isAdmin" @click="showLog('eod')">查看日志</button>
       </div>
-      <div v-if="eod.state === 'running'" class="muted">
-        {{ eod.message }}（{{ eod.done }}/{{ eod.total }}）
-        <div class="pbar"><i :style="{ width: eodPct + '%' }"></i></div>
+      <div v-if="jobs.eod?.state === 'running'" class="muted">
+        {{ jobs.eod.message }}（{{ jobs.eod.done }}/{{ jobs.eod.total }}）
+        <div class="pbar"><i :style="{ width: jobPct('eod') + '%' }"></i></div>
       </div>
-      <div v-else-if="eod.message" class="muted">{{ eod.message }}</div>
+      <div v-else-if="jobs.eod?.error" class="err">{{ jobs.eod.error }}</div>
+      <div v-if="jobs.eod?.source_breakdown" class="muted">来源占比：{{ pct(jobs.eod.source_breakdown) }}</div>
+      <div v-if="jobLogLines.eod.length" class="logpanel">
+        <div v-for="(l, i) in jobLogLines.eod" :key="i" :class="['logline', 'log-' + l.level]">
+          <span class="logts">{{ l.ts }}</span> <span class="loglvl">{{ l.level }}</span> {{ l.message }}
+        </div>
+      </div>
     </section>
 
     <section class="card">
@@ -153,9 +184,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onUnmounted } from 'vue';
+import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue';
 import { dataApi, type StockSnapshot, type NewsItem, type DataSource } from '../api/data';
 import StockPicker from '../components/StockPicker.vue';
+import { useAuthStore } from '../stores/auth';
+
+const authStore = useAuthStore();
+const isAdmin = computed(() => authStore.isAdmin);
 
 const source = reactive({ sidecarConfigured: false, base: null as string | null, sidecarHealthy: false });
 const file = ref<File | null>(null);
@@ -322,60 +357,89 @@ async function removeSource(s: DataSource) {
   }
 }
 
-// ---- stock universe sync ----
-const sync = reactive({ state: 'idle', total: 0, done: 0, message: '', count: 0 });
-let syncPoll: ReturnType<typeof setInterval> | null = null;
-const syncStateCn = computed(() => ({ idle: '未同步', running: '同步中', done: '已完成', error: '出错' }[sync.state] || sync.state));
-async function loadSyncStatus() {
-  try { Object.assign(sync, (await dataApi.stockSyncStatus()).data.data); } catch { /* ignore */ }
-}
-async function doStockSync() {
-  await dataApi.stockSync();
-  sync.state = 'running';
-  if (syncPoll) clearInterval(syncPoll);
-  syncPoll = setInterval(async () => {
-    await loadSyncStatus();
-    if (sync.state !== 'running' && syncPoll) { clearInterval(syncPoll); syncPoll = null; }
-  }, 1500);
-}
-// ---- EOD (local quote) ingestion ----
-const eod = reactive<{ state: string; total: number; done: number; message: string; updated_at?: string; source_breakdown?: Record<string, number> | null }>({ state: 'idle', total: 0, done: 0, message: '' });
-let eodPoll: ReturnType<typeof setInterval> | null = null;
-
 // ---- upstream probe ----
 const providers = ref<Array<{ key: string; label: string; reachable: boolean; latencyMs: number | null; error: string | null }>>([]);
 async function runProbe() { providers.value = await dataApi.probe('quote'); }
-const eodBreakdown = computed(() => {
-  const b = eod.source_breakdown; if (!b) return '';
-  return Object.entries(b).map(([k, v]) => `${k} ${v}%`).join('、');
-});
-const eodStateCn = computed(() => ({ idle: '未拉取', running: '拉取中', done: '已完成', error: '出错' }[eod.state] || eod.state));
-const eodPct = computed(() => (eod.total ? Math.round((eod.done / eod.total) * 100) : 0));
-async function loadEodStatus() {
-  try { Object.assign(eod, (await dataApi.eodStatus()).data.data); } catch { /* ignore */ }
+
+// ---- shared job governance (stock_universe + eod) ----
+interface JobStatus {
+  state: string;
+  total: number;
+  done: number;
+  message: string | null;
+  updated_at: string | null;
+  started_at: string | null;
+  finished_at: string | null;
+  last_success_at: string | null;
+  started_by: string | null;
+  error: string | null;
+  cancel_requested: boolean;
+  source_breakdown: Record<string, number> | null;
 }
-async function doEod(days: number) {
-  if (days >= 200 && !confirm(`将为本地全量 A 股拉取约一年的历史行情，可能耗时较久（数千只股票）。确定开始？`)) return;
-  await dataApi.eodIngest(days);
-  eod.state = 'running';
-  if (eodPoll) clearInterval(eodPoll);
-  eodPoll = setInterval(async () => {
-    await loadEodStatus();
-    if (eod.state !== 'running' && eodPoll) { clearInterval(eodPoll); eodPoll = null; }
-  }, 2000);
+const jobs = reactive<Record<string, JobStatus | null>>({ stock_universe: null, eod: null });
+const jobLogLines = reactive<Record<string, Array<{ ts: string; level: string; message: string }>>>({ stock_universe: [], eod: [] });
+let jobTimer: ReturnType<typeof setInterval> | null = null;
+
+async function refreshJob(job: 'stock_universe' | 'eod') {
+  try { jobs[job] = await dataApi.jobStatus(job); } catch { /* ignore */ }
 }
 
-onUnmounted(() => { if (syncPoll) clearInterval(syncPoll); if (eodPoll) clearInterval(eodPoll); });
+function pct(b: Record<string, number> | null) {
+  return b ? Object.entries(b).map(([k, v]) => `${k} ${v}%`).join('、') : '';
+}
+
+function canRun(job: 'stock_universe' | 'eod') {
+  const s = jobs[job]; if (!s) return true;
+  if (s.state === 'running') return false;
+  if (s.last_success_at) {
+    const fmt = (d: Date) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai' }).format(d);
+    if (fmt(new Date(String(s.last_success_at).replace(' ', 'T') + 'Z')) === fmt(new Date())) return false;
+  }
+  return true;
+}
+
+function runDisabledTitle(job: 'stock_universe' | 'eod') {
+  const s = jobs[job]; if (!s) return '';
+  if (s.state === 'running') return '任务正在运行中';
+  if (!canRun(job)) return '今日已成功更新';
+  return '';
+}
+
+async function doRun(job: 'stock_universe' | 'eod') {
+  try { await dataApi.runJob(job); } catch { /* 409 locked — ignore */ }
+  refreshJob(job);
+}
+
+async function doCancel(job: 'stock_universe' | 'eod') {
+  try { await dataApi.cancelJob(job); } catch { /* ignore */ }
+  refreshJob(job);
+}
+
+async function showLog(job: 'stock_universe' | 'eod') {
+  try { jobLogLines[job] = await dataApi.jobLog(job); } catch { /* ignore */ }
+}
+
+function jobPct(job: 'stock_universe' | 'eod') {
+  const s = jobs[job]; if (!s || !s.total) return 0;
+  return Math.round((s.done / s.total) * 100);
+}
+
+onBeforeUnmount(() => { if (jobTimer) clearInterval(jobTimer); });
 
 onMounted(async () => {
   await loadSource();
   await loadSources();
-  await loadSyncStatus();
-  await loadEodStatus();
+  await refreshJob('stock_universe');
+  await refreshJob('eod');
   runProbe();
   try {
     news.value = (await dataApi.getNews()).data.data;
   } catch { /* ignore */ }
+  jobTimer = setInterval(() => {
+    (['stock_universe', 'eod'] as const).forEach((j) => {
+      if (jobs[j]?.state === 'running') refreshJob(j);
+    });
+  }, 1500);
 });
 </script>
 
@@ -421,4 +485,11 @@ button:disabled { opacity: 0.5; }
 .probe-list li { padding: 3px 0; }
 .probe-ok { color: #2a8a2a; font-weight: 600; }
 .probe-bad { color: #c00; font-weight: 600; }
+.logpanel { background: #f5f5f5; border: 1px solid #ddd; border-radius: 4px; padding: 8px; margin-top: 8px; max-height: 200px; overflow-y: auto; font-family: monospace; font-size: 12px; }
+.logline { padding: 2px 0; border-bottom: 1px solid #eee; }
+.logts { color: #999; }
+.loglvl { display: inline-block; width: 44px; text-transform: uppercase; font-weight: 600; }
+.log-error .loglvl { color: #c00; }
+.log-warn .loglvl { color: #c80; }
+.log-info .loglvl { color: #2a8a2a; }
 </style>
