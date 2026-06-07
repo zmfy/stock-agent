@@ -343,6 +343,30 @@ def quote(code: str, days: int = 120, order: str = ""):
     return {"source": None, "rows": []}
 
 
+@app.get("/realtime/{code}")
+def realtime(code: str):
+    code = code[-6:]
+    def _fn():
+        import easyquotation
+        eq = easyquotation.use("sina")
+        d = eq.real([code], prefix=False) or {}
+        row = d.get(code) or {}
+        if not row:
+            return None
+        return {
+            "price": _f(row.get("now")),
+            "open": _f(row.get("open")),
+            "high": _f(row.get("high")),
+            "low": _f(row.get("low")),
+            "prev_close": _f(row.get("close")),
+            "volume": _f(row.get("volume") or row.get("turnover")),
+            "name": row.get("name"),
+            "time": (str(row.get("date", "")) + " " + str(row.get("time", ""))).strip(),
+        }
+    data = _timed(_fn, 8)
+    return {"source": "sina-rt" if data else None, "data": data or {}}
+
+
 @app.get("/news")
 def news(limit: int = 20, order: str = ""):
     for reg in _order_providers("news", order):
