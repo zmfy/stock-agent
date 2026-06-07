@@ -11,6 +11,7 @@ services:
       - REGISTRATION_MODE=invite
       - DEFAULT_ADMIN_USER=stock-agent
       - DEFAULT_ADMIN_PASSWORD=sg123456
+      - TZ=Asia/Shanghai
     volumes:
       - stock_agent_data:/app/backend/data
     depends_on:
@@ -20,6 +21,8 @@ services:
     build:
       context: ./sidecar
       dockerfile: Dockerfile
+    environment:
+      - TZ=Asia/Shanghai
     expose:
       - "8000"
     # Exposed on the compose network as http://akshare-mcp:8000 (the akshare-data plugin default).

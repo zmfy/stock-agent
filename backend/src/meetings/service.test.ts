@@ -14,6 +14,15 @@ beforeAll(() => {
   data.cacheMarket(svc.today(), { limit_up_count: 73, limit_down_count: 11, sse_ma20_slope: -7.6 }, 'test');
 });
 
+describe('today() uses Beijing calendar day', () => {
+  afterEach(() => jest.useRealTimers());
+  it('returns the Beijing date even when UTC is still the previous day', () => {
+    // 2026-06-07T17:00:00Z = 2026-06-08 01:00 北京 → today() 应为 06-08（而非 UTC 的 06-07）
+    jest.useFakeTimers().setSystemTime(new Date('2026-06-07T17:00:00Z'));
+    expect(svc.today()).toBe('2026-06-08');
+  });
+});
+
 describe('meetings service', () => {
   it('generateMorning is a multi-agent discussion; core synthesis prompt carries market + rulebook', async () => {
     const roles: string[] = [];

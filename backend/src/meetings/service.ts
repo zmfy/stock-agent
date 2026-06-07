@@ -13,7 +13,8 @@ import { recordCollected, listTitleLog, getContent, markAdopted } from '../data/
 export type MeetingKind = 'morning' | 'evening';
 
 export function today(): string {
-  return new Date().toISOString().slice(0, 10);
+  // 北京日历日 YYYY-MM-DD（DB 仍存 UTC；此处用于「当天会议」键，需按北京日界）
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Shanghai' });
 }
 
 function marketText(): { text: string; data: any } {
