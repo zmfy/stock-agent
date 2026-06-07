@@ -203,28 +203,13 @@ def _ak_fund(code: str) -> dict:
 
 
 @app.get("/fundamentals/{code}")
-def fundamentals(code: str):
+def fundamentals(code: str, order: str = ""):
     code = code[-6:]
-    out: dict = {}
-    try:
-        out["name"] = stock_name(code).get("name")
-    except Exception:
-        pass
-
-    # BaoStock primary (bounded so a blocked source never hangs the request)
-    bsd = _timed(lambda: _bs_fund(code), 10) or {}
-    for k, v in bsd.items():
-        if v is not None:
-            out[k] = v
-
-    # AkShare fallback only for fields still missing
-    if out.get("roe_ttm") is None or out.get("net_profit") is None or out.get("turnover_rate") is None:
-        akd = _timed(lambda: _ak_fund(code), 10) or {}
-        for k in ("roe_ttm", "net_profit", "turnover_rate"):
-            if out.get(k) is None and akd.get(k) is not None:
-                out[k] = akd[k]
-
-    return out
+    for reg in _order_providers("fundamentals", order):
+        data = _timed(lambda r=reg: r["fn"](code, 0), 10)
+        if data:
+            return {"source": reg["key"], "data": data}
+    return {"source": None, "data": {}}
 
 
 def _bs_quote(code: str, days: int):
@@ -270,7 +255,40 @@ QUOTE_PROVIDERS = [
     {"key": "baostock", "label": "BaoStock", "fn": _quote_baostock},
 ]
 
-PROVIDERS = {"quote": QUOTE_PROVIDERS}  # fundamentals/sentiment/news 在后续任务加入
+def _fund_baostock(code, days): return _bs_fund(code)
+def _fund_em(code, days):       return _ak_fund(code)
+def _sentiment_em(_code, _days):
+    return _market_sentiment_em()   # 抽出现有 /market/sentiment 主体
+def _news_provider(fn_name):
+    def _f(_code, limit):
+        f = getattr(ak, fn_name, None)
+        if not f: return None
+        df = f()
+        rows = []
+        for _, r in df.head(limit or 20).iterrows():
+            title = r.get("标题") or r.get("内容") or r.get("summary")
+            ts = r.get("发布时间") or r.get("时间") or r.get("datetime") or r.get("publish_time") or ""
+            summary = r.get("摘要") or r.get("内容") or ""
+            if title:
+                rows.append({"title": str(title), "summary": str(summary)[:200], "published_at": str(ts)})
+        return rows or None
+    return _f
+
+PROVIDERS = {
+    "quote": QUOTE_PROVIDERS,
+    "fundamentals": [
+        {"key": "baostock", "label": "BaoStock", "fn": _fund_baostock},
+        {"key": "em",       "label": "东方财富", "fn": _fund_em},
+    ],
+    "sentiment": [
+        {"key": "em", "label": "东方财富", "fn": _sentiment_em},
+    ],
+    "news": [
+        {"key": "em",   "label": "东方财富", "fn": _news_provider("stock_info_global_em")},
+        {"key": "cjzc", "label": "财经早餐", "fn": _news_provider("stock_info_cjzc_em")},
+        {"key": "cls",  "label": "财联社",   "fn": _news_provider("stock_info_global_cls")},
+    ],
+}
 
 def _order_providers(kind, order):
     regs = PROVIDERS.get(kind, [])
@@ -310,26 +328,12 @@ def quote(code: str, days: int = 120, order: str = ""):
 
 
 @app.get("/news")
-def news(limit: int = 20):
-    """热点财经快讯，best-effort across a few AkShare sources."""
-    for fn in ("stock_info_global_em", "stock_info_cjzc_em", "stock_info_global_cls"):
-        f = getattr(ak, fn, None)
-        if not f:
-            continue
-        try:
-            df = f()
-            rows = []
-            for _, r in df.head(limit).iterrows():
-                title = r.get("标题") or r.get("内容") or r.get("summary")
-                ts = r.get("发布时间") or r.get("时间") or r.get("datetime") or r.get("publish_time") or ""
-                summary = r.get("摘要") or r.get("内容") or ""
-                if title:
-                    rows.append({"title": str(title), "summary": str(summary)[:200], "published_at": str(ts)})
-            if rows:
-                return rows
-        except Exception:
-            continue
-    return []
+def news(limit: int = 20, order: str = ""):
+    for reg in _order_providers("news", order):
+        rows = _timed(lambda r=reg: r["fn"](None, limit), 10)
+        if rows:
+            return {"source": reg["key"], "rows": rows}
+    return {"source": None, "rows": []}
 
 
 @app.get("/sectors/hot")
@@ -388,8 +392,7 @@ def provider_name(code: str):
     return stock_name(code)
 
 
-@app.get("/market/sentiment")
-def market_sentiment():
+def _market_sentiment_em() -> dict:
     out = {"limit_up_count": None, "limit_down_count": None, "sse_ma20_slope": None}
     today = datetime.now().strftime("%Y%m%d")
     try:
@@ -409,3 +412,12 @@ def market_sentiment():
     except Exception:
         pass
     return out
+
+
+@app.get("/market/sentiment")
+def market_sentiment(order: str = ""):
+    for reg in _order_providers("sentiment", order):
+        data = _timed(lambda r=reg: r["fn"](None, 0), 10)
+        if data:
+            return {"source": reg["key"], "data": data}
+    return {"source": None, "data": {}}
