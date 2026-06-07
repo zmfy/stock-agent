@@ -91,10 +91,11 @@
                     </div>
                   </div>
                   <div class="screen-results">
-                    <div v-for="r in screen.results" :key="r.code" class="srow" @click="openStockCode(r.code)">
-                      <span class="badge2" :class="r.aPass ? 'a' : r.bPass ? 'b' : 'no'">{{ r.aPass ? 'A' : r.bPass ? 'B' : '—' }}</span>
+                    <div v-for="r in screenPicks" :key="r.code" class="srow" @click="openStockCode(r.code)">
+                      <span class="badge2" :class="r.aPass ? 'a' : 'b'">{{ r.aPass ? 'A' : 'B' }}</span>
                       {{ r.name || r.code }} <span class="muted">{{ r.code }} · {{ r.reason }}</span>
                     </div>
+                    <div v-if="!screenPicks.length" class="muted">本次无入选个股。</div>
                   </div>
                 </div>
               </template>
@@ -264,6 +265,8 @@ const generating = reactive(new Set<string>());
 // 后台生成失败信息，按 kind 记录
 const genErr = reactive<Record<string, string>>({});
 const screen = ref<ScreenRun | null>(null);
+// 选股讨论只展示入选（A/B 通过）个股，未入选不显示
+const screenPicks = computed(() => (screen.value?.results || []).filter((r) => r.aPass || r.bPass));
 const screenHistory = ref<Array<{ created_at: string; note: string; picks: Array<{ code: string; name: string | null; reason: string }> }>>([]);
 const screenHistOpen = ref(false);
 const isMobile = typeof window !== 'undefined' && window.innerWidth <= 768;
@@ -842,7 +845,7 @@ onMounted(async () => {
 .composer button:hover:not(:disabled) { background: var(--accent-600); }
 .composer button:disabled { opacity: 0.5; cursor: not-allowed; }
 .err { color: var(--danger); }
-.adopted-news-box { background: #f3faf3; border: 1px solid #cce8cc; border-radius: 8px; padding: 8px 12px; margin: 6px 0; flex: 0 0 auto; }
+.adopted-news-box { background: #f3faf3; border: 1px solid #cce8cc; border-radius: 8px; padding: 8px 12px; margin: 6px 0; flex: 0 0 auto; max-height: 30vh; overflow-y: auto; }
 .an-head { font-size: 12px; font-weight: 600; color: #2a8a2a; margin-bottom: 4px; }
 .an-list { list-style: none; padding: 0; margin: 0; }
 .an-list li { padding: 3px 0; font-size: 13px; }
@@ -851,7 +854,7 @@ onMounted(async () => {
 .an-content { margin-top: 8px; border-top: 1px dashed #b7d7b7; padding-top: 8px; }
 .an-content-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: 13px; margin-bottom: 4px; }
 .an-content p { font-size: 12px; line-height: 1.65; white-space: pre-wrap; margin: 0; color: #444; }
-.screen-box { background: #f7faff; border: 1px solid #d6e4ff; border-radius: 8px; padding: 8px 12px; margin: 6px 0; flex: 0 0 auto; }
+.screen-box { background: #f7faff; border: 1px solid #d6e4ff; border-radius: 8px; padding: 8px 12px; margin: 6px 0; flex: 0 0 auto; max-height: 40vh; overflow-y: auto; }
 .screen-results { margin-top: 6px; }
 .screen-hist { margin: 6px 0; border-top: 1px dashed #d6e4ff; padding-top: 6px; max-height: 260px; overflow-y: auto; }
 .sh-row { margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid #eef2fa; }
