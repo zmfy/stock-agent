@@ -12,7 +12,7 @@ describe('data/sidecar client', () => {
   it('parses fundamentals JSON', async () => {
     (global as any).fetch = jest.fn(() => Promise.resolve({ ok: true, json: async () => ({ roe_ttm: 12.3, pe: 20 }) }));
     const f = await fetchFundamentals('http://x', '600519');
-    expect(f.roe_ttm).toBe(12.3);
+    expect(f.data.roe_ttm).toBe(12.3);
   });
 
   it('maps quote rows and coerces numbers', async () => {
@@ -54,5 +54,16 @@ describe('data/sidecar client', () => {
     expect(q.source).toBe('tx');
     expect(q.rows[0].close).toBe(10.5);
     expect(q.rows[0].code).toBe('600519');
+  });
+
+  it('fetchMarket/fetchNews/fetchFundamentals 解析 {source, data/rows}', async () => {
+    const sc = require('./sidecar');
+    (global as any).fetch = jest.fn((u: string) => Promise.resolve({ ok: true, json: async () =>
+      u.includes('/news') ? { source: 'em', rows: [{ title: 'x', summary: '', published_at: '' }] }
+      : u.includes('/market') ? { source: 'em', data: { limit_up_count: 5, limit_down_count: 1, sse_ma20_slope: 0.1 } }
+      : { source: 'baostock', data: { roe_ttm: 12 } } }));
+    expect((await sc.fetchMarket('http://x')).source).toBe('em');
+    expect((await sc.fetchNews('http://x', 3)).source).toBe('em');
+    expect((await sc.fetchFundamentals('http://x', '600519')).source).toBe('baostock');
   });
 });

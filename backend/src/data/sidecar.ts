@@ -23,8 +23,11 @@ async function getJson(url: string): Promise<any | null> {
   }
 }
 
-export async function fetchFundamentals(base: string, code: string): Promise<Record<string, unknown> | null> {
-  return getJson(`${base}/fundamentals/${code}`);
+export async function fetchFundamentals(base: string, code: string, order?: string[]): Promise<{ source: string | null; data: Record<string, unknown> } | null> {
+  const d = await getJson(`${base}/fundamentals/${code}${order && order.length ? `?order=${order.join(',')}` : ''}`);
+  const data = d?.data ?? (d && !('source' in d) ? d : null);   // 兼容旧裸对象
+  if (!data) return null;
+  return { source: d?.source ?? null, data };
 }
 
 export interface ProbeResult { key: string; label: string; reachable: boolean; latencyMs: number | null; error: string | null }
@@ -59,22 +62,18 @@ export async function fetchQuotes(base: string, code: string, days = 120, order?
   };
 }
 
-export async function fetchMarket(base: string): Promise<{ limit_up_count: number | null; limit_down_count: number | null; sse_ma20_slope: number | null } | null> {
-  const data = await getJson(`${base}/market/sentiment`);
+export async function fetchMarket(base: string, order?: string[]): Promise<{ source: string | null; data: { limit_up_count: number | null; limit_down_count: number | null; sse_ma20_slope: number | null } } | null> {
+  const d = await getJson(`${base}/market/sentiment${order && order.length ? `?order=${order.join(',')}` : ''}`);
+  const data = d?.data ?? (d && !('source' in d) ? d : null);   // 兼容旧裸对象
   if (!data) return null;
-  return {
-    limit_up_count: num(data.limit_up_count),
-    limit_down_count: num(data.limit_down_count),
-    sse_ma20_slope: num(data.sse_ma20_slope),
-  };
+  return { source: d?.source ?? null, data: { limit_up_count: num(data.limit_up_count), limit_down_count: num(data.limit_down_count), sse_ma20_slope: num(data.sse_ma20_slope) } };
 }
 
-export async function fetchNews(base: string, limit = 20): Promise<Array<{ title: string; summary: string; published_at: string }> | null> {
-  const data = await getJson(`${base}/news?limit=${limit}`);
-  if (!Array.isArray(data)) return null;
-  return data
-    .map((n: any) => ({ title: String(n.title ?? ''), summary: String(n.summary ?? ''), published_at: String(n.published_at ?? '') }))
-    .filter((n) => n.title);
+export async function fetchNews(base: string, limit = 20, order?: string[]): Promise<{ source: string | null; rows: Array<{ title: string; summary: string; published_at: string }> } | null> {
+  const d = await getJson(`${base}/news?limit=${limit}${order && order.length ? `&order=${order.join(',')}` : ''}`);
+  const arr = Array.isArray(d) ? d : d?.rows;
+  if (!Array.isArray(arr)) return null;
+  return { source: Array.isArray(d) ? null : (d?.source ?? null), rows: arr.map((n: any) => ({ title: String(n.title ?? ''), summary: String(n.summary ?? ''), published_at: String(n.published_at ?? '') })).filter((n) => n.title) };
 }
 
 export async function fetchAllStocks(base: string): Promise<Array<{ code: string; name: string; py: string }> | null> {

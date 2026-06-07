@@ -13,18 +13,20 @@ export function listNews(limit = 30): Array<{ title: string; summary: string; pu
 export async function refreshNews(userId: string, limit = 20): Promise<number> {
   const base = resolveSidecarBase(userId);
   if (!base) return 0;
-  const items = await fetchNews(base, limit);
-  if (!items || !items.length) return 0;
+  const result = await fetchNews(base, limit);
+  if (!result || !result.rows.length) return 0;
+  const { source: fetchSource, rows } = result;
+  const srcVal = fetchSource ?? 'akshare';
   const db = getDb();
   const stmt = db.prepare(
-    `INSERT INTO news (id, title, summary, published_at, source, fetched_at) VALUES (?, ?, ?, ?, 'akshare', CURRENT_TIMESTAMP)
-     ON CONFLICT(title, published_at) DO UPDATE SET summary=excluded.summary, fetched_at=CURRENT_TIMESTAMP`
+    `INSERT INTO news (id, title, summary, published_at, source, fetched_at) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+     ON CONFLICT(title, published_at) DO UPDATE SET summary=excluded.summary, source=excluded.source, fetched_at=CURRENT_TIMESTAMP`
   );
-  const tx = db.transaction((rows: typeof items) => {
-    for (const n of rows) stmt.run(uuidv4(), n.title, n.summary, n.published_at);
+  const tx = db.transaction((items: typeof rows) => {
+    for (const n of items) stmt.run(uuidv4(), n.title, n.summary, n.published_at, srcVal);
   });
-  tx(items);
-  return items.length;
+  tx(rows);
+  return rows.length;
 }
 
 // ---- background jobs: status helpers (keyed by job name) ----
@@ -307,8 +309,8 @@ export async function refreshStock(userId: string, code: string): Promise<void> 
   const base = resolveSidecarBase(userId);
   if (!base) return;
   const [f, q] = await Promise.all([fetchFundamentals(base, code), fetchQuotes(base, code, 120)]);
-  if (f) cacheFundamentals(code, today(), f, 'akshare');
-  if (q && q.rows.length) cacheQuotes(q.rows, 'akshare');
+  if (f) cacheFundamentals(code, today(), f.data, f.source ?? 'akshare');
+  if (q && q.rows.length) cacheQuotes(q.rows, q.source ?? 'akshare');
 }
 
 export async function refreshMarket(userId: string): Promise<boolean> {
@@ -316,7 +318,7 @@ export async function refreshMarket(userId: string): Promise<boolean> {
   if (!base) return false;
   const m = await fetchMarket(base);
   if (!m) return false;
-  cacheMarket(today(), m, 'akshare');
+  cacheMarket(today(), m.data, m.source ?? 'akshare');
   return true;
 }
 
