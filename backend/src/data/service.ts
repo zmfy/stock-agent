@@ -13,7 +13,8 @@ export function listNews(limit = 30): Array<{ title: string; summary: string; pu
 export async function refreshNews(userId: string, limit = 20): Promise<number> {
   const base = resolveSidecarBase(userId);
   if (!base) return 0;
-  const result = await fetchNews(base, limit);
+  const order = await safeOrder(base, 'news');
+  const result = await fetchNews(base, limit, order);
   if (!result || !result.rows.length) return 0;
   const { source: fetchSource, rows } = result;
   const srcVal = fetchSource ?? 'akshare';
@@ -305,18 +306,32 @@ export function listCachedCodes(): string[] {
 
 // ---- refresh from sidecar (graceful) ----
 
-export async function refreshStock(userId: string, code: string): Promise<void> {
+/** Probe-ordered list with a tight timeout so a slow probe never blocks a refresh. */
+async function safeOrder(base: string, kind: string, ms = 2000): Promise<string[]> {
+  try {
+    return await Promise.race([
+      orderedProviders(base, kind),
+      new Promise<string[]>((res) => setTimeout(() => res([]), ms)),
+    ]);
+  } catch {
+    return [];
+  }
+}
+
+export async function refreshStock(userId: string, code: string, order?: string[]): Promise<void> {
   const base = resolveSidecarBase(userId);
   if (!base) return;
-  const [f, q] = await Promise.all([fetchFundamentals(base, code), fetchQuotes(base, code, 120)]);
+  const ord = order ?? (await safeOrder(base, 'fundamentals'));
+  const [f, q] = await Promise.all([fetchFundamentals(base, code, ord), fetchQuotes(base, code, 120)]);
   if (f) cacheFundamentals(code, today(), f.data, f.source ?? 'akshare');
   if (q && q.rows.length) cacheQuotes(q.rows, q.source ?? 'akshare');
 }
 
-export async function refreshMarket(userId: string): Promise<boolean> {
+export async function refreshMarket(userId: string, order?: string[]): Promise<boolean> {
   const base = resolveSidecarBase(userId);
   if (!base) return false;
-  const m = await fetchMarket(base);
+  const ord = order ?? (await safeOrder(base, 'sentiment'));
+  const m = await fetchMarket(base, ord);
   if (!m) return false;
   cacheMarket(today(), m.data, m.source ?? 'akshare');
   return true;
@@ -326,13 +341,14 @@ export async function refreshMarket(userId: string): Promise<boolean> {
 
 export async function getStockSnapshot(userId: string, code: string): Promise<StockSnapshot> {
   // If we have no quotes/fundamentals cached for this code, try a refresh (best-effort).
+  // Pass explicit empty order so on-demand snapshot path skips the probe round-trip.
   const haveQuotes = recentCloses(code, 1).length > 0;
   const haveFund = !!latestFundamentals(code);
   if (!haveQuotes || !haveFund) {
-    await refreshStock(userId, code).catch(() => {});
+    await refreshStock(userId, code, []).catch(() => {});
   }
   if (!latestMarket()) {
-    await refreshMarket(userId).catch(() => {});
+    await refreshMarket(userId, []).catch(() => {});
   }
 
   const f = latestFundamentals(code) || {};

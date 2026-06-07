@@ -205,11 +205,20 @@ def _ak_fund(code: str) -> dict:
 @app.get("/fundamentals/{code}")
 def fundamentals(code: str, order: str = ""):
     code = code[-6:]
+    merged: dict = {}
+    first_source = None
     for reg in _order_providers("fundamentals", order):
         data = _timed(lambda r=reg: r["fn"](code, 0), 10)
-        if data:
-            return {"source": reg["key"], "data": data}
-    return {"source": None, "data": {}}
+        if not isinstance(data, dict):
+            continue
+        contributed = False
+        for k, v in data.items():
+            if merged.get(k) is None and v is not None:
+                merged[k] = v
+                contributed = True
+        if first_source is None and contributed:
+            first_source = reg["key"]
+    return {"source": first_source, "data": merged}
 
 
 def _bs_quote(code: str, days: int):
@@ -392,7 +401,7 @@ def provider_name(code: str):
     return stock_name(code)
 
 
-def _market_sentiment_em() -> dict:
+def _market_sentiment_em() -> dict | None:
     out = {"limit_up_count": None, "limit_down_count": None, "sse_ma20_slope": None}
     today = datetime.now().strftime("%Y%m%d")
     try:
@@ -411,6 +420,9 @@ def _market_sentiment_em() -> dict:
         out["sse_ma20_slope"] = round(ma_today - ma_prev, 4)
     except Exception:
         pass
+    # Return None when every field is None so probe/route treats total failure as unreachable.
+    if out["limit_up_count"] is None and out["limit_down_count"] is None and out["sse_ma20_slope"] is None:
+        return None
     return out
 
 
