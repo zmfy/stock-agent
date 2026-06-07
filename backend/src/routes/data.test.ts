@@ -11,11 +11,22 @@ const { parseQuotesCsv } = require('./data');
 const app = createApp();
 
 let tok = '';
+let userTok = '';
 beforeAll(async () => {
   const login = await request(app).post('/api/auth/login').send({ username: 'stock-agent', password: 'sg123456' });
   tok = login.body.data.accessToken;
+
+  // Create a non-admin (role:'user') account via invite flow
+  const invite = await request(app)
+    .post('/api/settings/users/invite')
+    .set('Authorization', `Bearer ${tok}`);
+  const reg = await request(app)
+    .post('/api/auth/register')
+    .send({ username: 'plainuser', password: 'secret123', inviteCode: invite.body.data.code, agreed: true });
+  userTok = reg.body.data.accessToken;
 });
 const h = () => ({ Authorization: `Bearer ${tok}` });
+const uh = () => ({ Authorization: `Bearer ${userTok}` });
 
 describe('parseQuotesCsv', () => {
   it('parses English headers', () => {
@@ -111,5 +122,43 @@ describe('data routes', () => {
   it('POST /api/data/foo/run → 400 未知任务', async () => {
     const res = await request(app).post('/api/data/foo/run').set(h());
     expect(res.status).toBe(400);
+  });
+
+  it('非管理员访问 eod/cancel 和 eod/log 返回 403', async () => {
+    const cancel = await request(app).post('/api/data/eod/cancel').set(uh());
+    expect(cancel.status).toBe(403);
+    const log = await request(app).get('/api/data/eod/log').set(uh());
+    expect(log.status).toBe(403);
+  });
+
+  it('数据源增删改查写入轮转：POST → GET → PUT → DELETE', async () => {
+    // POST /api/data/sources — admin only
+    const add = await request(app)
+      .post('/api/data/sources')
+      .set(h())
+      .send({ name: '测试源', base_url: 'http://t:8000' });
+    expect(add.status).toBeLessThan(300); // 200 or 201
+    const addedId: string = add.body.data.id;
+    expect(addedId).toBeTruthy();
+
+    // GET /api/data/sources — lists the new source
+    const list = await request(app).get('/api/data/sources').set(h());
+    expect(list.status).toBe(200);
+    expect(list.body.data.some((s: { id: string }) => s.id === addedId)).toBe(true);
+
+    // PUT /api/data/sources/:id — disable it (enabled: 0)
+    const upd = await request(app)
+      .put(`/api/data/sources/${addedId}`)
+      .set(h())
+      .send({ enabled: 0 });
+    expect(upd.status).toBe(200);
+
+    // DELETE /api/data/sources/:id
+    const del = await request(app).delete(`/api/data/sources/${addedId}`).set(h());
+    expect(del.status).toBe(200);
+
+    // Confirm it's gone
+    const list2 = await request(app).get('/api/data/sources').set(h());
+    expect(list2.body.data.some((s: { id: string }) => s.id === addedId)).toBe(false);
   });
 });

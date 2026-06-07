@@ -340,7 +340,7 @@ async function addSource() {
   } finally { busy.value = false; }
 }
 async function toggleSource(s: DataSource) {
-  await dataApi.updateSource(s.id, { enabled: s.enabled !== 1 });
+  await dataApi.updateSource(s.id, { enabled: s.enabled === 1 ? 0 : 1 });
   await loadSources(); await loadSource();
 }
 async function setPriority(s: DataSource, ev: Event) {
@@ -373,7 +373,7 @@ interface JobStatus {
   last_success_at: string | null;
   started_by: string | null;
   error: string | null;
-  cancel_requested: boolean;
+  cancel_requested: number;
   source_breakdown: Record<string, number> | null;
 }
 const jobs = reactive<Record<string, JobStatus | null>>({ stock_universe: null, eod: null });

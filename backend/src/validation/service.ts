@@ -1,6 +1,6 @@
 import { getActive } from '../rulebook/service';
 import { Gate, StockSnapshot } from '../types';
-import { secondaryBases } from '../data/sources-service';
+import { secondaryBasesGlobal } from '../data/sources-service';
 import { fetchQuotes } from '../data/sidecar';
 
 export interface ValidationCheck {
@@ -66,7 +66,7 @@ export async function validateStock(userId: string, snapshot: StockSnapshot): Pr
 
   // cross-source: live-compare the primary close against each secondary data source
   let crossMismatch = false;
-  const secs = secondaryBases(userId);
+  const secs = secondaryBasesGlobal();
   if (secs.length && snapshot.close !== null && snapshot.close !== undefined) {
     const diffs: string[] = [];
     for (const base of secs) {
