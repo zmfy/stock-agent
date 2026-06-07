@@ -5,11 +5,17 @@
       <router-link to="/">返回</router-link>
     </header>
 
+    <nav class="subtabs">
+      <button :class="{ active: tab === 'models' }" @click="tab = 'models'">模型配置</button>
+      <button :class="{ active: tab === 'tasks' }" @click="tab = 'tasks'">任务分工</button>
+    </nav>
+
     <p class="hint">
       去对应 AI 公司申请 API Key，回到这里配置并<b>启用多个模型</b>，再在「任务分工」里把不同任务交给不同模型
       （数据类用快/便宜的，分析类用强的），或让 agent 自动挑。Key 加密存储、只属于你。
     </p>
 
+    <div v-show="tab === 'models'">
     <!-- 配置提供商 -->
     <section class="card">
       <h2>配置提供商</h2>
@@ -63,7 +69,9 @@
       </table>
       <p class="muted">勾选「启用」的模型才会进入分工池。停用不删除配置。</p>
     </section>
+    </div>
 
+    <div v-show="tab === 'tasks'">
     <!-- 任务分工 -->
     <section class="card" v-if="configs.length">
       <div class="card-head">
@@ -92,6 +100,10 @@
       </table>
       <p v-if="roleMsg" :class="roleOk ? 'ok-msg' : 'err'">{{ roleMsg }}</p>
     </section>
+    <section v-else class="card">
+      <p class="hint">请先在「模型配置」里添加并启用至少一个模型，再来这里把任务分配给不同模型。</p>
+    </section>
+    </div>
   </div>
 </template>
 
@@ -190,6 +202,7 @@ async function remove(provider: string) {
   await reload();
 }
 
+const tab = ref<'models' | 'tasks'>('models');
 const assigning = ref(false);
 async function autoAssign() {
   assigning.value = true;
@@ -247,7 +260,7 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.ai { max-width: 760px; margin: 24px auto; padding: 0 16px; }
+.ai { max-width: 960px; margin: 0; padding: 0 16px; }
 .bar { display: flex; justify-content: space-between; align-items: baseline; }
 .hint { color: #777; font-size: 13px; }
 .card { border: 1px solid #e5e5e5; border-radius: 8px; padding: 16px; margin-top: 16px; }

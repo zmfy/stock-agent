@@ -2,7 +2,7 @@
   <div class="mh">
     <header class="bar"><h1>早会 / 晚会历史</h1></header>
     <p v-if="!list.length" class="muted">还没有早会/晚会记录。可在主页左栏「生成早会/晚会」，或等每天 8:00 / 16:45 自动生成。</p>
-    <div v-for="m in list" :key="m.id" class="item">
+    <section v-for="m in list" :key="m.id" class="card">
       <div class="head" @click="toggle(m.id)">
         <span class="tag" :class="m.kind">{{ m.kind === 'morning' ? '早会' : '晚会' }}</span>
         <span class="date">{{ m.date }}</span>
@@ -10,7 +10,7 @@
         <span class="chev">{{ open[m.id] ? '▾' : '▸' }}</span>
       </div>
       <pre v-if="open[m.id]" class="full">{{ m.content }}</pre>
-    </div>
+    </section>
   </div>
 </template>
 
@@ -39,9 +39,9 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.mh { max-width: 760px; margin: 0 auto; }
+.mh { max-width: 960px; margin: 0; padding: 0; }
 .muted { color: #999; }
-.item { border: 1px solid #eee; border-radius: 8px; margin: 8px 0; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 14px; }
 .head { display: flex; align-items: center; gap: 8px; padding: 8px 12px; cursor: pointer; font-size: 13px; }
 .tag { font-size: 11px; padding: 1px 8px; border-radius: 8px; }
 .tag.morning { background: #fff3d6; color: #a76b00; }

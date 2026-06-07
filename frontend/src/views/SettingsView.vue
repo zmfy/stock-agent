@@ -5,7 +5,14 @@
       <router-link to="/">返回</router-link>
     </header>
 
+    <nav class="subtabs">
+      <button :class="{ active: tab === 'account' }" @click="tab = 'account'">账号安全</button>
+      <button :class="{ active: tab === 'backup' }" @click="tab = 'backup'">数据备份</button>
+      <button v-if="auth.isAdmin" :class="{ active: tab === 'users' }" @click="tab = 'users'">用户管理</button>
+    </nav>
+
     <!-- ===== 我的账号：修改密码（所有用户） ===== -->
+    <div v-show="tab === 'account'">
     <section class="card">
       <h2>修改密码</h2>
       <div class="form">
@@ -24,8 +31,10 @@
         <p v-if="pwd.msg" :class="pwd.ok ? 'ok-msg' : 'err'">{{ pwd.msg }}</p>
       </div>
     </section>
+    </div>
 
     <!-- ===== 数据备份与重置 ===== -->
+    <div v-show="tab === 'backup'">
     <section class="card">
       <h2>数据备份与重置</h2>
       <div class="row">
@@ -40,7 +49,7 @@
         <tbody>
           <tr v-for="b in backups" :key="b.id">
             <td>{{ b.label }}</td>
-            <td class="muted">{{ b.created_at }}</td>
+            <td class="muted">{{ fmtCN(b.created_at) }}</td>
             <td class="muted">{{ Math.round(b.size / 1024) }} KB</td>
             <td class="ops">
               <button @click="doRestore(b)" :disabled="acctBusy">恢复</button>
@@ -50,8 +59,10 @@
         </tbody>
       </table>
     </section>
+    </div>
 
     <!-- ===== 用户管理（仅管理员） ===== -->
+    <div v-show="tab === 'users'">
     <section v-if="auth.isAdmin" class="card">
       <div class="card-head">
         <h2>用户管理</h2>
@@ -75,7 +86,7 @@
           <tr v-for="u in users" :key="u.id">
             <td>{{ u.username }}</td>
             <td><span :class="['tag', u.role]">{{ u.role === 'admin' ? '管理员' : '普通用户' }}</span></td>
-            <td class="muted">{{ u.created_at }}</td>
+            <td class="muted">{{ fmtCN(u.created_at) }}</td>
             <td class="ops">
               <button v-if="u.id !== auth.user?.id" @click="toggleRole(u)">
                 {{ u.role === 'admin' ? '降为普通' : '升为管理员' }}
@@ -115,7 +126,7 @@
         <thead><tr><th>时间</th><th>用户名</th><th>结果</th><th>说明</th><th>IP</th></tr></thead>
         <tbody>
           <tr v-for="l in logs" :key="l.id">
-            <td class="nowrap">{{ l.created_at }}</td>
+            <td class="nowrap">{{ fmtCN(l.created_at) }}</td>
             <td>{{ l.username || '—' }}</td>
             <td><span :class="['tag', l.success ? 'ok' : 'fail']">{{ l.success ? '成功' : '失败' }}</span></td>
             <td>{{ l.reason || '' }}</td>
@@ -125,6 +136,7 @@
       </table>
       <p v-else class="muted">暂无登录记录。</p>
     </section>
+    </div>
   </div>
 </template>
 
@@ -133,8 +145,10 @@ import { reactive, ref, computed, onMounted } from 'vue';
 import { useAuthStore } from '../stores/auth';
 import { settingsApi, type AdminUser, type LoginLog } from '../api/settings';
 import { accountApi, type Backup } from '../api/account';
+import { fmtCN } from '../utils/time';
 
 const auth = useAuthStore();
+const tab = ref<'account' | 'backup' | 'users'>('account');
 
 // ---- 数据备份与重置 ----
 const backups = ref<Backup[]>([]);
@@ -319,7 +333,7 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.settings { max-width: 760px; margin: 32px auto; padding: 0 16px; }
+.settings { max-width: 960px; margin: 0; padding: 0 16px; }
 .bar { display: flex; justify-content: space-between; align-items: baseline; }
 .card { border: 1px solid #e5e5e5; border-radius: 8px; padding: 16px; margin-top: 16px; }
 .row { display: flex; gap: 8px; flex-wrap: wrap; }

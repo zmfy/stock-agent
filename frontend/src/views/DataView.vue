@@ -11,8 +11,8 @@
         <template v-if="source.sidecarConfigured">数据源 {{ source.sidecarHealthy ? '在线' : '离线' }}</template>
         <template v-else>未启用数据源</template>
       </span>
-      <span class="ov-item">股票库 {{ (jobs.stock_universe?.last_success_at || '—').slice(0, 10) }}</span>
-      <span class="ov-item">行情 {{ (jobs.eod?.last_success_at || '—').slice(0, 10) }}</span>
+      <span class="ov-item">股票库 {{ fmtCNDate(jobs.stock_universe?.last_success_at) }}</span>
+      <span class="ov-item">行情 {{ fmtCNDate(jobs.eod?.last_success_at) }}</span>
       <span v-if="anySyncing" class="ov-item syncing">⟳ 同步中…</span>
       <span v-if="!source.sidecarConfigured" class="ov-hint">可在「能力插件」启用 AkShare；仍可手动上传 CSV。</span>
     </section>
@@ -80,7 +80,7 @@
       <h2>股票库（本地全量 A 股）</h2>
       <p class="hint">代码 + 名称 + 拼音首字母存本地，用于自由查询的快速搜索。后台同步，可手动触发更新（增量对比增删改）。</p>
       <div class="row">
-        <span>最后成功：{{ jobs.stock_universe?.last_success_at || '—' }}</span>
+        <span>最后成功：{{ fmtCN(jobs.stock_universe?.last_success_at) }}</span>
         <button
           @click="doRun('stock_universe')"
           :disabled="!canRun('stock_universe')"
@@ -100,7 +100,7 @@
       <div v-if="jobs.stock_universe?.source_breakdown" class="muted">来源占比：{{ pct(jobs.stock_universe.source_breakdown) }}</div>
       <div v-if="jobLogLines.stock_universe.length" class="logpanel">
         <div v-for="(l, i) in jobLogLines.stock_universe" :key="i" :class="['logline', 'log-' + l.level]">
-          <span class="logts">{{ l.ts }}</span> <span class="loglvl">{{ l.level }}</span> {{ l.message }}
+          <span class="logts">{{ fmtCN(l.ts) }}</span> <span class="loglvl">{{ l.level }}</span> {{ l.message }}
         </div>
       </div>
     </section>
@@ -109,7 +109,7 @@
       <h2>行情数据（本地）</h2>
       <p class="hint">后台批量把全量 A 股的日线行情拉到本地缓存，分析时直接读本地、不再实时联网。每天晚上自动增量更新；可手动触发。</p>
       <div class="row">
-        <span>最后成功：{{ jobs.eod?.last_success_at || '—' }}</span>
+        <span>最后成功：{{ fmtCN(jobs.eod?.last_success_at) }}</span>
         <button
           @click="doRun('eod')"
           :disabled="!canRun('eod')"
@@ -129,7 +129,7 @@
       <div v-if="jobs.eod?.source_breakdown" class="muted">来源占比：{{ pct(jobs.eod.source_breakdown) }}</div>
       <div v-if="jobLogLines.eod.length" class="logpanel">
         <div v-for="(l, i) in jobLogLines.eod" :key="i" :class="['logline', 'log-' + l.level]">
-          <span class="logts">{{ l.ts }}</span> <span class="loglvl">{{ l.level }}</span> {{ l.message }}
+          <span class="logts">{{ fmtCN(l.ts) }}</span> <span class="loglvl">{{ l.level }}</span> {{ l.message }}
         </div>
       </div>
     </section>
@@ -144,7 +144,7 @@
       <ul v-if="newsLog.length" class="news-log">
         <li v-for="n in newsLog" :key="n.id">
           <a href="#" @click.prevent="showNewsContent(n.content_id)">{{ n.title }}</a>
-          <span class="muted"> · {{ (n.collected_at || '').slice(0,16) }}</span>
+          <span class="muted"> · {{ fmtCN(n.collected_at) }}</span>
           <span v-if="n.adopted" class="adopted">已采用</span>
         </li>
       </ul>
@@ -216,6 +216,7 @@ import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue';
 import { dataApi, type StockSnapshot, type DataSource } from '../api/data';
 import StockPicker from '../components/StockPicker.vue';
 import { useAuthStore } from '../stores/auth';
+import { fmtCN, fmtCNDate } from '../utils/time';
 
 const authStore = useAuthStore();
 const isAdmin = computed(() => authStore.isAdmin);
@@ -493,7 +494,7 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.data { max-width: 720px; margin: 24px auto; padding: 0 16px; }
+.data { max-width: 960px; margin: 0; padding: 0 16px; }
 .bar { display: flex; justify-content: space-between; align-items: baseline; }
 .overview { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; padding: 10px 14px; background: #f7faff; border: 1px solid #d6e4ff; border-radius: 8px; margin-top: 12px; font-size: 13px; }
 .ov-item { color: #334; }
@@ -501,9 +502,6 @@ onMounted(async () => {
 .ov-item.warn b { color: #cf1322; }
 .ov-item.syncing { color: #1677ff; }
 .ov-hint { color: #888; margin-left: auto; }
-.subtabs { display: flex; gap: 6px; margin: 12px 0 4px; border-bottom: 1px solid #eee; }
-.subtabs button { border: none; background: none; padding: 8px 16px; font-size: 14px; cursor: pointer; color: #555; border-bottom: 2px solid transparent; }
-.subtabs button.active { color: #1677ff; border-bottom-color: #1677ff; font-weight: 600; }
 .card { border: 1px solid #e5e5e5; border-radius: 8px; padding: 16px; margin-top: 16px; }
 .hint { color: #777; font-size: 12px; }
 .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }

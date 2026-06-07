@@ -14,7 +14,7 @@
         <h2>{{ report.stock_code }} {{ report.stock_name || '' }}</h2>
         <div class="meta">
           规则版本 {{ report.rulebook_version_id?.slice(0, 8) }} · 数据 {{ report.data_date }} ·
-          模型 {{ report.ai_provider }}/{{ report.ai_model }} · {{ report.created_at }}
+          模型 {{ report.ai_provider }}/{{ report.ai_model }} · {{ fmtCN(report.created_at) }}
         </div>
       </div>
 
@@ -54,7 +54,7 @@
             <td>{{ r.stock_code }} {{ r.stock_name || '' }}</td>
             <td>{{ r.one_liner }}</td>
             <td class="muted">{{ r.ai_model }}</td>
-            <td class="muted">{{ r.created_at }}</td>
+            <td class="muted">{{ fmtCN(r.created_at) }}</td>
           </tr>
         </tbody>
       </table>
@@ -66,6 +66,7 @@
 import { ref, computed, onMounted, defineComponent, h } from 'vue';
 import { useRoute } from 'vue-router';
 import { analysisApi, type AnalysisReport, type ReportSummary, type GateResult } from '../api/analysis';
+import { fmtCN } from '../utils/time';
 
 const route = useRoute();
 const focusCode = ref<string>(typeof route.query.code === 'string' ? route.query.code : '');
@@ -139,7 +140,7 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.analysis { max-width: 820px; margin: 24px auto; padding: 0 16px; }
+.analysis { max-width: 960px; margin: 0; padding: 0 16px; }
 .bar { display: flex; justify-content: space-between; align-items: baseline; }
 .card { border: 1px solid #e5e5e5; border-radius: 8px; padding: 16px; margin-top: 16px; }
 .run { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }

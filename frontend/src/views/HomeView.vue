@@ -85,7 +85,7 @@
                   <button class="fold" @click="screenHistOpen = !screenHistOpen">{{ screenHistOpen ? '▾' : '▸' }} 历史选股记录（{{ screenHistory.length }}）</button>
                   <div v-if="screenHistOpen" class="screen-hist">
                     <div v-for="(h, i) in screenHistory" :key="i" class="sh-row">
-                      <div class="muted">{{ (h.created_at || '').slice(0,16) }} · {{ h.note }}</div>
+                      <div class="muted">{{ fmtCN(h.created_at) }} · {{ h.note }}</div>
                       <div v-for="p in h.picks" :key="p.code" class="sh-pick" @click="openStockCode(p.code)">{{ p.name || p.code }} <span class="muted">{{ p.code }} · {{ p.reason }}</span></div>
                       <div v-if="!h.picks.length" class="muted">（本次无入选）</div>
                     </div>
@@ -220,6 +220,7 @@ import { rulebookApi, type ProposeResult, type FullRulebook, type Gate, type Tem
 import { meetingsApi, type Meeting } from '../api/meetings';
 import { screenApi, type ScreenRun } from '../api/screen';
 import { dataApi } from '../api/data';
+import { fmtCN, fmtCNDate } from '../utils/time';
 import AnalysisView from './AnalysisView.vue';
 import RulebookView from './RulebookView.vue';
 import AiSettingsView from './AiSettingsView.vue';
@@ -329,7 +330,7 @@ function buildCpBriefing(rb: FullRulebook | null): string {
     .join('\n\n');
   const prio = (rb.positionRules as any)?.system_priority;
   const prioLine = Array.isArray(prio) && prio.length > 1 ? `\n系统优先级：${prio.join(' > ')}\n` : '';
-  const changed = rb.version.created_at ? `（最后更换：${rb.version.created_at.slice(0, 10)}）` : '';
+  const changed = rb.version.created_at ? `（最后更换：${fmtCNDate(rb.version.created_at)}）` : '';
   return (
     `【当前使用的核心原则 ${rb.version.version_label}${changed}】\n` +
     `人设：${rb.version.persona}\n${prioLine}\n` +
@@ -401,9 +402,8 @@ async function applyProposal() {
 }
 
 function fmtTime(ts: string) {
-  // sqlite CURRENT_TIMESTAMP is UTC "YYYY-MM-DD HH:MM:SS"; show local time.
-  const d = new Date(ts.includes('T') ? ts : ts.replace(' ', 'T') + 'Z');
-  return isNaN(d.getTime()) ? ts : d.toLocaleString('zh-CN', { hour12: false });
+  // DB 时间为 UTC，统一显示北京时间（见 utils/time）
+  return fmtCN(ts);
 }
 function kindIcon(k: ChatKind) {
   const icons: Record<ChatKind, string> = { general: '💬', core_principle: '📜', stock: '📊', morning: '📈', evening: '🌙', screen: '🔍' };

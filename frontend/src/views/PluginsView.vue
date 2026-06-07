@@ -152,7 +152,7 @@ onMounted(reload);
 </script>
 
 <style scoped>
-.plugins { max-width: 760px; margin: 24px auto; padding: 0 16px; }
+.plugins { max-width: 960px; margin: 0; padding: 0 16px; }
 .bar { display: flex; justify-content: space-between; align-items: baseline; }
 .hint { color: #777; font-size: 13px; }
 .card { border: 1px solid #e5e5e5; border-radius: 8px; padding: 16px; margin-top: 16px; }

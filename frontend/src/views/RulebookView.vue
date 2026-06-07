@@ -18,7 +18,7 @@
         <div class="card-head">
           <h2>当前使用：{{ shown.version.version_label }}
             <span class="badge">当前</span>
-            <span class="muted">{{ shown.version.author === 'agent' ? 'agent 提议' : '手动' }} · {{ shown.version.created_at }}</span>
+            <span class="muted">{{ shown.version.author === 'agent' ? 'agent 提议' : '手动' }} · {{ fmtCN(shown.version.created_at) }}</span>
           </h2>
           <div>
             <button @click="startEdit" :disabled="editing">编辑并另存为新版本</button>
@@ -50,7 +50,7 @@
               <td>{{ v.version_label }} <span v-if="v.is_active === 1" class="badge">当前</span></td>
               <td>{{ v.author === 'agent' ? 'agent' : '手动' }}</td>
               <td class="muted">{{ v.note }}</td>
-              <td class="muted">{{ v.created_at }}</td>
+              <td class="muted">{{ fmtCN(v.created_at) }}</td>
               <td class="ops">
                 <button @click="view(v.id)">查看</button>
                 <button v-if="v.is_active !== 1" @click="showDiff(v.id)">对比当前</button>
@@ -109,6 +109,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, h, defineComponent } from 'vue';
 import { rulebookApi, type FullRulebook, type RulebookVersion, type RulebookDiff, type Gate } from '../api/rulebook';
+import { fmtCN } from '../utils/time';
 
 // small inline table component for gates
 const GateTable = defineComponent({
@@ -287,7 +288,7 @@ onMounted(load);
 </script>
 
 <style scoped>
-.rulebook { max-width: 860px; margin: 24px auto; padding: 0 16px; }
+.rulebook { max-width: 960px; margin: 0; padding: 0 16px; }
 .bar { display: flex; justify-content: space-between; align-items: baseline; }
 .card { border: 1px solid #e5e5e5; border-radius: 8px; padding: 16px; margin-top: 16px; }
 .card-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
