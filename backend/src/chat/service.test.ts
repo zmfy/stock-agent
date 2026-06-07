@@ -16,4 +16,16 @@ describe('chat service', () => {
     await svc.postMessage(USER, sid, '聊聊', { aiCall: async (p: string) => { seen = p; return { raw: 'ok' }; } });
     expect(seen).toContain('原则演进记忆');
   });
+
+  it('screen 会话 prompt 注入最近选股摘要', async () => {
+    const svc = require('./service');
+    const sc = require('../screen/service');
+    const rb = require('../rulebook/service');
+    await rb.applyTemplateAsVersion(USER, 'value-quality');
+    await sc.runScreen(USER, { codes: ['600519'] });
+    const sid = svc.createSession(USER, 'screen', null, '选股讨论');
+    let seen = '';
+    await svc.postMessage(USER, sid, '为什么选它', { aiCall: async (p: string) => { seen = p; return { raw: 'ok' }; } });
+    expect(seen).toContain('本次选股');
+  });
 });
