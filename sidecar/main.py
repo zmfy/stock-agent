@@ -321,9 +321,16 @@ def _probe_one(reg, kind):
         return {"key": reg["key"], "label": reg["label"], "reachable": False, "latency_ms": None, "error": str(e)[:120]}
 
 
+@app.get("/probe/list")
+def probe_list(kind: str = "quote"):
+    return [{"key": r["key"], "label": r["label"]} for r in PROVIDERS.get(kind, [])]
+
 @app.get("/probe")
-def probe(kind: str = "quote"):
-    return [_probe_one(reg, kind) for reg in PROVIDERS.get(kind, [])]
+def probe(kind: str = "quote", provider: str = ""):
+    regs = PROVIDERS.get(kind, [])
+    if provider:
+        regs = [r for r in regs if r["key"] == provider]
+    return [_probe_one(reg, kind) for reg in regs]
 
 
 @app.get("/quote/{code}")
@@ -334,6 +341,30 @@ def quote(code: str, days: int = 120, order: str = ""):
         if rows:
             return {"source": reg["key"], "rows": rows}
     return {"source": None, "rows": []}
+
+
+@app.get("/realtime/{code}")
+def realtime(code: str):
+    code = code[-6:]
+    def _fn():
+        import easyquotation
+        eq = easyquotation.use("sina")
+        d = eq.real([code], prefix=False) or {}
+        row = d.get(code) or {}
+        if not row:
+            return None
+        return {
+            "price": _f(row.get("now")),
+            "open": _f(row.get("open")),
+            "high": _f(row.get("high")),
+            "low": _f(row.get("low")),
+            "prev_close": _f(row.get("close")),
+            "volume": _f(row.get("volume") or row.get("turnover")),
+            "name": row.get("name"),
+            "time": (str(row.get("date", "")) + " " + str(row.get("time", ""))).strip(),
+        }
+    data = _timed(_fn, 8)
+    return {"source": "sina-rt" if data else None, "data": data or {}}
 
 
 @app.get("/news")

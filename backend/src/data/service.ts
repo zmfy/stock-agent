@@ -1,7 +1,7 @@
 import { getDb } from '../db';
 import { QuoteRow, StockSnapshot } from '../types';
 import { v4 as uuidv4 } from 'uuid';
-import { resolveSidecarBase, fetchFundamentals, fetchQuotes, fetchMarket, fetchName, fetchNews, fetchAllStocks, orderedProviders } from './sidecar';
+import { resolveSidecarBase, fetchFundamentals, fetchQuotes, fetchMarket, fetchName, fetchNews, fetchAllStocks, orderedProviders, fetchRealtime } from './sidecar';
 
 // ---- hot news ----
 export function listNews(limit = 30): Array<{ title: string; summary: string; published_at: string; fetched_at: string }> {
@@ -444,6 +444,15 @@ export async function getStockSnapshot(userId: string, code: string): Promise<St
     market: latestMarketRow(),
     sidecarBase: resolveSidecarBase(userId),
   };
+  snap.realtime = null;
+  try {
+    const base = resolveSidecarBase(userId);
+    if (base) {
+      const rt = await fetchRealtime(base, code);
+      const price = rt?.data?.price;
+      if (rt && price != null) snap.realtime = { price: Number(price), time: String(rt.data.time ?? ''), source: rt.source };
+    }
+  } catch { /* ignore */ }
   return snap;
 }
 

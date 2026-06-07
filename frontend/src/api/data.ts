@@ -17,6 +17,7 @@ export interface StockSnapshot {
   limit_up_count: number | null;
   limit_down_count: number | null;
   sse_ma20_slope: number | null;
+  realtime?: { price: number; time: string; source: string | null } | null;
   _missing: string[];
   sources?: {
     quote: { source: string; date: string; fetched_at: string } | null;
@@ -47,6 +48,8 @@ export const dataApi = {
   refreshNews: () => api.post<{ data: { inserted: number; news: NewsItem[] } }>('/data/news/refresh'),
   stockSearch: (q: string) => api.get<{ data: Array<{ code: string; name: string }> }>(`/data/stocks/search?q=${encodeURIComponent(q)}`),
   probe: (kind = 'quote') => api.get('/data/probe?kind=' + kind).then((r) => r.data.data as Array<{ key: string; label: string; reachable: boolean; latencyMs: number | null; error: string | null }>),
+  probeList: (kind = 'quote') => api.get('/data/probe/list?kind=' + kind).then((r) => r.data.data as Array<{ key: string; label: string }>),
+  probeOne: (kind: string, provider: string) => api.get(`/data/probe?kind=${kind}&provider=${provider}`).then((r) => (r.data.data[0] || null) as { key: string; label: string; reachable: boolean; latencyMs: number | null; error: string | null } | null),
   runJob: (job: 'stock_universe' | 'eod') => api.post(`/data/${job}/run`).then((r) => r.data),
   jobStatus: (job: 'stock_universe' | 'eod') => api.get(`/data/${job}/status`).then((r) => r.data.data),
   cancelJob: (job: 'stock_universe' | 'eod') => api.post(`/data/${job}/cancel`).then((r) => r.data),

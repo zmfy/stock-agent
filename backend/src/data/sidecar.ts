@@ -16,15 +16,21 @@ export function resolveSidecarBase(userId: string): string | null {
   return null;
 }
 
-async function getJson(url: string): Promise<any | null> {
+async function getJson(url: string, timeoutMs = 30000): Promise<any | null> {
   try {
     // bound it so a blocked/slow data source never hangs the app
-    const resp = await fetch(url, { signal: AbortSignal.timeout(30000) });
+    const resp = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
     if (!resp.ok) return null;
     return await resp.json();
   } catch {
     return null;
   }
+}
+
+export async function fetchRealtime(base: string, code: string): Promise<{ source: string | null; data: Record<string, unknown> } | null> {
+  const d = await getJson(`${base}/realtime/${code}`, 500);
+  if (!d || !d.data) return null;
+  return { source: d.source ?? null, data: d.data };
 }
 
 export async function fetchFundamentals(base: string, code: string, order?: string[]): Promise<{ source: string | null; data: Record<string, unknown> } | null> {
@@ -36,14 +42,28 @@ export async function fetchFundamentals(base: string, code: string, order?: stri
 
 export interface ProbeResult { key: string; label: string; reachable: boolean; latencyMs: number | null; error: string | null }
 
-export async function probe(base: string, kind: string): Promise<ProbeResult[]> {
-  const data = await getJson(`${base}/probe?kind=${encodeURIComponent(kind)}`);
+export async function probe(base: string, kind: string, provider = ''): Promise<ProbeResult[]> {
+  const url = `${base}/probe?kind=${encodeURIComponent(kind)}${provider ? `&provider=${encodeURIComponent(provider)}` : ''}`;
+  const data = await getJson(url);
   if (!Array.isArray(data)) return [];
   return data.map((p: any) => ({
     key: String(p.key), label: String(p.label ?? p.key),
     reachable: !!p.reachable, latencyMs: p.latency_ms == null ? null : Number(p.latency_ms),
     error: p.error == null ? null : String(p.error),
   }));
+}
+
+export async function probeList(base: string, kind: string): Promise<Array<{ key: string; label: string }>> {
+  const data = await getJson(`${base}/probe/list?kind=${encodeURIComponent(kind)}`);
+  if (!Array.isArray(data)) return [];
+  return data.map((p: any) => ({ key: String(p.key), label: String(p.label ?? p.key) }));
+}
+
+export async function probeOne(base: string, kind: string, provider: string): Promise<ProbeResult | null> {
+  const data = await getJson(`${base}/probe?kind=${encodeURIComponent(kind)}&provider=${encodeURIComponent(provider)}`);
+  if (!Array.isArray(data) || !data[0]) return null;
+  const p = data[0];
+  return { key: String(p.key), label: String(p.label ?? p.key), reachable: !!p.reachable, latencyMs: p.latency_ms == null ? null : Number(p.latency_ms), error: p.error == null ? null : String(p.error) };
 }
 
 export async function orderedProviders(base: string, kind: string): Promise<string[]> {

@@ -6,7 +6,7 @@ import { successResponse, errorResponse } from '../utils/response';
 import { QuoteRow } from '../types';
 import * as svc from '../data/service';
 import * as sources from '../data/sources-service';
-import { resolveSidecarBase, pingHealth, probe } from '../data/sidecar';
+import { resolveSidecarBase, pingHealth, probe, probeList, probeOne } from '../data/sidecar';
 
 const router = Router();
 router.use(authMiddleware);
@@ -178,12 +178,20 @@ router.get('/source', async (req: Request, res: Response) => {
   successResponse(res, { sidecarConfigured: !!base, base, sidecarHealthy: healthy });
 });
 
-// GET /api/data/probe?kind=quote — probe each upstream provider's reachability
+// GET /api/data/probe/list?kind=quote — list available providers (no reachability check)
+router.get('/probe/list', async (req: Request, res: Response) => {
+  const base = resolveSidecarBase(req.user!.userId);
+  if (!base) return successResponse(res, []);
+  successResponse(res, await probeList(base, String(req.query.kind || 'quote')));
+});
+
+// GET /api/data/probe?kind=quote[&provider=] — probe each upstream provider's reachability
 router.get('/probe', async (req: Request, res: Response) => {
   const base = resolveSidecarBase(req.user!.userId);
   if (!base) return successResponse(res, []);
   const kind = String(req.query.kind || 'quote');
-  successResponse(res, await probe(base, kind));
+  const provider = String(req.query.provider || '');
+  successResponse(res, await probe(base, kind, provider));
 });
 
 export default router;
