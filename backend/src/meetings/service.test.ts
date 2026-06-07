@@ -19,6 +19,7 @@ describe('meetings service', () => {
     const roles: string[] = [];
     let corePrompt = '';
     const m = await svc.generateMorning(USER, {
+      fetchNews: async () => {},
       aiCall: async (p: string, role: string) => {
         roles.push(role);
         if (role === 'core') {
@@ -48,6 +49,7 @@ describe('meetings service', () => {
     const roles: string[] = [];
     let corePrompt = '';
     const e = await svc.generateEvening(USER, {
+      fetchNews: async () => {},
       aiCall: async (p: string, role: string) => {
         roles.push(role);
         if (role === 'core') corePrompt = p;
@@ -69,12 +71,26 @@ describe('meetings service', () => {
   });
 
   it('regenerating the same day upserts (no duplicate)', async () => {
-    await svc.generateMorning(USER, { aiCall: async () => '更新后的早会' });
+    await svc.generateMorning(USER, { fetchNews: async () => {}, aiCall: async () => '更新后的早会' });
     expect(svc.getTodayContent(USER, 'morning')).toContain('更新后的早会');
   });
 
   it('eligibleUserIds includes a user with rulebook (model required) ', () => {
     // USER has rulebook but no AI model configured -> not eligible
     expect(svc.eligibleUserIds()).not.toContain(USER);
+  });
+
+  it('generateMorning 采集新闻入双日志，来财 __ADOPT__ 标记采用并存 adopted_news', async () => {
+    const m = require('./service');
+    const nl = require('../data/news-log');
+    require('../data/sources-service').ensureSeedGlobal?.();
+    const recs = nl.recordCollected([{ title: '新能源爆发', content: 'c1', source: 'em', published_at: 'p1' }, { title: '银行走弱', content: 'c2', source: 'em', published_at: 'p2' }]);
+    // buildNewsWithIds orders by collected_at DESC, rowid DESC — both inserted in same tx,
+    // so rowid of '银行走弱' > rowid of '新能源爆发', meaning N1 = '银行走弱', N2 = '新能源爆发'.
+    const aiCall = async (_p: string, role: string) => role === 'core' ? '今日新能源板块占优。\n__ADOPT__ N2' : `[${role}]`;
+    const r = await m.generateMorning('u1', { aiCall, fetchNews: async () => {} });
+    const parsedData = JSON.parse(r.data);
+    expect(parsedData.adopted_news.map((x: any) => x.title)).toContain('新能源爆发');
+    expect(r.content).not.toContain('__ADOPT__');
   });
 });

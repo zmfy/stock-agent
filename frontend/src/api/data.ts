@@ -46,6 +46,8 @@ export interface NewsItem {
 export const dataApi = {
   getNews: () => api.get<{ data: NewsItem[] }>('/data/news'),
   refreshNews: () => api.post<{ data: { inserted: number; news: NewsItem[] } }>('/data/news/refresh'),
+  newsLog: (limit = 50) => api.get('/data/news/log?limit=' + limit).then((r) => r.data.data as Array<{ id: string; content_id: string; title: string; source: string; collected_at: string; adopted: number }>),
+  newsContent: (id: string) => api.get('/data/news/content/' + id).then((r) => r.data.data as { title: string; content: string; source: string; collected_at: string; adopted: number }),
   stockSearch: (q: string) => api.get<{ data: Array<{ code: string; name: string }> }>(`/data/stocks/search?q=${encodeURIComponent(q)}`),
   probe: (kind = 'quote') => api.get('/data/probe?kind=' + kind).then((r) => r.data.data as Array<{ key: string; label: string; reachable: boolean; latencyMs: number | null; error: string | null }>),
   probeList: (kind = 'quote') => api.get('/data/probe/list?kind=' + kind).then((r) => r.data.data as Array<{ key: string; label: string }>),

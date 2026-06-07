@@ -279,7 +279,7 @@ def _news_provider(fn_name):
             ts = r.get("发布时间") or r.get("时间") or r.get("datetime") or r.get("publish_time") or ""
             summary = r.get("摘要") or r.get("内容") or ""
             if title:
-                rows.append({"title": str(title), "summary": str(summary)[:200], "published_at": str(ts)})
+                rows.append({"title": str(title), "summary": str(summary)[:200], "content": str(summary), "published_at": str(ts)})
         return rows or None
     return _f
 

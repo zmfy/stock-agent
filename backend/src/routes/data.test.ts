@@ -131,6 +131,17 @@ describe('data routes', () => {
     expect(log.status).toBe(403);
   });
 
+  it('GET /api/data/news/log 返回采集日志；/news/content/:id 返回内容', async () => {
+    const nl = require('../data/news-log');
+    const [{ content_id }] = nl.recordCollected([{ title: '日志测试', content: '内容Z', source: 'em', published_at: 'p' }]);
+    const log = await request(app).get('/api/data/news/log').set('Authorization', `Bearer ${tok}`);
+    expect(log.status).toBe(200);
+    expect(log.body.data.some((x: any) => x.title === '日志测试')).toBe(true);
+    const c = await request(app).get(`/api/data/news/content/${content_id}`).set('Authorization', `Bearer ${tok}`);
+    expect(c.status).toBe(200);
+    expect(c.body.data.content).toBe('内容Z');
+  });
+
   it('数据源增删改查写入轮转：POST → GET → PUT → DELETE', async () => {
     // POST /api/data/sources — admin only
     const add = await request(app)

@@ -73,6 +73,19 @@
               <div v-if="analyzing" class="analyzing">正在按你的核心原则分析 {{ active.ref_id }} …</div>
               <div v-if="briefing" class="briefing">{{ briefing }}</div>
 
+              <div v-if="adoptedNews.length" class="adopted-news-box">
+                <div class="an-head">来财采用的新闻</div>
+                <ul class="an-list">
+                  <li v-for="an in adoptedNews" :key="an.content_id">
+                    <a href="#" @click.prevent="showMeetingNews(an.content_id)">{{ an.title }}</a>
+                  </li>
+                </ul>
+                <div v-if="openMeetingNews" class="an-content">
+                  <div class="an-content-head"><b>{{ openMeetingNews.title }}</b><button class="mini" @click="openMeetingNews = null">关闭</button></div>
+                  <p>{{ openMeetingNews.content || '（无正文）' }}</p>
+                </div>
+              </div>
+
               <div class="msgs" ref="msgsEl">
                 <div v-for="m in messages" :key="m.id" class="msg" :class="m.role">
                   <div class="bubble">{{ m.content }}</div>
@@ -192,6 +205,7 @@ import { chatApi, type ChatSession, type ChatMessage, type ChatKind } from '../a
 import { rulebookApi, type ProposeResult, type FullRulebook, type Gate, type TemplateMeta } from '../api/rulebook';
 import { meetingsApi, type Meeting } from '../api/meetings';
 import { screenApi, type ScreenRun } from '../api/screen';
+import { dataApi } from '../api/data';
 import AnalysisView from './AnalysisView.vue';
 import RulebookView from './RulebookView.vue';
 import AiSettingsView from './AiSettingsView.vue';
@@ -322,6 +336,14 @@ const noChange = computed(() => {
   const d = proposal.value?.delta;
   return !!d && !d.personaChanged && !d.gates.changed.length && !d.gates.added.length && !d.gates.removed.length && !d.softRules.added.length && !d.softRules.removed.length && !d.positionRulesChangedKeys.length;
 });
+
+const adoptedNews = computed<Array<{ content_id: string; title: string }>>(() => {
+  const mt = active.value?.kind === 'morning' ? meetings.value.morning : active.value?.kind === 'evening' ? meetings.value.evening : null;
+  if (!mt || !mt.data) return [];
+  try { return (JSON.parse(mt.data).adopted_news) || []; } catch { return []; }
+});
+const openMeetingNews = ref<{ title: string; content: string } | null>(null);
+async function showMeetingNews(id: string) { openMeetingNews.value = await dataApi.newsContent(id); }
 
 async function propose() {
   if (!active.value) return;
@@ -744,4 +766,13 @@ onMounted(async () => {
 .composer button:hover:not(:disabled) { background: var(--accent-600); }
 .composer button:disabled { opacity: 0.5; cursor: not-allowed; }
 .err { color: var(--danger); }
+.adopted-news-box { background: #f3faf3; border: 1px solid #cce8cc; border-radius: 8px; padding: 8px 12px; margin: 6px 0; flex: 0 0 auto; }
+.an-head { font-size: 12px; font-weight: 600; color: #2a8a2a; margin-bottom: 4px; }
+.an-list { list-style: none; padding: 0; margin: 0; }
+.an-list li { padding: 3px 0; font-size: 13px; }
+.an-list a { color: #34699a; text-decoration: none; }
+.an-list a:hover { text-decoration: underline; }
+.an-content { margin-top: 8px; border-top: 1px dashed #b7d7b7; padding-top: 8px; }
+.an-content-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: 13px; margin-bottom: 4px; }
+.an-content p { font-size: 12px; line-height: 1.65; white-space: pre-wrap; margin: 0; color: #444; }
 </style>

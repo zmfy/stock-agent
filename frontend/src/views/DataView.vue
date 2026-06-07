@@ -128,12 +128,16 @@
         <button @click="collectNews" :disabled="busy">采集热点新闻</button>
       </div>
       <p v-if="collectMsg" :class="collectOk ? 'ok-msg' : 'err'">{{ collectMsg }}</p>
-      <div v-if="news.length" class="news">
-        <div v-for="(n, i) in news" :key="i" class="nitem">
-          <div class="ntitle">{{ n.title }}</div>
-          <div class="nmeta">来源 AkShare · {{ n.published_at || n.fetched_at }}</div>
-          <div v-if="n.summary" class="nsum">{{ n.summary }}</div>
-        </div>
+      <ul v-if="newsLog.length" class="news-log">
+        <li v-for="n in newsLog" :key="n.id">
+          <a href="#" @click.prevent="showNewsContent(n.content_id)">{{ n.title }}</a>
+          <span class="muted"> · {{ (n.collected_at || '').slice(0,16) }}</span>
+          <span v-if="n.adopted" class="adopted">已采用</span>
+        </li>
+      </ul>
+      <div v-if="openNews" class="news-content">
+        <div class="nc-head"><b>{{ openNews.title }}</b><button class="mini" @click="openNews = null">关闭</button></div>
+        <p>{{ openNews.content || '（无正文）' }}</p>
       </div>
     </section>
 
@@ -193,7 +197,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue';
-import { dataApi, type StockSnapshot, type NewsItem, type DataSource } from '../api/data';
+import { dataApi, type StockSnapshot, type DataSource } from '../api/data';
 import StockPicker from '../components/StockPicker.vue';
 import { useAuthStore } from '../stores/auth';
 
@@ -279,10 +283,14 @@ async function loadSource() {
   } catch { /* ignore */ }
 }
 
-const news = ref<NewsItem[]>([]);
 const collectMsg = ref('');
 const collectOk = ref(false);
 const showTdxHelp = ref(false);
+
+const newsLog = ref<Array<{ id: string; content_id: string; title: string; source: string; collected_at: string; adopted: number }>>([]);
+const openNews = ref<{ title: string; content: string } | null>(null);
+async function loadNewsLog() { newsLog.value = await dataApi.newsLog(50); }
+async function showNewsContent(id: string) { openNews.value = await dataApi.newsContent(id); }
 
 async function refreshMarket() {
   busy.value = true; collectMsg.value = '';
@@ -300,10 +308,9 @@ async function refreshMarket() {
 async function collectNews() {
   busy.value = true; collectMsg.value = '';
   try {
-    const res = await dataApi.refreshNews();
-    news.value = res.data.data.news;
-    collectOk.value = res.data.data.inserted > 0;
-    collectMsg.value = res.data.data.inserted > 0 ? `已采集 ${res.data.data.inserted} 条热点新闻` : '未取到新闻（数据源不可用或未启用 AkShare 插件）';
+    await dataApi.refreshNews();
+    await loadNewsLog();
+    collectOk.value = true; collectMsg.value = '已采集，日志已刷新';
   } catch (e: any) {
     collectOk.value = false; collectMsg.value = e.response?.data?.message || '采集失败';
   } finally {
@@ -456,9 +463,7 @@ onMounted(async () => {
   await refreshJob('stock_universe');
   await refreshJob('eod');
   runProbe();
-  try {
-    news.value = (await dataApi.getNews()).data.data;
-  } catch { /* ignore */ }
+  loadNewsLog();
   jobTimer = setInterval(() => {
     (['stock_universe', 'eod'] as const).forEach((j) => {
       if (jobs[j]?.state === 'running') refreshJob(j);
@@ -486,11 +491,14 @@ input { padding: 5px; }
 .snap tr.miss td { color: #c08; }
 .err { color: #c00; }
 .ok-msg { color: #2a8a2a; }
-.news { margin-top: 10px; max-height: 320px; overflow-y: auto; }
-.nitem { border-top: 1px solid #eee; padding: 8px 0; }
-.ntitle { font-size: 14px; font-weight: 600; }
-.nmeta { font-size: 11px; color: #999; }
-.nsum { font-size: 13px; color: #555; margin-top: 2px; }
+.news-log { list-style: none; padding: 0; margin: 10px 0 0; max-height: 320px; overflow-y: auto; }
+.news-log li { padding: 5px 0; border-top: 1px solid #eee; font-size: 13px; }
+.news-log a { color: #34699a; text-decoration: none; }
+.news-log a:hover { text-decoration: underline; }
+.adopted { display: inline-block; font-size: 11px; background: #e6f7e6; color: #2a8a2a; border-radius: 8px; padding: 1px 7px; margin-left: 6px; }
+.news-content { margin-top: 10px; border: 1px solid #d6e4ff; border-radius: 8px; padding: 10px 12px; background: #f7faff; }
+.nc-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 6px; font-size: 14px; }
+.news-content p { font-size: 13px; line-height: 1.65; white-space: pre-wrap; margin: 0; color: #333; }
 .prov { font-size: 12px; color: #888; margin-top: 8px; }
 .srctable { width: 100%; border-collapse: collapse; margin: 8px 0; }
 .srctable th, .srctable td { text-align: left; padding: 5px 8px; border-bottom: 1px solid #eee; font-size: 13px; }

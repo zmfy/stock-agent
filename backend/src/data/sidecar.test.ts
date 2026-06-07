@@ -83,4 +83,10 @@ describe('data/sidecar client', () => {
     const r = await require('./sidecar').fetchRealtime('http://x', '600519');
     expect(r.source).toBe('sina-rt'); expect(r.data.price).toBe(1688.5);
   });
+
+  it('fetchNews 解析 content', async () => {
+    (global as any).fetch = jest.fn(() => Promise.resolve({ ok: true, json: async () => ({ source: 'em', rows: [{ title: 't', summary: 's', content: '完整正文', published_at: 'p' }] }) }));
+    const r = await require('./sidecar').fetchNews('http://x', 2);
+    expect(r.rows[0].content).toBe('完整正文');
+  });
 });

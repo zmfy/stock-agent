@@ -5,6 +5,7 @@ export interface Meeting {
   kind: 'morning' | 'evening';
   date: string;
   content: string;
+  data?: string | null;
   created_at: string;
 }
 
