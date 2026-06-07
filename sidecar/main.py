@@ -483,3 +483,19 @@ def market_sentiment(order: str = ""):
         if data:
             return {"source": reg["key"], "data": data}
     return {"source": None, "data": {}}
+
+
+@app.get("/tdx/servers/test")
+def tdx_servers_test():
+    return {"servers": tdx.test_servers()}
+
+
+@app.get("/tdx/server")
+def tdx_server_get():
+    return {"server": tdx.get_server()}
+
+
+@app.post("/tdx/server")
+def tdx_server_set(addr: str = "", port: int = 0):
+    tdx.set_server(addr, port)
+    return {"server": tdx.get_server()}
