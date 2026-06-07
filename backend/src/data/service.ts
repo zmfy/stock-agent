@@ -31,67 +31,114 @@ export async function refreshNews(userId: string, limit = 20): Promise<number> {
 }
 
 // ---- background jobs: status helpers (keyed by job name) ----
-function setSync(job: string, state: string, total: number, done: number, message: string, breakdown?: Record<string, number>): void {
-  const msg = breakdown ? `${message} __SRC__${JSON.stringify(breakdown)}` : message;
-  getDb()
-    .prepare(
-      `INSERT INTO sync_status (job, state, total, done, message, updated_at) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-       ON CONFLICT(job) DO UPDATE SET state=excluded.state, total=excluded.total, done=excluded.done, message=excluded.message, updated_at=CURRENT_TIMESTAMP`
-    )
-    .run(job, state, total, done, msg);
+
+function todayCN(): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai' }).format(new Date());
 }
 
-export function getSyncStatus(job = 'stock_universe'): any | null {
-  const row = getDb().prepare('SELECT state, total, done, message, updated_at FROM sync_status WHERE job = ?').get(job) as any;
+export interface JobStatus {
+  job: string; state: string; total: number; done: number; message: string; updated_at: string;
+  started_at: string | null; finished_at: string | null; last_success_at: string | null;
+  started_by: string | null; error: string | null; cancel_requested: number;
+  source_breakdown: Record<string, number> | null;
+}
+
+function setProgress(job: string, total: number, done: number, message: string): void {
+  getDb().prepare(`UPDATE sync_status SET total=?, done=?, message=?, updated_at=CURRENT_TIMESTAMP WHERE job=?`).run(total, done, message, job);
+}
+
+export function beginJob(job: string, startedBy: string, total: number): void {
+  getDb().prepare(
+    `INSERT INTO sync_status (job, state, total, done, message, started_at, finished_at, error, cancel_requested, updated_at)
+     VALUES (?, 'running', ?, 0, '开始…', CURRENT_TIMESTAMP, NULL, NULL, 0, CURRENT_TIMESTAMP)
+     ON CONFLICT(job) DO UPDATE SET state='running', total=excluded.total, done=0, message='开始…',
+       started_at=CURRENT_TIMESTAMP, finished_at=NULL, error=NULL, cancel_requested=0, updated_at=CURRENT_TIMESTAMP`
+  ).run(job, total);
+  getDb().prepare(`UPDATE sync_status SET started_by=? WHERE job=?`).run(startedBy, job);
+  jobLog(job, 'info', `开始（${startedBy}），共 ${total}`);
+}
+
+export function finishJob(job: string, state: 'done' | 'error' | 'idle', message: string, breakdown?: Record<string, number> | null, error?: string): void {
+  const successAt = state === 'done' ? 'CURRENT_TIMESTAMP' : 'last_success_at';
+  const bdJson = breakdown ? JSON.stringify(breakdown) : null;
+  const errVal = error ?? null;
+  const db = getDb();
+  // Upsert: create the row if it doesn't exist yet (e.g. direct error before beginJob)
+  db.prepare(
+    `INSERT INTO sync_status (job, state, message, finished_at, error, cancel_requested, source_breakdown, updated_at)
+     VALUES (?, ?, ?, CURRENT_TIMESTAMP, ?, 0, ?, CURRENT_TIMESTAMP)
+     ON CONFLICT(job) DO UPDATE SET state=excluded.state, message=excluded.message,
+       finished_at=CURRENT_TIMESTAMP, last_success_at=${successAt},
+       error=excluded.error, cancel_requested=0, source_breakdown=excluded.source_breakdown,
+       updated_at=CURRENT_TIMESTAMP`
+  ).run(job, state, message, errVal, bdJson);
+  jobLog(job, state === 'error' ? 'error' : 'info', error ? `${message}：${error}` : message);
+}
+
+export function jobLog(job: string, level: string, message: string): void {
+  const db = getDb();
+  db.prepare('INSERT INTO sync_log (job, level, message) VALUES (?, ?, ?)').run(job, level, message);
+  db.prepare(`DELETE FROM sync_log WHERE job=? AND id NOT IN (SELECT id FROM sync_log WHERE job=? ORDER BY id DESC LIMIT 200)`).run(job, job);
+}
+
+export function getJobLog(job: string, limit = 200): Array<{ ts: string; level: string; message: string }> {
+  return getDb().prepare('SELECT ts, level, message FROM sync_log WHERE job=? ORDER BY id DESC LIMIT ?').all(job, limit) as any[];
+}
+
+export function requestCancel(job: string): void {
+  getDb().prepare(`UPDATE sync_status SET cancel_requested=1, updated_at=CURRENT_TIMESTAMP WHERE job=? AND state='running'`).run(job);
+  jobLog(job, 'warn', '收到取消请求');
+}
+
+export function isCancelRequested(job: string): boolean {
+  const r = getDb().prepare('SELECT cancel_requested FROM sync_status WHERE job=?').get(job) as any;
+  return !!(r && r.cancel_requested);
+}
+
+export function getSyncStatus(job = 'stock_universe'): JobStatus | null {
+  const row = getDb().prepare('SELECT * FROM sync_status WHERE job=?').get(job) as any;
   if (!row) return null;
   let source_breakdown: Record<string, number> | null = null;
-  const m = /__SRC__(\{.*\})\s*$/.exec(row.message || '');
-  if (m) { try { source_breakdown = JSON.parse(m[1]); } catch { /* ignore */ } row.message = row.message.replace(/__SRC__\{.*\}\s*$/, '').trim(); }
-  return { ...row, source_breakdown };
+  if (row.source_breakdown) { try { source_breakdown = JSON.parse(row.source_breakdown); } catch { /* ignore */ } }
+  return { ...row, cancel_requested: row.cancel_requested ?? 0, source_breakdown };
+}
+
+export function canStartJob(job: string): boolean {
+  const st = getSyncStatus(job);
+  if (!st) return true;
+  if (st.state === 'running') return false;
+  if (st.last_success_at) {
+    const d = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai' }).format(new Date(st.last_success_at.replace(' ', 'T') + 'Z'));
+    if (d === todayCN()) return false;
+  }
+  return true;
 }
 
 // ---- EOD batch ingestion: pull daily quotes for the whole local universe into the cache ----
-export async function ingestEod(userId: string, opts: { days?: number; codes?: string[] } = {}): Promise<void> {
+export async function ingestEod(userId: string, opts: { days?: number; codes?: string[]; startedBy?: string } = {}): Promise<void> {
   if (getSyncStatus('eod')?.state === 'running') return;
   const base = resolveSidecarBase(userId);
-  if (!base) {
-    setSync('eod', 'error', 0, 0, '没有可用的数据源');
-    return;
-  }
+  if (!base) { beginJob('eod', opts.startedBy ?? 'system', 0); finishJob('eod', 'error', '没有可用的数据源', null, 'NO_SOURCE'); return; }
+  const codes = opts.codes?.length ? opts.codes : (getDb().prepare('SELECT code FROM stock_names').all() as { code: string }[]).map((r) => r.code);
+  if (!codes.length) { beginJob('eod', opts.startedBy ?? 'system', 0); finishJob('eod', 'error', '本地股票库为空，请先同步股票库', null, 'EMPTY_UNIVERSE'); return; }
   const days = opts.days ?? 10;
-  const codes = opts.codes?.length
-    ? opts.codes
-    : (getDb().prepare('SELECT code FROM stock_names').all() as { code: string }[]).map((r) => r.code);
-  if (!codes.length) {
-    setSync('eod', 'error', 0, 0, '本地股票库为空，请先在「股票库」同步');
-    return;
-  }
-  setSync('eod', 'running', codes.length, 0, `开始拉取 ${codes.length} 只股票近 ${days} 天行情…`);
+  beginJob('eod', opts.startedBy ?? 'system', codes.length);
   const order = await orderedProviders(base, 'quote');
   const bySource: Record<string, number> = {};
-  let ok = 0;
-  let fail = 0;
+  let ok = 0, fail = 0;
   for (let i = 0; i < codes.length; i++) {
+    if (isCancelRequested('eod')) { finishJob('eod', 'idle', `已取消：已处理 ${i}/${codes.length}（成功 ${ok}）`); return; }
     try {
       const res = await fetchQuotes(base, codes[i], days, order);
-      if (res && res.rows.length) {
-        const src = res.source ?? 'unknown';
-        cacheQuotes(res.rows, src);
-        bySource[src] = (bySource[src] ?? 0) + 1;
-        ok++;
-      } else fail++;
-    } catch {
-      fail++;
-    }
-    if (i % 20 === 0 || i === codes.length - 1) {
-      setSync('eod', 'running', codes.length, i + 1, `已处理 ${i + 1}/${codes.length}，成功 ${ok}、失败 ${fail}`);
-    }
-    await new Promise((res) => setImmediate(res));
+      if (res && res.rows.length) { const src = res.source ?? 'unknown'; cacheQuotes(res.rows, src); bySource[src] = (bySource[src] ?? 0) + 1; ok++; }
+      else fail++;
+    } catch { fail++; }
+    if (i % 20 === 0 || i === codes.length - 1) setProgress('eod', codes.length, i + 1, `已处理 ${i + 1}/${codes.length}，成功 ${ok}、失败 ${fail}`);
+    await new Promise((r) => setImmediate(r));
   }
-  const denom = ok || 1;
-  const breakdown: Record<string, number> = {};
+  const denom = ok || 1; const breakdown: Record<string, number> = {};
   for (const k of Object.keys(bySource)) breakdown[k] = Math.round((bySource[k] / denom) * 100);
-  setSync('eod', 'done', codes.length, codes.length, `完成：成功 ${ok}、失败 ${fail}`, breakdown);
+  finishJob('eod', 'done', `完成：成功 ${ok}、失败 ${fail}`, breakdown);
 }
 
 export function countStocks(): number {
@@ -99,21 +146,24 @@ export function countStocks(): number {
 }
 
 // Fire-and-forget incremental sync: add new, update changed, delete delisted. Never throws.
-export async function syncStockUniverse(userId: string): Promise<void> {
+export async function syncStockUniverse(userId: string, startedBy = 'system'): Promise<void> {
   const cur = getSyncStatus();
   if (cur?.state === 'running') return; // already in progress
-  setSync('stock_universe', 'running', 0, 0, '正在获取全量股票列表…');
   try {
     const base = resolveSidecarBase(userId);
     if (!base) {
-      setSync('stock_universe', 'error', 0, 0, '没有可用的数据源');
+      beginJob('stock_universe', startedBy, 0);
+      finishJob('stock_universe', 'error', '没有可用的数据源', null, 'NO_SOURCE');
       return;
     }
     const remote = await fetchAllStocks(base);
     if (!remote || remote.length < 1000) {
-      setSync('stock_universe', 'error', remote?.length ?? 0, 0, '数据源返回异常（数量过少），已跳过以免误删');
+      beginJob('stock_universe', startedBy, remote?.length ?? 0);
+      finishJob('stock_universe', 'error', '数据源返回异常（数量过少），已跳过以免误删', null, 'INSUFFICIENT_DATA');
       return;
     }
+    const total = remote.length;
+    beginJob('stock_universe', startedBy, total);
     const db = getDb();
     const localRows = db.prepare('SELECT code, name, py FROM stock_names').all() as { code: string; name: string; py: string }[];
     const local = new Map(localRows.map((r) => [r.code, r]));
@@ -126,10 +176,14 @@ export async function syncStockUniverse(userId: string): Promise<void> {
       `INSERT INTO stock_names (code, name, py, source, fetched_at) VALUES (?, ?, ?, 'akshare', CURRENT_TIMESTAMP)
        ON CONFLICT(code) DO UPDATE SET name=excluded.name, py=excluded.py, fetched_at=CURRENT_TIMESTAMP`
     );
-    setSync('stock_universe', 'running', remote.length, 0, '正在比对并写入本地…');
+    setProgress('stock_universe', total, 0, '正在比对并写入本地…');
 
     // batch with yields so the event loop isn't blocked and progress is visible
     for (let i = 0; i < remote.length; i += 500) {
+      if (isCancelRequested('stock_universe')) {
+        finishJob('stock_universe', 'idle', `已取消：已处理 ${i}/${total}`);
+        return;
+      }
       const batch = remote.slice(i, i + 500);
       const tx = db.transaction(() => {
         for (const r of batch) {
@@ -140,7 +194,7 @@ export async function syncStockUniverse(userId: string): Promise<void> {
         }
       });
       tx();
-      setSync('stock_universe', 'running', remote.length, Math.min(i + 500, remote.length), '正在比对并写入本地…');
+      setProgress('stock_universe', total, Math.min(i + 500, total), '正在比对并写入本地…');
       await new Promise((res) => setImmediate(res));
     }
     // delete delisted (codes locally but not in remote)
@@ -153,9 +207,9 @@ export async function syncStockUniverse(userId: string): Promise<void> {
       }
     });
     delTx();
-    setSync('stock_universe', 'done', remote.length, remote.length, `完成：新增 ${added}、更新 ${updated}、删除 ${deleted}，共 ${remote.length} 只`);
-  } catch (e) {
-    setSync('stock_universe', 'error', 0, 0, `同步失败：${(e as Error).message}`);
+    finishJob('stock_universe', 'done', `完成：新增 ${added}、更新 ${updated}、删除 ${deleted}，共 ${total} 只`);
+  } catch (err) {
+    finishJob('stock_universe', 'error', '同步失败', null, String(err));
   }
 }
 

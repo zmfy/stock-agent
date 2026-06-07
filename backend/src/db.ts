@@ -203,9 +203,25 @@ function initSchema(): void {
       total INTEGER DEFAULT 0,
       done INTEGER DEFAULT 0,
       message TEXT,
+      started_at DATETIME,
+      finished_at DATETIME,
+      last_success_at DATETIME,
+      started_by TEXT,
+      error TEXT,
+      cancel_requested INTEGER DEFAULT 0,
+      source_breakdown TEXT,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
+
+    CREATE TABLE IF NOT EXISTS sync_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      job TEXT NOT NULL,
+      ts DATETIME DEFAULT CURRENT_TIMESTAMP,
+      level TEXT,
+      message TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_sync_log_job ON sync_log (job, id);
 
     CREATE TABLE IF NOT EXISTS market_sentiment (
       date TEXT PRIMARY KEY,
@@ -344,6 +360,24 @@ function migrate(): void {
   }
   // index on py created after the column is guaranteed to exist
   db.exec('CREATE INDEX IF NOT EXISTS idx_stock_names_py ON stock_names (py)');
+  const sycols = db.prepare('PRAGMA table_info(sync_status)').all() as { name: string }[];
+  if (sycols.length) {
+    const add = (c: string, ddl: string) => { if (!sycols.some((x) => x.name === c)) db.exec(`ALTER TABLE sync_status ADD COLUMN ${ddl}`); };
+    add('started_at', 'started_at DATETIME');
+    add('finished_at', 'finished_at DATETIME');
+    add('last_success_at', 'last_success_at DATETIME');
+    add('started_by', 'started_by TEXT');
+    add('error', 'error TEXT');
+    add('cancel_requested', 'cancel_requested INTEGER DEFAULT 0');
+    add('source_breakdown', 'source_breakdown TEXT');
+  }
+  db.exec(`CREATE TABLE IF NOT EXISTS sync_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, job TEXT NOT NULL, ts DATETIME DEFAULT CURRENT_TIMESTAMP, level TEXT, message TEXT
+  )`);
+  db.exec('CREATE INDEX IF NOT EXISTS idx_sync_log_job ON sync_log (job, id)');
+  // Dedup data_sources: keep one row per base_url (idempotent)
+  const dsHas = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='data_sources'").get();
+  if (dsHas) db.exec(`DELETE FROM data_sources WHERE id NOT IN (SELECT MIN(rowid) FROM data_sources GROUP BY base_url)`);
 }
 
 // Seed a default admin account on first init so an invite-only system is reachable.

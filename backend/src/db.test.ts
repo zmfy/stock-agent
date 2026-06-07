@@ -71,4 +71,14 @@ describe('getDb', () => {
       .map((r: { name: string }) => r.name);
     expect(tables).toEqual(expect.arrayContaining(['quote_daily', 'fundamentals', 'market_sentiment']));
   });
+
+  it('sync_status 有治理列，sync_log 表存在', () => {
+    const db = require('./db').getDb();
+    const cols = db.prepare('PRAGMA table_info(sync_status)').all().map((c: any) => c.name);
+    for (const c of ['started_at', 'finished_at', 'last_success_at', 'started_by', 'error', 'cancel_requested', 'source_breakdown']) {
+      expect(cols).toContain(c);
+    }
+    const t = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='sync_log'").get();
+    expect(t).toBeTruthy();
+  });
 });

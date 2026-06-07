@@ -60,6 +60,30 @@ describe('data/service', () => {
     expect(svc.searchStocks('300348').map((r: any) => r.code)).toContain('300348'); // by code
   });
 
+  it('富状态：beginJob/finishJob/canStartJob/cancel/log', () => {
+    const svc = require('./service');
+    svc.beginJob('eod', 'alice', 100);
+    let st = svc.getSyncStatus('eod');
+    expect(st.state).toBe('running'); expect(st.started_by).toBe('alice');
+    expect(svc.canStartJob('eod')).toBe(false);
+    svc.requestCancel('eod'); expect(svc.isCancelRequested('eod')).toBe(true);
+    svc.jobLog('eod', 'info', '处理中…');
+    expect(svc.getJobLog('eod').some((l: any) => l.message === '处理中…')).toBe(true);
+    svc.finishJob('eod', 'done', '完成', { tx: 90, sina: 10 });
+    st = svc.getSyncStatus('eod');
+    expect(st.state).toBe('done'); expect(st.last_success_at).toBeTruthy();
+    expect(st.source_breakdown).toEqual({ tx: 90, sina: 10 });
+    expect(st.cancel_requested).toBe(0);
+    expect(svc.canStartJob('eod')).toBe(false);
+  });
+
+  it('canStartJob: error 状态可重试', () => {
+    const svc = require('./service');
+    svc.finishJob('stock_universe', 'error', '出错', null, '网络错误');
+    expect(svc.getSyncStatus('stock_universe').error).toBe('网络错误');
+    expect(svc.canStartJob('stock_universe')).toBe(true);
+  });
+
   it('ingestEod 探测择优、按真实来源缓存并写占比', async () => {
     const svc = require('./service');
     const db = require('../db').getDb();
@@ -75,5 +99,20 @@ describe('data/service', () => {
     const row = db.prepare("SELECT source FROM quote_daily WHERE code='600519' LIMIT 1").get();
     expect(row.source).toBe('tx');
     expect(JSON.stringify(st.source_breakdown)).toContain('tx');
+  });
+
+  it('ingestEod 用 beginJob/finishJob 并在 cancel 时中止', async () => {
+    const svc = require('./service');
+    const db = require('../db').getDb();
+    db.prepare("INSERT OR IGNORE INTO stock_names (code,name) VALUES ('600519','x'),('000001','y'),('000002','z')").run();
+    require('./sources-service').ensureSeed?.('u1');
+    (global as any).fetch = jest.fn((url: string) => {
+      if (url.includes('/probe')) return Promise.resolve({ ok: true, json: async () => [{ key: 'tx', label: '腾讯', reachable: true, latency_ms: 1, error: null }] });
+      svc.requestCancel('eod');
+      return Promise.resolve({ ok: true, json: async () => ({ source: 'tx', rows: [{ date: '2026-06-01', open: 1, high: 1, low: 1, close: 1, volume: 1 }] }) });
+    });
+    await svc.ingestEod('u1', { days: 5, startedBy: 'alice' });
+    const st = svc.getSyncStatus('eod');
+    expect(st.state).toBe('idle'); expect(st.message).toContain('取消'); expect(st.done).toBeLessThan(3);
   });
 });
