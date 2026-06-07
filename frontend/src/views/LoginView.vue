@@ -11,19 +11,34 @@
         <svg class="art" viewBox="0 0 320 160" fill="none" xmlns="http://www.w3.org/2000/svg">
           <!-- K 线 -->
           <!-- 一路上涨的红色 K 线 -->
+          <!-- 多头排列：12 根红柱长短不一，均线穿插（柱在线上 / 线中 / 线下都有） -->
           <g opacity="0.98">
-            <line x1="36" y1="124" x2="36" y2="148" stroke="rgba(74,59,42,0.3)" stroke-width="2"/>
-            <rect x="28" y="126" width="16" height="18" rx="2" fill="#e5484d"/>
-            <line x1="84" y1="104" x2="84" y2="132" stroke="rgba(74,59,42,0.3)" stroke-width="2"/>
-            <rect x="76" y="106" width="16" height="22" rx="2" fill="#e5484d"/>
-            <line x1="132" y1="82" x2="132" y2="112" stroke="rgba(74,59,42,0.3)" stroke-width="2"/>
-            <rect x="124" y="84" width="16" height="24" rx="2" fill="#e5484d"/>
-            <line x1="180" y1="60" x2="180" y2="92" stroke="rgba(74,59,42,0.3)" stroke-width="2"/>
-            <rect x="172" y="62" width="16" height="26" rx="2" fill="#e5484d"/>
-            <line x1="228" y1="38" x2="228" y2="72" stroke="rgba(74,59,42,0.3)" stroke-width="2"/>
-            <rect x="220" y="40" width="16" height="28" rx="2" fill="#e5484d"/>
-            <polyline points="36,126 84,106 132,84 180,62 228,40 296,16" stroke="#e07a2f" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-            <circle cx="296" cy="16" r="4.5" fill="#e07a2f"/>
+            <line x1="30" y1="114" x2="30" y2="144" stroke="rgba(74,59,42,0.35)" stroke-width="1.6"/>
+            <rect x="24" y="120" width="12" height="18" rx="1.5" fill="#e5484d"/>
+            <line x1="54" y1="104" x2="54" y2="134" stroke="rgba(74,59,42,0.35)" stroke-width="1.6"/>
+            <rect x="48" y="110" width="12" height="18" rx="1.5" fill="#e5484d"/>
+            <line x1="78" y1="102" x2="78" y2="122" stroke="rgba(74,59,42,0.35)" stroke-width="1.6"/>
+            <rect x="72" y="108" width="12" height="8" rx="1.5" fill="#e5484d"/>
+            <line x1="102" y1="90" x2="102" y2="120" stroke="rgba(74,59,42,0.35)" stroke-width="1.6"/>
+            <rect x="96" y="96" width="12" height="18" rx="1.5" fill="#e5484d"/>
+            <line x1="126" y1="94" x2="126" y2="114" stroke="rgba(74,59,42,0.35)" stroke-width="1.6"/>
+            <rect x="120" y="100" width="12" height="8" rx="1.5" fill="#e5484d"/>
+            <line x1="150" y1="78" x2="150" y2="110" stroke="rgba(74,59,42,0.35)" stroke-width="1.6"/>
+            <rect x="144" y="84" width="12" height="20" rx="1.5" fill="#e5484d"/>
+            <line x1="174" y1="74" x2="174" y2="98" stroke="rgba(74,59,42,0.35)" stroke-width="1.6"/>
+            <rect x="168" y="80" width="12" height="10" rx="1.5" fill="#e5484d"/>
+            <line x1="198" y1="58" x2="198" y2="92" stroke="rgba(74,59,42,0.35)" stroke-width="1.6"/>
+            <rect x="192" y="64" width="12" height="22" rx="1.5" fill="#e5484d"/>
+            <line x1="222" y1="60" x2="222" y2="82" stroke="rgba(74,59,42,0.35)" stroke-width="1.6"/>
+            <rect x="216" y="66" width="12" height="8" rx="1.5" fill="#e5484d"/>
+            <line x1="246" y1="44" x2="246" y2="78" stroke="rgba(74,59,42,0.35)" stroke-width="1.6"/>
+            <rect x="240" y="50" width="12" height="20" rx="1.5" fill="#e5484d"/>
+            <line x1="270" y1="40" x2="270" y2="64" stroke="rgba(74,59,42,0.35)" stroke-width="1.6"/>
+            <rect x="264" y="46" width="12" height="10" rx="1.5" fill="#e5484d"/>
+            <line x1="294" y1="24" x2="294" y2="58" stroke="rgba(74,59,42,0.35)" stroke-width="1.6"/>
+            <rect x="288" y="30" width="12" height="22" rx="1.5" fill="#e5484d"/>
+            <polyline points="30,118 54,122 78,120 102,110 126,112 150,100 174,96 198,84 222,80 246,70 270,62 294,54" stroke="#e07a2f" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+            <circle cx="294" cy="54" r="4" fill="#e07a2f"/>
           </g>
         </svg>
         <p class="tag-mini">—— 一根韭菜，也要做有计划的韭菜 🥬</p>
