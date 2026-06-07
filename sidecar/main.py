@@ -6,6 +6,7 @@ reports the rest as `_missing`. AkShare call→field mappings may need tuning on
 real run; keep them isolated so one broken endpoint never sinks the whole response.
 """
 from datetime import datetime
+import time
 
 import socket
 from concurrent.futures import ThreadPoolExecutor
@@ -250,6 +251,52 @@ def _ak_quote(code: str, days: int):
         ]
     except Exception:
         return None
+
+
+# 每类数据的候选上游 provider。fetch(code/None, days) 返回标准化结果或 None。
+def _quote_em(code, days):   return _ak_quote(code, days)            # 东方财富 stock_zh_a_hist
+def _quote_tx(code, days):
+    df = ak.stock_zh_a_hist_tx(symbol=_mkt_prefix(code)).tail(days)
+    return [{"date": str(r.get("date")), "open": _f(r.get("open")), "high": _f(r.get("high")), "low": _f(r.get("low")), "close": _f(r.get("close")), "volume": _f(r.get("amount"))} for _, r in df.iterrows()]
+def _quote_sina(code, days):
+    df = ak.stock_zh_a_daily(symbol=_mkt_prefix(code), adjust="qfq").tail(days)
+    return [{"date": str(r.get("date")), "open": _f(r.get("open")), "high": _f(r.get("high")), "low": _f(r.get("low")), "close": _f(r.get("close")), "volume": _f(r.get("volume"))} for _, r in df.iterrows()]
+def _quote_baostock(code, days): return _bs_quote(code, days)
+
+QUOTE_PROVIDERS = [
+    {"key": "tx",       "label": "腾讯",     "fn": _quote_tx},
+    {"key": "sina",     "label": "新浪",     "fn": _quote_sina},
+    {"key": "em",       "label": "东方财富", "fn": _quote_em},
+    {"key": "baostock", "label": "BaoStock", "fn": _quote_baostock},
+]
+
+PROVIDERS = {"quote": QUOTE_PROVIDERS}  # fundamentals/sentiment/news 在后续任务加入
+
+def _order_providers(kind, order):
+    regs = PROVIDERS.get(kind, [])
+    if not order:
+        return regs
+    want = [k for k in order.split(",") if k]
+    by_key = {r["key"]: r for r in regs}
+    picked = [by_key[k] for k in want if k in by_key]
+    return picked or regs
+
+def _probe_one(reg, kind):
+    t0 = time.time()
+    try:
+        if kind in ("quote", "fundamentals"):
+            data = _timed(lambda: reg["fn"]("600519", 5), 8)
+        else:
+            data = _timed(lambda: reg["fn"](None, 5), 8)
+        ok = bool(data)
+        return {"key": reg["key"], "label": reg["label"], "reachable": ok, "latency_ms": int((time.time() - t0) * 1000) if ok else None, "error": None if ok else "空/超时"}
+    except Exception as e:
+        return {"key": reg["key"], "label": reg["label"], "reachable": False, "latency_ms": None, "error": str(e)[:120]}
+
+
+@app.get("/probe")
+def probe(kind: str = "quote"):
+    return [_probe_one(reg, kind) for reg in PROVIDERS.get(kind, [])]
 
 
 @app.get("/quote/{code}")
