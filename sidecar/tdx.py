@@ -258,12 +258,14 @@ def _probe_server(h):
     t0 = time.perf_counter()
     try:
         c = Quotes.factory(market="std", server=(h["addr"], int(h["port"])), bestip=False, timeout=2, raise_exception=True)
-        n = c.stock_count(market=1)
-        ok = bool(n and int(n) > 0)
         try:
-            c.close()
-        except Exception:
-            pass
+            n = c.stock_count(market=1)
+            ok = bool(n and int(n) > 0)
+        finally:
+            try:
+                c.close()
+            except Exception:
+                pass
         return {"site": h["site"], "addr": h["addr"], "port": int(h["port"]),
                 "ok": ok, "latency_ms": round((time.perf_counter() - t0) * 1000, 1) if ok else None}
     except Exception:
