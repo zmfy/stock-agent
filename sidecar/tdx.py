@@ -1,5 +1,6 @@
 # 通达信(mootdx)数据源：自算前复权 + 带锁单例客户端 + bars/stocks/finance/realtime。
 # 注意：不使用 mootdx 内置 adjust（其 qfq 在新版 pandas 下报 fillna(method=) 错误）。
+import re
 import threading
 from mootdx.quotes import Quotes
 
@@ -117,31 +118,89 @@ def _latest_raw_close(code):
     return _call(fn)
 
 
-def finance_fundamentals(code):
-    """用 finance() + 当前价算 roe_ttm/pe/pb/ps/net_profit。"""
-    price = _latest_raw_close(code)   # 先取价（独立 _call，避免嵌套加锁死锁）
+def _num_cn(s):
+    """解析中文数字串：去全角空格，支持 亿/万 后缀，'-' 或空 → None。"""
+    s = (s or "").replace("　", "").strip()
+    if not s or s == "-":
+        return None
+    mult = 1.0
+    if s.endswith("亿"):
+        mult, s = 1e8, s[:-1]
+    elif s.endswith("万"):
+        mult, s = 1e4, s[:-1]
+    try:
+        return float(s) * mult
+    except Exception:
+        return None
+
+
+def parse_f10_indicators(txt):
+    """解析 F10「财务分析」主要财务指标表（｜全角竖线分隔）。
+    eps/roe/revenue/net_profit 取最近年报列(YYYY-12-31)，bvps 取最新列(MRQ)。无表返回 None。"""
+    if not txt:
+        return None
+    lines = txt.split("\n")
+    hdr = None
+    for ln in lines:
+        if "财务指标" in ln and re.search(r"\d{4}-\d{2}-\d{2}", ln):
+            hdr = [x.strip() for x in ln.split("｜")]
+            break
+    if not hdr or len(hdr) < 3:
+        return None
+    dates = hdr[2:]
+    col_latest = 0
+    col_annual = next((i for i, d in enumerate(dates) if d.endswith("-12-31")), 0)
+
+    def cell(label, col):
+        for ln in lines:
+            cells = [x.strip() for x in ln.split("｜")]
+            if len(cells) > 2 and cells[1].startswith(label):
+                vals = cells[2:]
+                return vals[col] if col < len(vals) else None
+        return None
+
+    return {
+        "eps": _num_cn(cell("基本每股收益", col_annual)),
+        "roe": _num_cn(cell("加权净资产收益率", col_annual)),
+        "revenue": _num_cn(cell("营业总收入", col_annual)),
+        "net_profit": _num_cn(cell("净利润", col_annual)),
+        "bvps": _num_cn(cell("每股净资产", col_latest)),
+    }
+
+
+def _f10_text(code):
+    return _call(lambda c: c.F10(symbol=code, name="财务分析"))
+
+
+def _shares(code):
     def fn(c):
         fin = c.finance(symbol=code)
         if fin is None or len(fin) == 0:
             return None
-        row = fin.iloc[0]
-        shares = _f(row.get("zongguben"))
-        eq = _f(row.get("jingzichan"))
-        rev = _f(row.get("zhuyingshouru"))
-        profit = _f(row.get("jinglirun"))
-        bvps = _f(row.get("meigujingzichan"))
-        out = {}
-        if profit and eq:
-            out["roe_ttm"] = round(profit / eq * 100, 2)
-        if price and bvps:
-            out["pb"] = round(price / bvps, 2)
-        if price and shares and profit and profit > 0:
-            out["pe"] = round(price * shares / profit, 2)
-        if price and shares and rev and rev > 0:
-            out["ps"] = round(price * shares / rev, 2)
-        out["net_profit"] = profit
-        return out
+        return _f(fin.iloc[0].get("zongguben"))
     return _call(fn)
+
+
+def finance_fundamentals(code):
+    """F10 财务分析(干净) + 当前价 + 总股本 → roe_ttm/pe/pb/ps/net_profit。
+    PE/PS/ROE/净利润用最近年报(静态)，PB 用最新每股净资产(MRQ)。"""
+    price = _latest_raw_close(code)   # 独立 _call
+    shares = _shares(code)            # 独立 _call
+    ind = parse_f10_indicators(_f10_text(code))  # 独立 _call + 纯解析
+    if not ind:
+        return None
+    out = {}
+    if ind["roe"] is not None:
+        out["roe_ttm"] = round(ind["roe"], 2)
+    if price and ind["eps"]:
+        out["pe"] = round(price / ind["eps"], 2)
+    if price and ind["bvps"]:
+        out["pb"] = round(price / ind["bvps"], 2)
+    if price and shares and ind["revenue"]:
+        out["ps"] = round(price * shares / ind["revenue"], 2)
+    if ind["net_profit"] is not None:
+        out["net_profit"] = ind["net_profit"]
+    return out
 
 
 def _is_a_stock(market, code):
