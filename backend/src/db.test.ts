@@ -81,4 +81,12 @@ describe('getDb', () => {
     const t = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='sync_log'").get();
     expect(t).toBeTruthy();
   });
+
+  it('news_title_log / news_content_log 表存在且列齐全', () => {
+    const db = require('./db').getDb();
+    const t = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name IN ('news_title_log','news_content_log')").all().map((r: any) => r.name);
+    expect(t).toEqual(expect.arrayContaining(['news_title_log', 'news_content_log']));
+    const cc = db.prepare('PRAGMA table_info(news_content_log)').all().map((c: any) => c.name);
+    expect(cc).toEqual(expect.arrayContaining(['id','title','content','source','published_at','collected_at','adopted','adopted_at']));
+  });
 });

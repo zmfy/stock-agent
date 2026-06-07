@@ -311,6 +311,18 @@ function initSchema(): void {
 
     CREATE INDEX IF NOT EXISTS idx_chat_sessions_user ON chat_sessions (user_id, kind);
     CREATE INDEX IF NOT EXISTS idx_chat_messages_session ON chat_messages (session_id, created_at);
+
+    CREATE TABLE IF NOT EXISTS news_content_log (
+      id TEXT PRIMARY KEY, title TEXT NOT NULL, content TEXT, source TEXT, published_at TEXT,
+      collected_at DATETIME DEFAULT CURRENT_TIMESTAMP, adopted INTEGER DEFAULT 0, adopted_at DATETIME,
+      UNIQUE(title, published_at)
+    );
+    CREATE TABLE IF NOT EXISTS news_title_log (
+      id TEXT PRIMARY KEY, content_id TEXT, title TEXT NOT NULL, source TEXT, published_at TEXT,
+      collected_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_news_title_collected ON news_title_log (collected_at);
+    CREATE INDEX IF NOT EXISTS idx_news_content_adopted ON news_content_log (adopted, collected_at);
   `);
 
   migrate();
@@ -378,6 +390,20 @@ function migrate(): void {
   // Dedup data_sources: keep one row per base_url (idempotent)
   const dsHas = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='data_sources'").get();
   if (dsHas) db.exec(`DELETE FROM data_sources WHERE id NOT IN (SELECT MIN(rowid) FROM data_sources GROUP BY base_url)`);
+  // news dual-log tables (idempotent for old DBs)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS news_content_log (
+      id TEXT PRIMARY KEY, title TEXT NOT NULL, content TEXT, source TEXT, published_at TEXT,
+      collected_at DATETIME DEFAULT CURRENT_TIMESTAMP, adopted INTEGER DEFAULT 0, adopted_at DATETIME,
+      UNIQUE(title, published_at)
+    );
+    CREATE TABLE IF NOT EXISTS news_title_log (
+      id TEXT PRIMARY KEY, content_id TEXT, title TEXT NOT NULL, source TEXT, published_at TEXT,
+      collected_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_news_title_collected ON news_title_log (collected_at);
+    CREATE INDEX IF NOT EXISTS idx_news_content_adopted ON news_content_log (adopted, collected_at);
+  `);
 }
 
 // Seed a default admin account on first init so an invite-only system is reachable.
