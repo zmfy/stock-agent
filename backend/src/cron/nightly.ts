@@ -1,6 +1,7 @@
 import cron from 'node-cron';
 import { getDb } from '../db';
 import * as data from '../data/service';
+import { purgeOldLogs } from '../data/news-log';
 
 // Pick a user whose enabled akshare-data plugin we can use to refresh shared market data.
 // Market data is global, so any admin/user with the sidecar enabled works; default to the admin.
@@ -12,6 +13,8 @@ function pickRefreshUserId(): string | null {
 }
 
 async function runNightly(): Promise<void> {
+  // 新闻双日志清理（标题>1年 / 内容采用>3月·未采用>1周）——全局，无需用户
+  try { purgeOldLogs(); } catch { /* ignore */ }
   const userId = pickRefreshUserId();
   if (!userId) return;
   try {
