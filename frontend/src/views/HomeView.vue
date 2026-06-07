@@ -79,6 +79,23 @@
                   <div v-if="m.created_at" class="mtime">{{ fmtTime(m.created_at) }}</div>
                 </div>
                 <div v-if="sending" class="msg assistant"><div class="bubble typing">思考中…</div></div>
+        <div v-if="proposal" class="msg assistant">
+          <div class="bubble proposal-card">
+            <h4>修改提议（{{ proposal.magnitude === 'major' ? '较大改动' : '微调' }}）：{{ proposal.currentLabel }} → <b>{{ proposal.suggestedLabel }}</b></h4>
+            <p v-if="proposal.delta.personaChanged">· 人设有改动</p>
+            <p v-for="c in proposal.delta.gates.changed" :key="c.gate_key">· 门槛 <b>{{ c.gate_key }}</b>：{{ c.from.threshold }} → {{ c.to.threshold }}</p>
+            <p v-for="k in proposal.delta.gates.added" :key="'a'+k">· 新增门槛 {{ k }}</p>
+            <p v-for="k in proposal.delta.gates.removed" :key="'r'+k">· 删除门槛 {{ k }}</p>
+            <p v-if="proposal.delta.softRules.added.length || proposal.delta.softRules.removed.length">· 软判断 +{{ proposal.delta.softRules.added.length }} / -{{ proposal.delta.softRules.removed.length }}</p>
+            <p v-if="proposal.delta.positionRulesChangedKeys.length">· 仓位规则改动：{{ proposal.delta.positionRulesChangedKeys.join('、') }}</p>
+            <p v-if="noChange" class="muted">无实质改动</p>
+            <p v-if="proposal.proposal.note" class="muted">理由：{{ proposal.proposal.note }}</p>
+            <div class="ops">
+              <button :disabled="applying || noChange" @click="applyProposal">采纳并升级到 {{ proposal.suggestedLabel }}</button>
+              <button @click="proposal = null">放弃</button>
+            </div>
+          </div>
+        </div>
               </div>
 
               <div class="composer">
@@ -156,22 +173,6 @@
                 </button>
               </div>
 
-              <div v-if="proposal" class="proposal">
-                <h4>修改提议（{{ proposal.magnitude === 'major' ? '较大改动' : '微调' }}）：{{ proposal.currentLabel }} → <b>{{ proposal.suggestedLabel }}</b></h4>
-                <p v-if="proposal.delta.personaChanged">· 人设有改动</p>
-                <p v-for="c in proposal.delta.gates.changed" :key="c.gate_key">· 门槛 <b>{{ c.gate_key }}</b>：{{ c.from.threshold }} → {{ c.to.threshold }}</p>
-                <p v-for="k in proposal.delta.gates.added" :key="'a'+k">· 新增门槛 {{ k }}</p>
-                <p v-for="k in proposal.delta.gates.removed" :key="'r'+k">· 删除门槛 {{ k }}</p>
-                <p v-if="proposal.delta.softRules.added.length || proposal.delta.softRules.removed.length">· 软判断 +{{ proposal.delta.softRules.added.length }} / -{{ proposal.delta.softRules.removed.length }}</p>
-                <p v-if="proposal.delta.positionRulesChangedKeys.length">· 仓位规则改动：{{ proposal.delta.positionRulesChangedKeys.join('、') }}</p>
-                <p v-if="noChange" class="muted">无实质改动</p>
-                <p v-if="proposal.proposal.note" class="muted">理由：{{ proposal.proposal.note }}</p>
-                <div class="ops">
-                  <button :disabled="applying || noChange" @click="applyProposal">采纳并升级到 {{ proposal.suggestedLabel }}</button>
-                  <button @click="proposal = null">放弃</button>
-                </div>
-                <p v-if="applyMsg" class="ok-msg">{{ applyMsg }}</p>
-              </div>
             </template>
           </aside>
         </div>
@@ -204,12 +205,12 @@ const auth = useAuthStore();
 
 // 系统设置：右侧内嵌这些页面，左栏不变
 const SETTINGS = [
-  { key: 'analysis', label: '分析历史', icon: '📊', comp: AnalysisView },
   { key: 'rulebook', label: '核心规则', icon: '📜', comp: RulebookView },
+  { key: 'meetings', label: '早晚会历史', icon: '🗓', comp: MeetingsHistoryView },
+  { key: 'analysis', label: '分析历史', icon: '📊', comp: AnalysisView },
+  { key: 'data', label: '数据', icon: '📈', comp: DataView },
   { key: 'ai', label: 'AI 模型', icon: '🤖', comp: AiSettingsView },
   { key: 'plugins', label: '能力插件', icon: '🧩', comp: PluginsView },
-  { key: 'data', label: '数据', icon: '📈', comp: DataView },
-  { key: 'meetings', label: '早晚会历史', icon: '🗓', comp: MeetingsHistoryView },
   { key: 'account', label: '账号设置', icon: '👤', comp: SettingsView },
 ];
 const settingsKey = ref(''); // '' = 聊天；否则为某个功能面板
@@ -321,7 +322,6 @@ const briefing = computed(() => {
 const proposal = ref<ProposeResult | null>(null);
 const proposing = ref(false);
 const applying = ref(false);
-const applyMsg = ref('');
 const noChange = computed(() => {
   const d = proposal.value?.delta;
   return !!d && !d.personaChanged && !d.gates.changed.length && !d.gates.added.length && !d.gates.removed.length && !d.softRules.added.length && !d.softRules.removed.length && !d.positionRulesChangedKeys.length;
@@ -330,7 +330,6 @@ const noChange = computed(() => {
 async function propose() {
   if (!active.value) return;
   proposing.value = true;
-  applyMsg.value = '';
   chatErr.value = '';
   try {
     proposal.value = (await rulebookApi.propose({ sessionId: active.value.id })).data.data;
@@ -345,11 +344,19 @@ async function applyProposal() {
   if (!proposal.value) return;
   applying.value = true;
   try {
-    await rulebookApi.apply(proposal.value.suggestedLabel, proposal.value.proposal);
-    applyMsg.value = `已采纳，规则升级到 ${proposal.value.suggestedLabel}`;
+    const label = proposal.value.suggestedLabel;
+    await rulebookApi.apply(label, proposal.value.proposal);
     proposal.value = null;
-    // refresh the in-pane current-rulebook banner
     activeRulebook.value = (await rulebookApi.getActive()).data.data;
+    messages.value.push({
+      id: 'local-applied-' + Date.now(),
+      session_id: active.value?.id || '',
+      role: 'assistant',
+      content: `✅ 已采纳，规则升级到 ${label}。\n\n` + buildCpBriefing(activeRulebook.value),
+      created_at: new Date().toISOString(),
+    } as ChatMessage);
+    await nextTick();
+    if (msgsEl.value) msgsEl.value.scrollTop = msgsEl.value.scrollHeight;
   } catch (e: any) {
     chatErr.value = e.response?.data?.message || '采纳失败';
   } finally {
@@ -380,7 +387,6 @@ async function open(s: ChatSession) {
   active.value = s;
   chatErr.value = '';
   proposal.value = null;
-  applyMsg.value = '';
   messages.value = (await chatApi.getMessages(s.id)).data.data;
   scrollDown();
   // A freshly opened stock session auto-runs the rule-based analysis as its opener.
@@ -729,6 +735,9 @@ onMounted(async () => {
 .proposal p { margin: 2px 0; }
 .proposal .ops { display: flex; gap: 8px; margin-top: 8px; }
 .ok-msg { color: #2a8a2a; }
+.proposal-card h4 { margin: 0 0 6px; font-size: 14px; }
+.proposal-card p { margin: 2px 0; font-size: 13px; }
+.proposal-card .ops { margin-top: 8px; display: flex; gap: 8px; }
 .composer { display: flex; gap: 8px; border-top: 1px solid var(--border); padding-top: 12px; }
 .composer textarea { flex: 1; padding: 9px 11px; resize: none; border-radius: var(--radius-sm); }
 .composer button { background: var(--accent); color: #fff; border: none; border-radius: var(--radius-sm); padding: 0 20px; font-weight: 600; font-size: 14px; transition: background 0.15s; }
