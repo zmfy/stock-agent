@@ -27,18 +27,36 @@ export async function fetchFundamentals(base: string, code: string): Promise<Rec
   return getJson(`${base}/fundamentals/${code}`);
 }
 
-export async function fetchQuotes(base: string, code: string, days = 120): Promise<QuoteRow[] | null> {
-  const data = await getJson(`${base}/quote/${code}?days=${days}`);
-  if (!Array.isArray(data)) return null;
-  return data.map((r: any) => ({
-    code,
-    date: String(r.date),
-    open: num(r.open),
-    high: num(r.high),
-    low: num(r.low),
-    close: num(r.close),
-    volume: num(r.volume),
+export interface ProbeResult { key: string; label: string; reachable: boolean; latencyMs: number | null; error: string | null }
+
+export async function probe(base: string, kind: string): Promise<ProbeResult[]> {
+  const data = await getJson(`${base}/probe?kind=${encodeURIComponent(kind)}`);
+  if (!Array.isArray(data)) return [];
+  return data.map((p: any) => ({
+    key: String(p.key), label: String(p.label ?? p.key),
+    reachable: !!p.reachable, latencyMs: p.latency_ms == null ? null : Number(p.latency_ms),
+    error: p.error == null ? null : String(p.error),
   }));
+}
+
+export async function orderedProviders(base: string, kind: string): Promise<string[]> {
+  const res = await probe(base, kind);
+  return res.filter((p) => p.reachable).sort((a, b) => (a.latencyMs ?? 1e9) - (b.latencyMs ?? 1e9)).map((p) => p.key);
+}
+
+function qs(order?: string[]): string {
+  return order && order.length ? `&order=${order.join(',')}` : '';
+}
+
+export async function fetchQuotes(base: string, code: string, days = 120, order?: string[]): Promise<{ source: string | null; rows: QuoteRow[] } | null> {
+  const data = await getJson(`${base}/quote/${code}?days=${days}${qs(order)}`);
+  const arr = Array.isArray(data) ? data : data?.rows;     // 兼容旧裸数组
+  if (!Array.isArray(arr)) return null;
+  const source = Array.isArray(data) ? null : (data?.source ?? null);
+  return {
+    source,
+    rows: arr.map((r: any) => ({ code, date: String(r.date), open: num(r.open), high: num(r.high), low: num(r.low), close: num(r.close), volume: num(r.volume) })),
+  };
 }
 
 export async function fetchMarket(base: string): Promise<{ limit_up_count: number | null; limit_down_count: number | null; sse_ma20_slope: number | null } | null> {

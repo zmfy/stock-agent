@@ -71,7 +71,7 @@ export async function validateStock(userId: string, snapshot: StockSnapshot): Pr
     const diffs: string[] = [];
     for (const base of secs) {
       const q = await fetchQuotes(base, snapshot.code, 3).catch(() => null);
-      const close = q && q.length ? q[q.length - 1].close : null;
+      const close = q && q.rows.length ? q.rows[q.rows.length - 1].close : null;
       if (close !== null && close !== undefined && snapshot.close) {
         const dev = Math.abs(close - snapshot.close) / snapshot.close;
         if (dev > 0.02) {

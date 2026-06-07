@@ -63,8 +63,8 @@ export async function ingestEod(userId: string, opts: { days?: number; codes?: s
   for (let i = 0; i < codes.length; i++) {
     try {
       const q = await fetchQuotes(base, codes[i], days);
-      if (q && q.length) {
-        cacheQuotes(q, 'eod');
+      if (q && q.rows.length) {
+        cacheQuotes(q.rows, 'eod');
         ok++;
       } else fail++;
     } catch {
@@ -295,7 +295,7 @@ export async function refreshStock(userId: string, code: string): Promise<void> 
   if (!base) return;
   const [f, q] = await Promise.all([fetchFundamentals(base, code), fetchQuotes(base, code, 120)]);
   if (f) cacheFundamentals(code, today(), f, 'akshare');
-  if (q && q.length) cacheQuotes(q, 'akshare');
+  if (q && q.rows.length) cacheQuotes(q.rows, 'akshare');
 }
 
 export async function refreshMarket(userId: string): Promise<boolean> {
