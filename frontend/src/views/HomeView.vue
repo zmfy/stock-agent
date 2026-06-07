@@ -202,6 +202,30 @@
               </div>
 
             </template>
+
+            <!-- A 股日历（面板最底部，点击在按钮上方弹出当月休市日） -->
+            <div class="cal-wrap">
+              <div v-if="calOpen" class="cal-pop">
+                <div class="cal-nav">
+                  <button class="mini" @click="prevMonth">‹</button>
+                  <span>{{ calYear }} 年 {{ calMonth }} 月</span>
+                  <button class="mini" @click="nextMonth">›</button>
+                </div>
+                <div class="cal-grid cal-head">
+                  <span v-for="w in ['一','二','三','四','五','六','日']" :key="w">{{ w }}</span>
+                </div>
+                <div class="cal-grid">
+                  <span v-for="n in calLead" :key="'b'+n" class="cal-cell blank"></span>
+                  <span v-for="d in calDays" :key="d.date"
+                        class="cal-cell" :class="{ closed: !d.trading, today: d.date === calToday }">
+                    {{ Number(d.date.slice(8, 10)) }}
+                    <i v-if="!d.trading" class="cal-x">休</i>
+                  </span>
+                </div>
+                <div class="cal-foot muted">灰色=休市（周末/节假日），不开早晚会；今日高亮。</div>
+              </div>
+              <button class="ops-btn" @click="toggleCalendar">📅 A 股日历</button>
+            </div>
           </aside>
         </div>
 
@@ -269,6 +293,37 @@ const screen = ref<ScreenRun | null>(null);
 const screenPicks = computed(() => (screen.value?.results || []).filter((r) => r.aPass || r.bPass));
 const screenHistory = ref<Array<{ created_at: string; note: string; picks: Array<{ code: string; name: string | null; reason: string }> }>>([]);
 const screenHistOpen = ref(false);
+
+// A 股日历弹窗
+const calToday = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Shanghai' }); // YYYY-MM-DD（北京）
+const calOpen = ref(false);
+const calYear = ref(Number(calToday.slice(0, 4)));
+const calMonth = ref(Number(calToday.slice(5, 7)));
+const calDays = ref<Array<{ date: string; trading: boolean }>>([]);
+// 当月 1 号是周几（周一=0 … 周日=6），用于网格前置空格
+const calLead = computed(() => {
+  const first = `${calYear.value}-${String(calMonth.value).padStart(2, '0')}-01`;
+  return (new Date(first + 'T00:00:00Z').getUTCDay() + 6) % 7;
+});
+async function loadCalendar() {
+  try {
+    calDays.value = (await dataApi.tradeCalendar(calYear.value, calMonth.value)).days;
+  } catch {
+    calDays.value = [];
+  }
+}
+function toggleCalendar() {
+  calOpen.value = !calOpen.value;
+  if (calOpen.value && !calDays.value.length) loadCalendar();
+}
+function prevMonth() {
+  if (calMonth.value === 1) { calMonth.value = 12; calYear.value--; } else calMonth.value--;
+  loadCalendar();
+}
+function nextMonth() {
+  if (calMonth.value === 12) { calMonth.value = 1; calYear.value++; } else calMonth.value++;
+  loadCalendar();
+}
 const isMobile = typeof window !== 'undefined' && window.innerWidth <= 768;
 const opsOpen = ref(!isMobile); // 右侧操作框是否展开（手机默认收起，避免遮挡）
 const railOpen = ref(false); // 移动端左栏抽屉
@@ -770,6 +825,17 @@ onMounted(async () => {
 .ops-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
 .ops-btn.dashed { border-style: dashed; background: #f0f7f2; }
 .ops-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+.cal-wrap { position: relative; margin-top: auto; }
+.cal-pop { position: absolute; bottom: 100%; right: 0; left: 0; margin-bottom: 6px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow-md); padding: 10px; z-index: 50; }
+.cal-nav { display: flex; justify-content: space-between; align-items: center; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+.cal-head span { text-align: center; font-size: 11px; color: var(--muted); padding: 2px 0; }
+.cal-cell { position: relative; text-align: center; font-size: 12px; padding: 5px 0; border-radius: 6px; cursor: default; }
+.cal-cell.blank { visibility: hidden; }
+.cal-cell.closed { background: #f0f0f0; color: #aaa; }
+.cal-cell.today { outline: 2px solid var(--accent); font-weight: 700; }
+.cal-x { position: absolute; top: 0; right: 2px; font-size: 8px; color: #c98; font-style: normal; }
+.cal-foot { margin-top: 6px; font-size: 11px; }
 .ops-side .tplswitch, .ops-side .propose-bar, .ops-side .proposal { margin: 0; }
 .ops-fab { position: fixed; right: 22px; bottom: 104px; z-index: 50; background: #e5484d; color: #fff; border: none; border-radius: 22px; padding: 10px 16px; box-shadow: var(--shadow-md); cursor: pointer; font-size: 13px; font-weight: 600; }
 .ops-fab:hover { background: #d23b40; }

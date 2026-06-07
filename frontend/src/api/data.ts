@@ -70,4 +70,8 @@ export const dataApi = {
     const qs = code ? `?code=${encodeURIComponent(code)}` : '';
     return api.post<{ data: { inserted: number; codes: string[] } }>(`/data/quotes/csv${qs}`, fd);
   },
+  tradeCalendar: (year: number, month: number) =>
+    api
+      .get(`/data/trade-calendar?year=${year}&month=${month}`)
+      .then((r) => r.data.data as { year: number; month: number; days: Array<{ date: string; trading: boolean }> }),
 };
