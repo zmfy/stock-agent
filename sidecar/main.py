@@ -300,12 +300,13 @@ def probe(kind: str = "quote"):
 
 
 @app.get("/quote/{code}")
-def quote(code: str, days: int = 120):
+def quote(code: str, days: int = 120, order: str = ""):
     code = code[-6:]
-    rows = _timed(lambda: _bs_quote(code, days), 10)  # BaoStock primary (reliable EOD)
-    if rows:
-        return rows
-    return _timed(lambda: _ak_quote(code, days), 10) or []  # AkShare fallback
+    for reg in _order_providers("quote", order):
+        rows = _timed(lambda r=reg: r["fn"](code, days), 10)
+        if rows:
+            return {"source": reg["key"], "rows": rows}
+    return {"source": None, "rows": []}
 
 
 @app.get("/news")
