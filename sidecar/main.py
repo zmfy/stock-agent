@@ -321,9 +321,16 @@ def _probe_one(reg, kind):
         return {"key": reg["key"], "label": reg["label"], "reachable": False, "latency_ms": None, "error": str(e)[:120]}
 
 
+@app.get("/probe/list")
+def probe_list(kind: str = "quote"):
+    return [{"key": r["key"], "label": r["label"]} for r in PROVIDERS.get(kind, [])]
+
 @app.get("/probe")
-def probe(kind: str = "quote"):
-    return [_probe_one(reg, kind) for reg in PROVIDERS.get(kind, [])]
+def probe(kind: str = "quote", provider: str = ""):
+    regs = PROVIDERS.get(kind, [])
+    if provider:
+        regs = [r for r in regs if r["key"] == provider]
+    return [_probe_one(reg, kind) for reg in regs]
 
 
 @app.get("/quote/{code}")
