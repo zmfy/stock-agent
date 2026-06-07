@@ -9,7 +9,7 @@ import { getStockName, getCachedName } from '../data/service';
 import { skillDirectives } from '../plugins/service';
 import { getLatestReportByCode } from '../analysis/report-service';
 import { getTodayContent } from '../meetings/service';
-import { getActive } from '../rulebook/service';
+import { getActive, listVersionHistory } from '../rulebook/service';
 
 export type ChatKind = 'general' | 'core_principle' | 'stock' | 'morning' | 'evening';
 
@@ -184,7 +184,10 @@ export async function postMessage(userId: string, sessionId: string, content: st
       const g = rb.gates
         .map((x) => `${x.system}:${x.label} ${x.op}${x.threshold ?? ''}${x.unit}${x.veto ? '(否决)' : ''}`)
         .join('；');
-      extra = `当前核心原则【${rb.version.version_label}】人设：${rb.version.persona}\n硬门槛：${g}`;
+      const hist = listVersionHistory(userId, 5)
+        .map((v) => `· ${v.version_label}（${(v.created_at || '').slice(0, 10)}）：${v.note || '（无说明）'}`)
+        .join('\n');
+      extra = `当前核心原则【${rb.version.version_label}】人设：${rb.version.persona}\n硬门槛：${g}\n\n原则演进记忆（最近变更，知道为什么是现在这样）：\n${hist}`;
     }
   }
   const prompt = buildPrompt(persona, session.kind, history, extra, skillDirectives(userId));
