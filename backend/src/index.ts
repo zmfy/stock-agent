@@ -107,5 +107,16 @@ if (require.main === module) {
     const { getDb } = require('./db');
     const admin = getDb().prepare("SELECT id FROM users WHERE role = 'admin' ORDER BY created_at LIMIT 1").get() as { id: string } | undefined;
     if (admin) syncTradeCalendar(admin.id).catch(() => {});
+    // 重新应用持久化的通达信服务器选择（扛 sidecar 重启）
+    const sidecarMod = require('./data/sidecar');
+    const { getTdxServerSetting } = require('./data/service');
+    if (admin) {
+      const sv = getTdxServerSetting();
+      if (sv) {
+        const [a, p] = sv.split(':');
+        const base = sidecarMod.resolveSidecarBase(admin.id);
+        if (base) sidecarMod.tdxSetServer(base, a, Number(p)).catch(() => {});
+      }
+    }
   });
 }

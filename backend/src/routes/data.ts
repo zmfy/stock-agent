@@ -6,7 +6,7 @@ import { successResponse, errorResponse } from '../utils/response';
 import { QuoteRow } from '../types';
 import * as svc from '../data/service';
 import * as sources from '../data/sources-service';
-import { resolveSidecarBase, pingHealth, probe, probeList, probeOne } from '../data/sidecar';
+import { resolveSidecarBase, pingHealth, probe, probeList, probeOne, tdxTestServers, tdxSetServer } from '../data/sidecar';
 import { listTitleLog, getContent } from '../data/news-log';
 import { monthCalendar } from '../data/trade-calendar';
 
@@ -162,6 +162,27 @@ router.delete('/sources/:id', adminMiddleware, (req: Request, res: Response) => 
 // GET /api/data/stocks/search?q=
 router.get('/stocks/search', (req: Request, res: Response) => {
   successResponse(res, svc.searchStocks(String(req.query.q || ''), 20));
+});
+
+// ---- 通达信(TDX)行情服务器：测速 + 选用 ----
+router.get('/tdx/servers/test', adminMiddleware, async (req: Request, res: Response) => {
+  const base = resolveSidecarBase(req.user!.userId);
+  if (!base) return successResponse(res, { servers: [] });
+  successResponse(res, { servers: await tdxTestServers(base) });
+});
+router.get('/tdx/server', (_req: Request, res: Response) => {
+  successResponse(res, { server: svc.getTdxServerSetting() });
+});
+router.post('/tdx/server', adminMiddleware, async (req: Request, res: Response) => {
+  const parsed = z.object({ addr: z.string().optional(), port: z.number().int().optional() }).safeParse(req.body);
+  if (!parsed.success) return errorResponse(res, 422, 'VALIDATION_ERROR', '参数校验失败');
+  const addr = (parsed.data.addr || '').trim();
+  const port = parsed.data.port || 0;
+  const base = resolveSidecarBase(req.user!.userId);
+  if (base) await tdxSetServer(base, addr, port);
+  const val = addr ? `${addr}:${port}` : '';
+  svc.setTdxServerSetting(val);
+  successResponse(res, { server: val });
 });
 
 // ---- unified job routes: /api/data/<job>/run|status|cancel|log ----

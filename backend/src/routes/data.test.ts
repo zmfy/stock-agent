@@ -157,6 +157,19 @@ describe('data routes', () => {
     expect(c.body.data.content).toBe('内容Z');
   });
 
+  it('TDX 服务器选择：admin 可设并读回；非 admin 403', async () => {
+    const forbidden = await request(app).post('/api/data/tdx/server').set(uh()).send({ addr: '1.2.3.4', port: 7709 });
+    expect(forbidden.status).toBe(403);
+    const setOk = await request(app).post('/api/data/tdx/server').set(h()).send({ addr: '1.2.3.4', port: 7709 });
+    expect(setOk.status).toBe(200);
+    const get1 = await request(app).get('/api/data/tdx/server').set(h());
+    expect(get1.body.data.server).toBe('1.2.3.4:7709');
+    const auto = await request(app).post('/api/data/tdx/server').set(h()).send({ addr: '' });
+    expect(auto.status).toBe(200);
+    const get2 = await request(app).get('/api/data/tdx/server').set(h());
+    expect(get2.body.data.server).toBe('');
+  });
+
   it('数据源增删改查写入轮转：POST → GET → PUT → DELETE', async () => {
     // POST /api/data/sources — admin only
     const add = await request(app)

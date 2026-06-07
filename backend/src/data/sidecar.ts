@@ -16,6 +16,16 @@ export function resolveSidecarBase(userId: string): string | null {
   return null;
 }
 
+async function postJson(url: string, timeoutMs = 30000): Promise<any | null> {
+  try {
+    const resp = await fetch(url, { method: 'POST', signal: AbortSignal.timeout(timeoutMs) });
+    if (!resp.ok) return null;
+    return await resp.json();
+  } catch {
+    return null;
+  }
+}
+
 async function getJson(url: string, timeoutMs = 30000): Promise<any | null> {
   try {
     // bound it so a blocked/slow data source never hangs the app
@@ -138,6 +148,15 @@ export async function pingHealth(base: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+export async function tdxTestServers(base: string): Promise<Array<{ site: string; addr: string; port: number; ok: boolean; latency_ms: number | null }>> {
+  const r = await getJson(`${base}/tdx/servers/test`, 40000);
+  return Array.isArray(r?.servers) ? r.servers : [];
+}
+
+export async function tdxSetServer(base: string, addr: string, port: number): Promise<void> {
+  await postJson(`${base}/tdx/server?addr=${encodeURIComponent(addr)}&port=${port}`, 8000);
 }
 
 function num(v: unknown): number | null {

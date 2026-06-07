@@ -461,6 +461,17 @@ export async function getStockSnapshot(userId: string, code: string): Promise<St
   return snap;
 }
 
+// 通达信选定服务器（持久化于 settings；"" = 自动 bestip）
+export function getTdxServerSetting(): string {
+  const r = getDb().prepare("SELECT value FROM settings WHERE key='tdx_server'").get() as { value: string } | undefined;
+  return r?.value || '';
+}
+export function setTdxServerSetting(val: string): void {
+  getDb()
+    .prepare("INSERT INTO settings (key, value) VALUES ('tdx_server', ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value")
+    .run(val);
+}
+
 function numOrNull(v: unknown): number | null {
   const n = typeof v === 'string' ? parseFloat(v) : (v as number);
   return typeof n === 'number' && isFinite(n) ? n : null;
