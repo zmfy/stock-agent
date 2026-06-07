@@ -144,14 +144,14 @@
 
             <!-- 早会 -->
             <button v-if="meetings.morning" class="ops-btn" :class="{ active: active?.kind === 'morning' }" @click="openMeeting('morning')">📈 今日操作方向（早会）</button>
-            <button v-else class="ops-btn dashed" :disabled="genning === 'morning'" @click="genMeeting('morning')">📈 生成今日早会{{ genning === 'morning' ? '…' : '' }}</button>
+            <button v-else class="ops-btn dashed" :disabled="genning === 'morning'" @click="genMeeting('morning')"><span v-if="genning === 'morning'" class="spinner"></span>📈 生成今日早会</button>
 
             <!-- 晚会 -->
             <button v-if="meetings.evening" class="ops-btn" :class="{ active: active?.kind === 'evening' }" @click="openMeeting('evening')">🌙 今日操作复盘（晚会）</button>
-            <button v-else class="ops-btn dashed" :disabled="genning === 'evening'" @click="genMeeting('evening')">🌙 生成今日晚会{{ genning === 'evening' ? '…' : '' }}</button>
+            <button v-else class="ops-btn dashed" :disabled="genning === 'evening'" @click="genMeeting('evening')"><span v-if="genning === 'evening'" class="spinner"></span>🌙 生成今日晚会</button>
 
             <!-- 选股 -->
-            <button class="ops-btn" :disabled="screening" @click="runScreen">🔍 {{ screening ? '选股中…' : '按核心原则选股' }}</button>
+            <button class="ops-btn" :disabled="screening" @click="runScreen"><span v-if="screening" class="spinner"></span>🔍 {{ screening ? '选股中…' : '按核心原则选股' }}</button>
 
             <!-- 核心原则讨论 / 更换模板（合并入口） -->
             <button class="ops-btn" :class="{ active: active?.kind === 'core_principle' }" @click="openPrincipleAndTemplates">📜 核心原则讨论 / 更换模板</button>
@@ -189,7 +189,7 @@
             <template v-if="active?.kind === 'core_principle'">
               <div class="propose-bar">
                 <button class="propose-btn" :disabled="proposing" @click="propose">
-                  {{ proposing ? 'agent 拟定中…' : '🛠 根据本次讨论，让 agent 提议修改规则' }}
+                  <span v-if="proposing" class="spinner"></span>{{ proposing ? 'agent 拟定中…' : '🛠 根据本次讨论，让 agent 提议修改规则' }}
                 </button>
               </div>
 
@@ -819,4 +819,6 @@ onMounted(async () => {
 .sh-row:last-child { border-bottom: none; margin-bottom: 0; }
 .sh-pick { padding: 3px 6px; border-radius: 4px; cursor: pointer; font-size: 12px; display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
 .sh-pick:hover { background: #e8f0fe; }
+.spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: spin 0.6s linear infinite; vertical-align: -1px; margin-right: 4px; }
+@keyframes spin { to { transform: rotate(360deg); } }
 </style>
