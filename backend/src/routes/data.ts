@@ -8,6 +8,7 @@ import * as svc from '../data/service';
 import * as sources from '../data/sources-service';
 import { resolveSidecarBase, pingHealth, probe, probeList, probeOne } from '../data/sidecar';
 import { listTitleLog, getContent } from '../data/news-log';
+import { monthCalendar } from '../data/trade-calendar';
 
 const router = Router();
 router.use(authMiddleware);
@@ -111,6 +112,14 @@ router.get('/news/content/:id', (req: Request, res: Response) => {
   const c = getContent(req.params.id);
   if (!c) return errorResponse(res, 404, 'NOT_FOUND', '内容已清理或不存在');
   successResponse(res, c);
+});
+
+// GET /api/data/trade-calendar?year=&month= — A 股交易日历（某月每天是否交易日）
+router.get('/trade-calendar', (req: Request, res: Response) => {
+  const now = new Date();
+  const year = Number(req.query.year) || now.getFullYear();
+  const month = Number(req.query.month) || now.getMonth() + 1;
+  successResponse(res, { year, month, days: monthCalendar(year, month) });
 });
 
 // ---- data source management (global: any user reads, admin writes) ----

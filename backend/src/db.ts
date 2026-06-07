@@ -323,6 +323,9 @@ function initSchema(): void {
     );
     CREATE INDEX IF NOT EXISTS idx_news_title_collected ON news_title_log (collected_at);
     CREATE INDEX IF NOT EXISTS idx_news_content_adopted ON news_content_log (adopted, collected_at);
+    CREATE TABLE IF NOT EXISTS trade_calendar (
+      date TEXT PRIMARY KEY      -- 'YYYY-MM-DD'，仅存 A 股交易日（全局共享）
+    );
   `);
 
   migrate();

@@ -102,5 +102,10 @@ if (require.main === module) {
     startNightlyCron();
     startMeetingsCron();
     startSharedDataCron();
+    // 启动后同步一次交易日历（失败则 isTradingDay 走周末兜底）。
+    const { syncTradeCalendar } = require('./data/trade-calendar');
+    const { getDb } = require('./db');
+    const admin = getDb().prepare("SELECT id FROM users WHERE role = 'admin' ORDER BY created_at LIMIT 1").get() as { id: string } | undefined;
+    if (admin) syncTradeCalendar(admin.id).catch(() => {});
   });
 }

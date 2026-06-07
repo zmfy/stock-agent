@@ -102,4 +102,29 @@ describe('meetings service', () => {
     expect(parsedData.adopted_news.map((x: any) => x.title)).toContain('新能源爆发');
     expect(r.content).not.toContain('__ADOPT__');
   });
+
+  // 放在最后：本用例会注入 trade_calendar/新闻并重生成早会，避免污染依赖早会内容的其它用例。
+  it('morning meeting news window = since last trading day (covers closed-day accumulation, excludes older)', async () => {
+    const db = require('../db').getDb();
+    const now = new Date();
+    const bj = (d: Date) => d.toLocaleDateString('en-CA', { timeZone: 'Asia/Shanghai' });
+    const prev = new Date(now); prev.setUTCDate(prev.getUTCDate() - 2);
+    // 注入日历：今天与两天前为交易日 → lastTradingDayBefore(today)=两天前=since
+    const insCal = db.prepare('INSERT OR IGNORE INTO trade_calendar (date) VALUES (?)');
+    insCal.run(bj(now)); insCal.run(bj(prev));
+    // 注入新闻：一条今天采集(应保留)，一条 10 天前采集(应排除)
+    const old = new Date(now); old.setUTCDate(old.getUTCDate() - 10);
+    const insNews = db.prepare('INSERT OR IGNORE INTO news_content_log (id, title, content, source, published_at, collected_at) VALUES (?, ?, ?, ?, ?, ?)');
+    insNews.run('nw-recent', '休市期间重磅财经新闻RECENT', 'x', 'test', '2026-06-06', now.toISOString());
+    insNews.run('nw-old', '十天前旧闻OLD', 'x', 'test', '2026-05-20', old.toISOString());
+
+    let dataPrompt = '';
+    await svc.generateMorning(USER, {
+      fetchNews: async () => {},
+      aiCall: async (p: string, role: string) => { if (role === 'data') dataPrompt = p; return `（${role}）`; },
+    });
+    expect(dataPrompt).toContain('自上个交易日');
+    expect(dataPrompt).toContain('休市期间重磅财经新闻RECENT');
+    expect(dataPrompt).not.toContain('十天前旧闻OLD');
+  });
 });

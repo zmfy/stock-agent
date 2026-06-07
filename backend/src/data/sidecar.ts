@@ -27,6 +27,12 @@ async function getJson(url: string, timeoutMs = 30000): Promise<any | null> {
   }
 }
 
+// 全量 A 股交易日 ['YYYY-MM-DD', ...]；拉不到返回 []。日历较大，给 20s。
+export async function fetchTradeDates(base: string): Promise<string[]> {
+  const r = await getJson(`${base}/trade-calendar`, 20000);
+  return Array.isArray(r?.dates) ? (r.dates as string[]) : [];
+}
+
 export async function fetchRealtime(base: string, code: string): Promise<{ source: string | null; data: Record<string, unknown> } | null> {
   const d = await getJson(`${base}/realtime/${code}`, 500);
   if (!d || !d.data) return null;

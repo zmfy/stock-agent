@@ -9,6 +9,7 @@ import { chat } from '../ai/manager';
 import { getCorePersona, listProfiles } from '../agent/profiles-service';
 import { skillDirectives } from '../plugins/service';
 import { recordCollected, listTitleLog, getContent, markAdopted } from '../data/news-log';
+import { lastTradingDayBefore } from '../data/trade-calendar';
 
 export type MeetingKind = 'morning' | 'evening';
 
@@ -42,6 +43,27 @@ function buildNewsWithIds(): { text: string; idMap: Record<string, string> } {
   const idMap: Record<string, string> = {};
   const lines = rows.map((r, i) => { const tag = `N${i + 1}`; idMap[tag] = r.id; return `[${tag}] ${r.title}`; });
   return { text: lines.length ? '近期财经要闻：\n' + lines.join('\n') : '（暂无近期财经新闻）', idMap };
+}
+
+// 某条 UTC 时间串对应的北京日历日 YYYY-MM-DD
+function beijingDateOf(utc: string): string {
+  const s = utc.includes('T') ? utc : utc.replace(' ', 'T') + 'Z';
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? '' : d.toLocaleDateString('en-CA', { timeZone: 'Asia/Shanghai' });
+}
+
+// 早会新闻：取「上个交易日以来」（北京日期 ≥ 上个交易日）攒下的新闻，最多 30 条；
+// 覆盖周末/节假日休市期间夜间采集的新闻，作为下个交易日判断凭据。为空则回退最近 8 条。
+function buildMorningNewsWithIds(): { text: string; idMap: Record<string, string> } {
+  const since = lastTradingDayBefore(today());
+  const rows = getDb()
+    .prepare('SELECT id, title, collected_at FROM news_content_log ORDER BY collected_at DESC, rowid DESC LIMIT 60')
+    .all() as Array<{ id: string; title: string; collected_at: string }>;
+  const kept = rows.filter((r) => beijingDateOf(r.collected_at) >= since).slice(0, 30);
+  if (!kept.length) return buildNewsWithIds();
+  const idMap: Record<string, string> = {};
+  const lines = kept.map((r, i) => { const tag = `N${i + 1}`; idMap[tag] = r.id; return `[${tag}] ${r.title}`; });
+  return { text: `自上个交易日（${since}）以来的财经要闻：\n` + lines.join('\n'), idMap };
 }
 
 function parseAdopt(coreOut: string): { tags: string[]; clean: string } {
@@ -243,7 +265,7 @@ export async function generateMorning(userId: string, opts: GenOpts = {}): Promi
   const mkt = marketText();
   const rbText = rulebookText(userId);
   const sec = await sectorText(userId);
-  const { text: news, idMap } = buildNewsWithIds();
+  const { text: news, idMap } = buildMorningNewsWithIds();
   const aiCall = opts.aiCall || ((p: string, role: string) => defaultAiCall(userId, p, role));
 
   const dataOut = (await aiCall(buildMorningDataPrompt(personaOf(userId, 'data'), mkt.text, sec.text, news), 'data')).trim();

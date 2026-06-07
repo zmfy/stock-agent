@@ -86,6 +86,14 @@ def health():
     return {"status": "ok", "ts": datetime.now().isoformat()}
 
 
+@app.get("/trade-calendar")
+def trade_calendar():
+    # A 股交易日历（新浪线路，含本年已公布节假日安排）；返回全部交易日 'YYYY-MM-DD'
+    df = _timed(lambda: ak.tool_trade_date_hist_sina(), 15)
+    dates = sorted({str(d)[:10] for d in df["trade_date"].tolist()})
+    return {"source": "sina", "dates": dates}
+
+
 _NAME_DF = None
 
 try:
