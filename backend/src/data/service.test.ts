@@ -178,3 +178,25 @@ describe('data/service', () => {
     });
   });
 });
+
+describe('getStockSnapshot depth gate', () => {
+  it('shouldDeepFetch true when local closes < 60', () => {
+    const code = 'DEP01';
+    const { getDb } = require('../db');
+    const db = getDb();
+    for (let i = 0; i < 10; i++) {
+      db.prepare('INSERT OR REPLACE INTO quote_daily (code,date,close,source) VALUES (?,?,?,?)').run(code, `2026-05-${(i+1).toString().padStart(2,'0')}`, 5, 'test');
+    }
+    expect(svc.shouldDeepFetch(code)).toBe(true);
+  });
+  it('shouldDeepFetch false when local closes >= 60', () => {
+    const code = 'DEP02';
+    const { getDb } = require('../db');
+    const db = getDb();
+    for (let i = 0; i < 60; i++) {
+      const d = new Date(Date.UTC(2026, 0, 1 + i)).toISOString().slice(0, 10);
+      db.prepare('INSERT OR REPLACE INTO quote_daily (code,date,close,source) VALUES (?,?,?,?)').run(code, d, 5, 'test');
+    }
+    expect(svc.shouldDeepFetch(code)).toBe(false);
+  });
+});

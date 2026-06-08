@@ -350,6 +350,11 @@ function recentCloses(code: string, n: number): number[] {
   return rows.map((r) => r.close);
 }
 
+// 本地行情深度不足 60 根 → 需要深取（保证 ma60/year_high 准）。
+export function shouldDeepFetch(code: string): boolean {
+  return recentCloses(code, 60).length < 60;
+}
+
 export interface Bar {
   date: string;
   open: number | null;
@@ -436,7 +441,7 @@ export async function refreshStock(userId: string, code: string, order?: string[
   const base = resolveSidecarBase(userId);
   if (!base) return;
   const ord = order ?? (await safeOrder(base, 'fundamentals'));
-  const [f, q] = await Promise.all([fetchFundamentals(base, code, ord), fetchQuotes(base, code, 120)]);
+  const [f, q] = await Promise.all([fetchFundamentals(base, code, ord), fetchQuotes(base, code, 250)]);
   if (f) cacheFundamentals(code, today(), f.data, f.source ?? 'akshare');
   if (q && q.rows.length) cacheQuotes(q.rows, q.source ?? 'akshare');
 }
@@ -456,9 +461,8 @@ export async function refreshMarket(userId: string, order?: string[]): Promise<b
 export async function getStockSnapshot(userId: string, code: string): Promise<StockSnapshot> {
   // If we have no quotes/fundamentals cached for this code, try a refresh (best-effort).
   // Pass explicit empty order so on-demand snapshot path skips the probe round-trip.
-  const haveQuotes = recentCloses(code, 1).length > 0;
   const haveFund = !!latestFundamentals(code);
-  if (!haveQuotes || !haveFund) {
+  if (shouldDeepFetch(code) || !haveFund) {
     await refreshStock(userId, code, []).catch(() => {});
   }
   if (!latestMarket()) {
