@@ -239,6 +239,13 @@ export function searchStocks(q: string, limit = 20): Array<{ code: string; name:
     .all(`${s}%`, like, `${lower}%`, `% ${lower}%`, s, lower, `% ${lower} %`, `${s}%`, limit) as Array<{ code: string; name: string }>;
 }
 
+export function findStockCodeInText(message: string): string | null {
+  const row = getDb()
+    .prepare("SELECT code FROM stock_names WHERE INSTR(?, name) > 0 ORDER BY LENGTH(name) DESC LIMIT 1")
+    .get(message) as { code: string } | undefined;
+  return row?.code ?? null;
+}
+
 export function getCachedName(code: string): string | null {
   const row = getDb().prepare('SELECT name FROM stock_names WHERE code = ?').get(code) as { name: string } | undefined;
   return row?.name ?? null;
