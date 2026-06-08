@@ -49,6 +49,15 @@ router.post('/sessions/:id/messages', async (req: Request, res: Response) => {
   }
 });
 
+// POST /api/chat/sessions/:id/note { content } — 写一条助手消息(不调 AI)，用于把后台流程错误以来财发言显示
+router.post('/sessions/:id/note', (req: Request, res: Response) => {
+  const parsed = z.object({ content: z.string().min(1).max(4000) }).safeParse(req.body);
+  if (!parsed.success) return errorResponse(res, 422, 'VALIDATION_ERROR', '请输入内容');
+  const msg = chat.addAssistantNote(req.user!.userId, req.params.id, parsed.data.content);
+  if (!msg) return errorResponse(res, 404, 'RESOURCE_NOT_FOUND', '会话不存在');
+  successResponse(res, msg, '已记录', 201);
+});
+
 // POST /api/chat/sessions/:id/analyze — run analysis on a stock session and seed it
 router.post('/sessions/:id/analyze', async (req: Request, res: Response) => {
   try {

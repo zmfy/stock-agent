@@ -104,3 +104,18 @@ describe('core_principle framing branches on rulebook presence', () => {
     expect(captured).toContain('探讨核心选股/操作原则的修改');
   });
 });
+
+describe('addAssistantNote', () => {
+  it('appends an assistant message to an owned session; null for foreign session', () => {
+    const chat = require('./service');
+    const U = 'u-note';
+    const sid = chat.createSession(U, 'screen', null, '选股');
+    const m = chat.addAssistantNote(U, sid, '⚠️ 选股失败：没有可用模型');
+    expect(m).toBeTruthy();
+    expect(m.role).toBe('assistant');
+    expect(m.content).toContain('选股失败');
+    const msgs = chat.getMessages(U, sid);
+    expect(msgs.some((x: any) => x.content.includes('选股失败'))).toBe(true);
+    expect(chat.addAssistantNote('someone-else', sid, 'x')).toBeNull();
+  });
+});
