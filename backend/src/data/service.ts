@@ -355,6 +355,13 @@ export function shouldDeepFetch(code: string): boolean {
   return recentCloses(code, 60).length < 60;
 }
 
+// 缓存的基本面缺估值字段(pe) → 视为不完整,需要重取。否则只有 net_profit/roe 的旧缓存会让
+// 校验门槛因「缺 pe/pb/ps」硬拦截分析。
+export function fundamentalsIncomplete(code: string): boolean {
+  const f = latestFundamentals(code);
+  return !f || f.pe === null || f.pe === undefined;
+}
+
 export function getMarketSentimentSeries(n: number): Array<{ date: string; limit_up_count: number | null; limit_down_count: number | null; sse_ma20_slope: number | null }> {
   const rows = getDb()
     .prepare('SELECT date, limit_up_count, limit_down_count, sse_ma20_slope FROM market_sentiment ORDER BY date DESC LIMIT ?')
@@ -510,10 +517,10 @@ export async function refreshMarket(userId: string, order?: string[]): Promise<b
 // ---- snapshot assembly ----
 
 export async function getStockSnapshot(userId: string, code: string): Promise<StockSnapshot> {
-  // If we have no quotes/fundamentals cached for this code, try a refresh (best-effort).
-  // Pass explicit empty order so on-demand snapshot path skips the probe round-trip.
-  const haveFund = !!latestFundamentals(code);
-  if (shouldDeepFetch(code) || !haveFund) {
+  // If we have no quotes, shallow quotes, or INCOMPLETE fundamentals cached for this code, try a refresh.
+  // 不只看「有没有」，还看「全不全」：旧缓存可能只有 net_profit/roe（缺 pe/pb/ps，会被校验门槛硬拦），
+  // 此时也要重取，避免被不完整的旧缓存卡住。Pass explicit empty order to skip the probe round-trip.
+  if (shouldDeepFetch(code) || fundamentalsIncomplete(code)) {
     await refreshStock(userId, code, []).catch(() => {});
   }
   if (!latestMarket()) {

@@ -232,6 +232,10 @@ def fundamentals(code: str, order: str = ""):
                 contributed = True
         if first_source is None and contributed:
             first_source = reg["key"]
+        # 关键字段齐了就停，避免再去跑本网络下会挂起的源（如 baostock）。
+        # turnover_rate 多为非否决项、且其上游(eastmoney push2his)本网络常被堵，不纳入早停条件。
+        if all(merged.get(k) is not None for k in ("pe", "pb", "ps", "roe_ttm", "net_profit")):
+            break
     return {"source": first_source, "data": merged}
 
 
@@ -300,12 +304,52 @@ def _news_provider(fn_name):
     return _f
 
 def _fund_tdx(code, _days=0): return tdx.finance_fundamentals(code)
+
+# 百度估值：本网络下 stock_zh_valuation_baidu 可用，直接给 PE(TTM)/PB；PS 由 总市值/最近年报营收 算出。
+# （TDX 断线、eastmoney 指标接口/legulegu/baostock 在本网络被堵或挂起时的 pe/pb/ps 兜底。）
+def _baidu_val(code, indicator):
+    try:
+        df = ak.stock_zh_valuation_baidu(symbol=code, indicator=indicator, period="近一年")
+        if df is not None and len(df):
+            return _f(df.iloc[-1].get("value"))
+    except Exception:
+        return None
+    return None
+
+def _latest_annual_revenue(code):
+    try:
+        ab = ak.stock_financial_abstract(symbol=code)
+        cols = [c for c in ab.columns if c not in ("选项", "指标")]
+        row = ab[ab["指标"].astype(str).str.fullmatch("营业总收入")]
+        if row.empty:
+            row = ab[ab["指标"].astype(str).str.contains("营业总收入", na=False)]
+        annual = [c for c in cols if len(str(c)) == 8 and str(c).endswith("1231")]
+        if annual and not row.empty:
+            return _f(row[annual[0]].iloc[0])
+    except Exception:
+        return None
+    return None
+
+def _fund_baidu(code, _days=0):
+    out = {}
+    pe = _baidu_val(code, "市盈率(TTM)")
+    pb = _baidu_val(code, "市净率")
+    if pe is not None: out["pe"] = pe
+    if pb is not None: out["pb"] = pb
+    mcap_yi = _baidu_val(code, "总市值")  # 亿元
+    if mcap_yi is not None:
+        rev = _latest_annual_revenue(code)  # 元
+        if rev and rev > 0:
+            out["ps"] = round(mcap_yi * 1e8 / rev, 2)
+    return out or None
+
 PROVIDERS = {
     "quote": QUOTE_PROVIDERS,
     "fundamentals": [
         {"key": "tdx",      "label": "通达信",   "fn": _fund_tdx},
-        {"key": "baostock", "label": "BaoStock", "fn": _fund_baostock},
+        {"key": "baidu",    "label": "百度",     "fn": _fund_baidu},
         {"key": "em",       "label": "东方财富", "fn": _fund_em},
+        {"key": "baostock", "label": "BaoStock", "fn": _fund_baostock},
     ],
     "sentiment": [
         {"key": "em", "label": "东方财富", "fn": _sentiment_em},

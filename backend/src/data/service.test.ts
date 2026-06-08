@@ -232,3 +232,14 @@ describe('getMarketSentimentSeries', () => {
     expect(s.map((x: any) => x.date)).toEqual(['2026-06-02','2026-06-03']);
   });
 });
+
+describe('fundamentalsIncomplete', () => {
+  it('true when no fundamentals or missing pe; false when pe present', () => {
+    const code = 'FUND01';
+    expect(svc.fundamentalsIncomplete(code)).toBe(true); // none cached
+    svc.cacheFundamentals(code, '2026-06-08', { net_profit: 100, roe_ttm: 10 }, 'em'); // no pe
+    expect(svc.fundamentalsIncomplete(code)).toBe(true);
+    svc.cacheFundamentals(code, '2026-06-08', { pe: 19, pb: 5, ps: 9, net_profit: 100, roe_ttm: 10 }, 'baidu');
+    expect(svc.fundamentalsIncomplete(code)).toBe(false);
+  });
+});
