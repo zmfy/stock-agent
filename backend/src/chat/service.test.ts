@@ -30,6 +30,25 @@ describe('chat service', () => {
   });
 });
 
+describe('postMessage injects market context for stock target', () => {
+  it('stock session prompt includes recent bars table', async () => {
+    const U = 'u-mc-inject';
+    const code = 'INJ01';
+    const chat = require('./service');
+    const { getDb } = require('../db');
+    const db = getDb();
+    const days = ['2026-04-01','2026-04-02','2026-04-03','2026-04-04','2026-04-07'];
+    days.forEach((d, i) => db.prepare('INSERT OR REPLACE INTO quote_daily (code,date,open,high,low,close,volume,source) VALUES (?,?,?,?,?,?,?,?)').run(code, d, 1,1,1, 100+i, 1, 'test'));
+    const sid = chat.createSession(U, 'stock', code, `个股 ${code}`);
+    let captured = '';
+    await chat.postMessage(U, sid, '最近走势如何', {
+      aiCall: async (p: string) => { captured = p; return { raw: 'ok', provider: 'p', model: 'm' }; },
+    });
+    expect(captured).toContain('日期│开│高│低│收│量');
+    expect(captured).toContain(code);
+  });
+});
+
 describe('core_principle framing branches on rulebook presence', () => {
   const chat = require('./service');
   const rb = require('../rulebook/service');

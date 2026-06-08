@@ -1,4 +1,4 @@
-import { getCachedName, findStockCodeInText, Bar } from '../data/service';
+import { getCachedName, findStockCodeInText, Bar, ensureStockBars, getStockSnapshot } from '../data/service';
 import { StockSnapshot } from '../types';
 
 export const RECENT_BARS_N = 30;
@@ -42,6 +42,29 @@ export function detectTarget(message: string, sessionRefId: string | null): Targ
   if (byName) return { kind: 'stock', code: byName };
   if (sessionRefId) return { kind: 'stock', code: sessionRefId };
   return null;
+}
+
+// 编排：据消息解析目标+窗口 → 取数 → 组装。本任务只处理 stock 分支（index 分支留待后续）。
+export async function buildMarketInjection(
+  userId: string,
+  sessionKind: string,
+  sessionRefId: string | null,
+  message: string
+): Promise<string> {
+  const refId = sessionKind === 'stock' ? sessionRefId : null;
+  const target = detectTarget(message, refId);
+  if (!target) return '';
+  const n = parseTimeWindow(message);
+  try {
+    if (target.kind === 'stock') {
+      const bars = await ensureStockBars(userId, target.code, n);
+      const snap = await getStockSnapshot(userId, target.code).catch(() => null);
+      return buildStockContext(target.code, snap, bars);
+    }
+    return ''; // index：后续任务实现
+  } catch {
+    return '';
+  }
 }
 
 function n2(x: number | null | undefined): string {
