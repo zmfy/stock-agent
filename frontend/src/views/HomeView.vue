@@ -51,12 +51,16 @@
         <div class="chat-row">
           <!-- 左：对话主体 -->
           <div class="chat-main">
-            <div v-if="needsInit" class="initbar">
-              还没设定核心原则？<router-link to="/onboarding">去完成初始化设定 →</router-link>
-            </div>
-
             <div v-if="!active" class="empty">
               <h2>你好，我是股票小作手，来财。🤝</h2>
+
+              <div v-if="needsInit" class="cp-cta">
+                <div class="cp-cta-title">🎯 你还没有核心原则</div>
+                <p class="cp-cta-desc">核心原则是我帮你选股、判断买卖的依据。现在还不能「按原则选股」，早晚会也只看大盘与板块。</p>
+                <button class="cp-cta-btn" @click="startInterview">🗣 和来财聊出我的核心原则</button>
+                <div class="cp-cta-alt"><router-link to="/onboarding">📋 或：选个模板快速开始 →</router-link></div>
+              </div>
+
               <p class="muted">输入股票代码 / 名称 / 拼音，开一个该股的分析讨论；或在右侧操作框点「核心原则讨论 / 更换模板」。本系统是操盘专用工具，只做个股与核心原则的讨论。</p>
               <div class="qbox">
                 <StockPicker placeholder="输入股票代码 / 名称 / 拼音，开个股讨论" @pick="onDefaultPick" />
@@ -120,7 +124,7 @@
                   <div v-if="m.created_at" class="mtime">{{ fmtTime(m.created_at) }}</div>
                 </div>
                 <div v-if="sending" class="msg assistant"><div class="bubble typing">思考中…</div></div>
-        <div v-if="proposal" class="msg assistant">
+        <div v-if="proposal && !synthFromScratch" class="msg assistant">
           <div class="bubble proposal-card">
             <h4>修改提议（{{ proposal.magnitude === 'major' ? '较大改动' : '微调' }}）：{{ proposal.currentLabel }} → <b>{{ proposal.suggestedLabel }}</b></h4>
             <p v-if="proposal.delta.personaChanged">· 人设有改动</p>
@@ -134,7 +138,30 @@
             <p v-if="proposedAt" class="muted">🕐 {{ fmtCN(proposedAt) }}</p>
             <div class="ops">
               <button :disabled="applying || noChange" @click="applyProposal">采纳并升级到 {{ proposal.suggestedLabel }}</button>
-              <button @click="proposal = null">放弃</button>
+              <button @click="proposal = null; synthFromScratch = false">放弃</button>
+            </div>
+          </div>
+        </div>
+        <div v-if="proposal && synthFromScratch" class="msg assistant">
+          <div class="bubble proposal-card">
+            <h4>📋 来财据我们的聊天生成的核心原则：<b>{{ proposal.suggestedLabel }}</b></h4>
+            <p class="synth-persona"><b>人设：</b>{{ (proposal as any).proposal.persona }}</p>
+            <div v-for="sys in synthSystems" :key="sys" class="synth-sys">
+              <b>{{ sys }} 系统硬门槛：</b>
+              <ul>
+                <li v-for="g in (proposal as any).proposal.gates.filter((x: any) => x.system === sys)" :key="g.gate_key">
+                  {{ g.label }}：{{ gateCond(g) }}{{ g.veto ? '（一票否决）' : '' }}
+                </li>
+              </ul>
+            </div>
+            <div v-if="(proposal as any).proposal.softRules.length" class="synth-soft">
+              <b>软判断：</b>
+              <ul><li v-for="(s, i) in (proposal as any).proposal.softRules" :key="i">{{ (s as any).text }}</li></ul>
+            </div>
+            <p v-if="proposedAt" class="muted">🕐 {{ fmtCN(proposedAt) }}</p>
+            <div class="ops">
+              <button :disabled="applying" @click="applyProposal">采纳并保存为 {{ proposal.suggestedLabel }}</button>
+              <button @click="proposal = null; synthFromScratch = false">放弃</button>
             </div>
           </div>
         </div>
@@ -177,6 +204,9 @@
                 </label>
               </div>
               <button :disabled="!tplSelected.length" @click="previewCompose">预览组合（{{ tplSelected.length }}）</button>
+              <div class="tpl-interview-entry">
+                <a href="#" @click.prevent="startInterview">或：我还没想好，帮我从聊天聊出一套 →</a>
+              </div>
 
               <div v-if="composeRes" class="composeprev">
                 <p v-if="!composeRes.conflict" class="ok-msg">✅ 无冲突，将合并为一套：{{ composeRes.versionLabel }}</p>
@@ -198,7 +228,10 @@
             <!-- 让 agent 提议修改（进入核心原则讨论后显示，在换模板按钮下边） -->
             <template v-if="active?.kind === 'core_principle'">
               <div class="propose-bar">
-                <button class="propose-btn" :disabled="proposing" @click="propose">
+                <button v-if="needsInit" class="propose-btn" :disabled="synthesizing" @click="synthesizePrinciple">
+                  <span v-if="synthesizing" class="spinner"></span>{{ synthesizing ? '来财生成中…' : '🛠 根据我们的聊天，帮我生成核心原则' }}
+                </button>
+                <button v-else class="propose-btn" :disabled="proposing" @click="propose">
                   <span v-if="proposing" class="spinner"></span>{{ proposing ? 'agent 拟定中…' : '🛠 根据本次讨论，让 agent 提议修改规则' }}
                 </button>
               </div>
@@ -240,7 +273,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, nextTick, onMounted } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRouter, useRoute } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 import { chatApi, type ChatSession, type ChatMessage, type ChatKind } from '../api/chat';
 import { rulebookApi, type ProposeResult, type FullRulebook, type Gate, type TemplateMeta } from '../api/rulebook';
@@ -275,6 +308,7 @@ function goChat() {
   settingsKey.value = '';
 }
 const router = useRouter();
+const route = useRoute();
 
 const sessions = ref<ChatSession[]>([]);
 const active = ref<ChatSession | null>(null);
@@ -380,7 +414,13 @@ function gateCond(g: Gate) {
   return `${g.op} ${g.threshold}${g.unit}`;
 }
 function buildCpBriefing(rb: FullRulebook | null): string {
-  if (!rb) return '你还没有核心原则。请到「系统设置 → 核心规则」导入一个模板后，再来这里和我探讨优化。';
+  if (!rb)
+    return (
+      '你好，我是来财。你还没有核心原则，我们用聊天的方式一起把它定出来。\n' +
+      '我会问你几个问题，了解你平时怎么选股、怎么买卖；你照实说就行，没想清楚的也没关系。\n\n' +
+      '先聊第一个：你平时主要看公司基本面（业绩、估值），还是看走势（均线、突破），还是两者都看？\n\n' +
+      '（聊得差不多了，点下方「🛠 根据我们的聊天，帮我生成核心原则」，我就帮你总结成一套规则。）'
+    );
   const systems = [...new Set(rb.gates.map((g) => g.system))].sort();
   const blocks = systems
     .map((sys) => {
@@ -420,9 +460,15 @@ const proposal = ref<ProposeResult | null>(null);
 const proposedAt = ref<string>('');
 const proposing = ref(false);
 const applying = ref(false);
+const synthesizing = ref(false);
+const synthFromScratch = ref(false);
 const noChange = computed(() => {
   const d = proposal.value?.delta;
   return !!d && !d.personaChanged && !d.gates.changed.length && !d.gates.added.length && !d.gates.removed.length && !d.softRules.added.length && !d.softRules.removed.length && !d.positionRulesChangedKeys.length;
+});
+const synthSystems = computed<string[]>(() => {
+  const gs = ((proposal.value as any)?.proposal?.gates || []) as Array<{ system: string }>;
+  return [...new Set(gs.map((g) => g.system))].sort();
 });
 
 const adoptedNews = computed<Array<{ content_id: string; title: string }>>(() => {
@@ -447,6 +493,23 @@ async function propose() {
   }
 }
 
+async function synthesizePrinciple() {
+  if (!active.value) return;
+  synthesizing.value = true;
+  chatErr.value = '';
+  try {
+    const r = (await rulebookApi.synthesize(active.value.id)).data.data;
+    // 复用 proposal 展示通道：合成结果只有 proposal + suggestedLabel（无 delta），标记 fromScratch 走完整预览
+    proposal.value = { proposal: r.proposal, suggestedLabel: r.suggestedLabel } as any;
+    synthFromScratch.value = true;
+    proposedAt.value = new Date().toISOString();
+  } catch (e: any) {
+    chatErr.value = e.response?.data?.message || '生成失败';
+  } finally {
+    synthesizing.value = false;
+  }
+}
+
 async function applyProposal() {
   if (!proposal.value) return;
   applying.value = true;
@@ -455,6 +518,8 @@ async function applyProposal() {
     await rulebookApi.apply(label, proposal.value.proposal, active.value?.id);
     proposal.value = null;
     activeRulebook.value = (await rulebookApi.getActive()).data.data;
+    needsInit.value = false;
+    synthFromScratch.value = false;
     messages.value.push({
       id: 'local-applied-' + Date.now(),
       session_id: active.value?.id || '',
@@ -577,9 +642,23 @@ async function openCorePrinciple() {
     s = sessions.value.find((x) => x.id === id);
   }
   if (s) {
-    await chatApi.clearMessages(s.id);
-    await open(s);
-    messages.value = [];
+    if (needsInit.value) {
+      // 访谈模式（无核心原则）：保留已有对话，重开不清空，否则会丢失正在进行的访谈记录
+      await open(s);
+    } else {
+      // 修改讨论模式（已有核心原则）：每次重开都重置，基于当前规则重新讨论
+      await chatApi.clearMessages(s.id);
+      await open(s);
+      messages.value = [];
+    }
+  }
+}
+async function startInterview() {
+  chatErr.value = '';
+  try {
+    await openCorePrinciple();
+  } catch (e: any) {
+    chatErr.value = e.response?.data?.message || '进入访谈失败';
   }
 }
 async function loadMeetings() {
@@ -666,6 +745,10 @@ async function openScreen() {
   if (s) await open(s);
 }
 async function runScreen() {
+  if (needsInit.value) {
+    chatErr.value = '你还没有核心原则，无法按原则选股。先点上方/中间的「🗣 和来财聊出我的核心原则」定一套吧。';
+    return;
+  }
   // 已在后台选股中：只切回选股会话，不重复触发
   if (generating.has('screen')) {
     await openScreen();
@@ -755,6 +838,10 @@ onMounted(async () => {
     templates.value = (await rulebookApi.getTemplates()).data.data;
   } catch {
     /* ignore */
+  }
+  // 向导选了「帮我聊出来」→ 落地自动进入核心原则访谈
+  if (route.query.interview === '1' && needsInit.value) {
+    await startInterview();
   }
 });
 </script>
@@ -871,7 +958,6 @@ onMounted(async () => {
   .bubble { max-width: 88%; }
   .ops-fab { bottom: 84px; right: 14px; }
 }
-.initbar { background: #fff7e6; border: 1px solid #ffe0a3; border-radius: 6px; padding: 8px 12px; font-size: 13px; margin-bottom: 8px; }
 .empty { margin: auto; text-align: center; color: var(--text-soft); max-width: 460px; }
 .empty h2 { font-size: 22px; margin-bottom: 8px; }
 .qbox { margin-top: 18px; text-align: left; }
@@ -942,4 +1028,17 @@ onMounted(async () => {
 .sh-pick:hover { background: #e8f0fe; }
 .spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: spin 0.6s linear infinite; vertical-align: -1px; margin-right: 4px; }
 @keyframes spin { to { transform: rotate(360deg); } }
+.cp-cta { max-width: 460px; margin: 18px auto 22px; padding: 18px 20px; background: var(--accent-soft, #f3faf3); border: 1px solid var(--accent, #2a8a2a); border-radius: 12px; text-align: center; }
+.cp-cta-title { font-size: 17px; font-weight: 700; color: var(--accent, #2a8a2a); margin-bottom: 6px; }
+.cp-cta-desc { font-size: 13px; color: #666; margin: 0 0 14px; }
+.cp-cta-btn { font-size: 15px; font-weight: 600; color: #fff; background: var(--accent, #2a8a2a); border: none; border-radius: 8px; padding: 11px 22px; cursor: pointer; }
+.cp-cta-btn:hover { filter: brightness(1.05); }
+.cp-cta-alt { margin-top: 10px; font-size: 12px; }
+.cp-cta-alt a { color: #888; }
+.synth-persona { margin: 4px 0; }
+.synth-sys { margin: 6px 0; }
+.synth-sys ul, .synth-soft ul { margin: 2px 0 2px 16px; padding: 0; }
+.synth-sys li, .synth-soft li { font-size: 13px; }
+.tpl-interview-entry { margin: 6px 0; font-size: 12px; }
+.tpl-interview-entry a { color: var(--accent, #2a8a2a); }
 </style>

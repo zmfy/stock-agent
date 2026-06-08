@@ -11,6 +11,10 @@
     <section v-if="step === 1" class="card">
       <h2>选一个核心原则模板</h2>
       <p class="hint">不确定就先选「A/B 双系统」，之后可在「核心规则」里随时优化。</p>
+      <div class="tpl interview" :class="{ sel: chosen === '__interview__' }" @click="chosen = '__interview__'">
+        <b>🗣 我还没有核心原则，帮我聊出来</b>
+        <div class="muted">先不选模板，进入后来财会通过聊天了解你平时怎么选股、怎么买卖，帮你总结出一套核心原则。</div>
+      </div>
       <div class="tpl" v-for="t in templates" :key="t.key" :class="{ sel: chosen === t.key }" @click="chosen = t.key">
         <b>{{ t.label }}</b> <span class="muted">（{{ t.gateCount }} 条硬门槛）</span>
         <div class="muted">{{ t.description }}</div>
@@ -76,6 +80,7 @@ const err = ref('');
 
 const templates = ref<TemplateMeta[]>([]);
 const chosen = ref('');
+const interview = ref(false);
 
 const providers = ref<ProviderDef[]>([]);
 const prov = reactive({ name: '', apiKey: '', model: '' });
@@ -95,10 +100,15 @@ function onProv() {
 async function doTemplate() {
   err.value = ''; busy.value = true;
   try {
+    if (chosen.value === '__interview__') {
+      interview.value = true;
+      step.value = 2;
+      return;
+    }
     await rulebookApi.init(chosen.value);
     step.value = 2;
   } catch (e: any) {
-    // already имеет rulebook -> just move on
+    // already 有 rulebook -> just move on
     if (e.response?.status === 409) step.value = 2;
     else err.value = e.response?.data?.message || '导入失败';
   } finally {
@@ -145,7 +155,7 @@ async function saveSubs() {
 function finish() {
   // kick off the background stock-universe sync so search is ready (fire-and-forget)
   import('../api/data').then((m) => m.dataApi.runJob('stock_universe').catch(() => {}));
-  router.push('/');
+  router.push(interview.value ? '/?interview=1' : '/');
 }
 
 onMounted(async () => {
@@ -171,4 +181,6 @@ input, select, textarea { width: 100%; box-sizing: border-box; padding: 6px; }
 .sub { margin-top: 8px; }
 .ops { display: flex; gap: 12px; align-items: center; margin-top: 12px; }
 .err { color: #c00; }
+.tpl.interview { border-color: var(--accent, #2a8a2a); background: #f3faf3; }
+.tpl.interview.sel { box-shadow: 0 0 0 2px rgba(42,138,42,0.25); }
 </style>

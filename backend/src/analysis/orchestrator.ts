@@ -117,9 +117,31 @@ export interface RunOptions {
   aiCall?: (prompt: string) => Promise<{ raw: string; provider: string; model: string }>;
 }
 
+// 无核心原则时的通用分析 prompt：基本面 + 当前走势 + 可能走势，明确声明不构成买卖结论。
+export function buildGeneralAnalysisPrompt(persona: string, snapshot: StockSnapshot, directives?: string): string {
+  const v = (x: number | null | undefined, suffix = '') => (x === null || x === undefined ? '—' : `${x}${suffix}`);
+  return `${persona || '你是一位资深 A 股操盘手。'}
+${directives ? `\n${directives}\n` : ''}
+用户【尚未设定核心原则】。请基于下面这只股票的基本面与当前走势做一份通用分析，并在结论开头明确声明「未设核心原则，以下为通用分析，不构成买卖结论」。
+
+股票 ${snapshot.code}${snapshot.name ? '（' + snapshot.name + '）' : ''} 当前数据（系统已精确算出，请勿质疑或重算）：
+PE(TTM): ${v(snapshot.pe)}　PB: ${v(snapshot.pb)}　PS: ${v(snapshot.ps)}　ROE(TTM): ${v(snapshot.roe_ttm, '%')}　归母净利: ${v(snapshot.net_profit)}
+现价: ${v(snapshot.close)}　MA20: ${v(snapshot.ma20)}　MA60: ${v(snapshot.ma60)}　年内最高: ${v(snapshot.year_high)}
+
+请分析：① 基本面好坏（盈利能力/估值）；② 当前走势（相对均线与年内高点的位置、强弱）；③ 基于一般股市常识，后续可能的走势与需要注意的风险。
+只输出如下 JSON，不要任何额外文字：
+{
+  "one_liner":"一句话通用结论（以「未设核心原则，仅供参考」开头）",
+  "a_conclusion":"基本面与当前/可能走势的综合分析",
+  "b_conclusion":"",
+  "exception_channel":null,
+  "position_suggestion":"通用提示：未设核心原则，建议先和来财聊出一套原则再做买卖决策",
+  "teach_notes":[]
+}`;
+}
+
 export async function runAnalysis(userId: string, code: string, opts: RunOptions = {}): Promise<any> {
   const rb = getActive(userId);
-  if (!rb) throw new Error('NO_RULEBOOK');
 
   const snapshot = await getStockSnapshot(userId, code);
 
@@ -131,12 +153,43 @@ export async function runAnalysis(userId: string, code: string, opts: RunOptions
     throw err;
   }
 
+  const aiCall = opts.aiCall || ((p: string) => defaultAiCall(userId, p));
+
+  // 无核心原则：走通用分析（不评门槛、不给买卖结论、rulebook_version_id=null）
+  if (!rb) {
+    const persona = getCorePersona(userId) || '';
+    const prompt = buildGeneralAnalysisPrompt(persona, snapshot, skillDirectives(userId));
+    const { raw, provider, model } = await aiCall(prompt);
+    const parsed = parseAnalysisResponse(raw);
+    const id = saveReport({
+      userId,
+      stockCode: code,
+      stockName: snapshot.name,
+      rulebookVersionId: null,
+      dataDate: snapshot.date,
+      aiProvider: provider,
+      aiModel: model,
+      snapshot,
+      gateResults: [],
+      softFindings: [],
+      aConclusion: parsed.a_conclusion,
+      bConclusion: parsed.b_conclusion,
+      exceptionChannel: parsed.exception_channel,
+      positionSuggestion: parsed.position_suggestion,
+      oneLiner: parsed.one_liner,
+      teachNotes: parsed.teach_notes,
+      rawAiResponse: raw,
+      sources: snapshot.sources,
+      validation,
+    });
+    return getReport(userId, id);
+  }
+
   const ev = evaluateGates(snapshot, rb.gates);
   // Main-agent persona now lives in agent_profiles (decoupled from the rulebook); fall back to the version persona.
   const persona = getCorePersona(userId) || rb.version.persona;
   const prompt = buildAnalysisPrompt(persona, ev.gateResults, rb.softRules, rb.positionRules, snapshot, skillDirectives(userId));
 
-  const aiCall = opts.aiCall || ((p: string) => defaultAiCall(userId, p));
   const { raw, provider, model } = await aiCall(prompt);
   const parsed = parseAnalysisResponse(raw);
 

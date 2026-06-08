@@ -16,7 +16,7 @@ router.post('/run', async (req: Request, res: Response) => {
     const report = await runAnalysis(req.user!.userId, parsed.data.code.trim());
     successResponse(res, report, '分析完成', 201);
   } catch (e: any) {
-    if (e.message === 'NO_RULEBOOK') return errorResponse(res, 400, 'BUSINESS_CONFLICT', '请先在「核心规则」导入或设定规则版本');
+    // 注：无核心原则时 runAnalysis 不再抛 NO_RULEBOOK，改走通用分析兜底（见 orchestrator）。
     if (e.message === 'NO_MODEL') return errorResponse(res, 400, 'BUSINESS_CONFLICT', '请先在「AI 模型」配置并启用一个可用模型');
     if (e.message === 'DATA_UNTRUSTED') {
       const v = (e as any).validation;

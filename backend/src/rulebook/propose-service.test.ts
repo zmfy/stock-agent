@@ -95,4 +95,30 @@ describe('applyProposal', () => {
     expect(rb.getActive(USER).version.note).toContain('龙头稀缺');
     expect(out.version.version_label).toBe('V9.9');
   });
+
+  it('first version (no active rulebook) creates+activates without an AI summary call', async () => {
+    const NEWUSER = 'u-firstver';
+    expect(rb.getActive(NEWUSER)).toBeNull();
+    const sid = chat.createSession(NEWUSER, 'core_principle', null, '访谈');
+    const db = getDb();
+    db.prepare('INSERT INTO chat_messages (id, session_id, role, content) VALUES (?, ?, ?, ?)').run(
+      uuidv4(), sid, 'user', '我只买低估值高ROE的票'
+    );
+    const proposal = {
+      persona: '价值党',
+      note: '从访谈合成核心原则',
+      gates: [{ system: 'A', gate_key: 'roe_ttm', label: 'ROE', field: 'roe_ttm', op: '>=', threshold: 15, threshold2: null, ref_field: null, unit: '%', veto: 1, teach: 't' }],
+      softRules: [],
+      positionRules: {},
+    };
+    // aiCall would throw if invoked — proves the first-version path skips summarizeChangeReason even with sessionId.
+    const out = await ps.applyProposal(NEWUSER, proposal, '我的原则 v1', sid, async () => {
+      throw new Error('AI_SHOULD_NOT_BE_CALLED');
+    });
+    expect(out.version.version_label).toBe('我的原则 v1');
+    expect(out.version.note).toBe('从访谈合成核心原则');
+    const activeNow = rb.getActive(NEWUSER);
+    expect(activeNow.version.version_label).toBe('我的原则 v1');
+    expect(activeNow.gates).toHaveLength(1);
+  });
 });

@@ -29,3 +29,37 @@ describe('chat service', () => {
     expect(seen).toContain('本次选股');
   });
 });
+
+describe('core_principle framing branches on rulebook presence', () => {
+  const chat = require('./service');
+  const rb = require('../rulebook/service');
+
+  it('no rulebook => interview framing in prompt', async () => {
+    const U = 'u-cp-interview';
+    const sid = chat.createSession(U, 'core_principle', null, '核心原则探讨');
+    let captured = '';
+    await chat.postMessage(U, sid, '我想定个原则', {
+      aiCall: async (p: string) => {
+        captured = p;
+        return { raw: '好的，我们开始', provider: 'p', model: 'm' };
+      },
+    });
+    expect(captured).toContain('引导式');
+    expect(captured).toContain('一次只问');
+    expect(captured).not.toContain('探讨核心选股/操作原则的修改');
+  });
+
+  it('has rulebook => modify framing in prompt', async () => {
+    const U = 'u-cp-modify';
+    rb.instantiateBaseline(U);
+    const sid = chat.createSession(U, 'core_principle', null, '核心原则探讨');
+    let captured = '';
+    await chat.postMessage(U, sid, '把 ROE 放宽', {
+      aiCall: async (p: string) => {
+        captured = p;
+        return { raw: '建议如下', provider: 'p', model: 'm' };
+      },
+    });
+    expect(captured).toContain('探讨核心选股/操作原则的修改');
+  });
+});

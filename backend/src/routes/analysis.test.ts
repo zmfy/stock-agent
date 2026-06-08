@@ -36,10 +36,11 @@ const AI_JSON =
 describe('analysis routes', () => {
   afterEach(() => jest.restoreAllMocks());
 
-  it('run without a rulebook -> 400 NO_RULEBOOK message', async () => {
+  it('run without a rulebook (degraded path) -> 400 NO_MODEL when AI not configured', async () => {
+    // No rulebook -> degraded general-analysis path -> hits NO_MODEL because fresh user has no AI config.
     const res = await request(app).post('/api/analysis/run').set(h(freshTok)).send({ code: '600000' });
     expect(res.status).toBe(400);
-    expect(res.body.message).toContain('核心规则');
+    expect(res.body.message).toContain('AI');
   });
 
   it('run with rulebook + trusted data but no AI model -> 400 (asks for AI)', async () => {

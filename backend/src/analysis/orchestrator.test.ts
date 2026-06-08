@@ -29,9 +29,8 @@ describe('parseAnalysisResponse', () => {
 describe('runAnalysis', () => {
   const USER = 'u-orch';
 
-  it('throws NO_RULEBOOK when the user has no active rulebook', async () => {
-    await expect(orch.runAnalysis(USER, '600000')).rejects.toThrow('NO_RULEBOOK');
-  });
+  // "throws NO_RULEBOOK" behavior removed: no-rulebook now degrades gracefully.
+  // See "runAnalysis degraded (no rulebook)" describe block below.
 
   it('runs end-to-end with injected AI and persists a report with gate verdicts', async () => {
     rb.instantiateBaseline(USER);
@@ -59,5 +58,41 @@ describe('runAnalysis', () => {
     // listed
     const list = require('./report-service').listReports(USER);
     expect(list.length).toBe(1);
+  });
+});
+
+describe('runAnalysis degraded (no rulebook)', () => {
+  it('produces a general report without gates and with null rulebook_version_id', async () => {
+    const U = 'u-gen-analysis';
+    const CODE = '600000';
+    // Seed trusted snapshot using the same mechanism as the passing test above:
+    // cacheFundamentals + cacheQuotes + cacheMarket so validateStock passes.
+    data.cacheFundamentals(CODE, '2026-06-05', { roe_ttm: 8.5, pe: 12, pb: 1.1, ps: 1.2, net_profit: 500, turnover_rate: 3, name: '浦发银行' }, 'test');
+    data.cacheQuotes(
+      Array.from({ length: 60 }, (_, i) => ({ code: CODE, date: `2026-04-${String(60 - i).padStart(2, '0')}`, open: 10, high: 10, low: 10, close: 10, volume: 1 })),
+      'test'
+    );
+    data.cacheMarket('2026-06-05', { limit_up_count: 39, limit_down_count: 18, sse_ma20_slope: 0 }, 'test');
+
+    const report = await orch.runAnalysis(U, CODE, {
+      aiCall: async () => ({
+        raw: JSON.stringify({
+          one_liner: '未设核心原则，仅供参考：基本面尚可',
+          a_conclusion: '基本面尚可，趋势中性',
+          b_conclusion: '',
+          exception_channel: null,
+          position_suggestion: '先定原则再决策',
+          teach_notes: [],
+        }),
+        provider: 'p',
+        model: 'm',
+      }),
+    });
+
+    expect(report).toBeTruthy();
+    expect(report.rulebook_version_id ?? null).toBeNull();
+    const gates = typeof report.gate_results === 'string' ? JSON.parse(report.gate_results) : report.gate_results;
+    expect(gates).toEqual([]);
+    expect(report.one_liner).toContain('未设核心原则');
   });
 });
