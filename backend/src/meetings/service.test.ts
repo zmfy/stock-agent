@@ -128,3 +128,32 @@ describe('meetings service', () => {
     expect(dataPrompt).not.toContain('十天前旧闻OLD');
   });
 });
+
+describe('meeting prompts honor hasRulebook', () => {
+  it('morning analysis: no rulebook => no A/B gate language, forbids picking stocks', () => {
+    const p = svc.buildMorningAnalysisPrompt('persona', '大盘数据', '（用户尚未设定核心原则）', '数据整理', false);
+    expect(p).toContain('只研判大盘');
+    expect(p).toContain('不要推荐或点名任何个股');
+    expect(p).not.toContain('A / B 系统今日是否开闸');
+  });
+
+  it('morning analysis: has rulebook => keeps gate language', () => {
+    const p = svc.buildMorningAnalysisPrompt('persona', '大盘数据', '硬门槛：A:ROE', '数据整理', true);
+    expect(p).toContain('A / B 系统今日是否开闸');
+  });
+
+  it('morning synth: no rulebook => forbids individual stocks', () => {
+    const p = svc.buildMorningSynthPrompt('persona', '大盘', '（用户尚未设定核心原则）', 'd', 'a', 'q', false);
+    expect(p).toContain('不要推荐或点名任何个股');
+  });
+
+  it('evening synth: no rulebook => forbids individual stocks', () => {
+    const p = svc.buildEveningSynthPrompt('persona', '大盘', null, 'd', 'a', 'r', false);
+    expect(p).toContain('不要推荐或点名任何个股');
+  });
+
+  it('evening review: no rulebook => no rule-tuning-by-gate language', () => {
+    const p = svc.buildEveningReviewPrompt('persona', '（用户尚未设定核心原则）', 'analysis', [], false);
+    expect(p).toContain('只复盘大盘与板块');
+  });
+});

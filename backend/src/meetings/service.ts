@@ -109,14 +109,17 @@ ${news}
 }
 
 // 分析师：按核心原则把数据读成交易研判
-export function buildMorningAnalysisPrompt(persona: string, market: string, rulebook: string, dataOut: string): string {
+export function buildMorningAnalysisPrompt(persona: string, market: string, rulebook: string, dataOut: string, hasRulebook: boolean): string {
+  const task = hasRulebook
+    ? '请据此判断：今日能否开新仓？A / B 系统今日是否开闸？给出理由（对照硬门槛/情绪闸门）。中文、分点、简短。'
+    : '用户尚未设定核心原则。本次【只研判大盘形势与热门/强势板块】，不要判断 A/B 系统开闸、不要推荐或点名任何个股。中文、分点、简短。';
   return `${persona || '你是分析师，严格按核心原则把数据转成可执行研判。'}
 
 你是早会上的【分析师】。数据员刚才的整理：
 ${dataOut}
 ${market}
 ${rulebook}
-请据此判断：今日能否开新仓？A / B 系统今日是否开闸？给出理由（对照硬门槛/情绪闸门）。中文、分点、简短。`;
+${task}`;
 }
 
 // 情绪面：题材/情绪观察 + 预测今日可能走强的板块
@@ -141,8 +144,20 @@ export function buildMorningSynthPrompt(
   dataOut: string,
   analysisOut: string,
   qualOut: string,
+  hasRulebook: boolean,
   directives?: string
 ): string {
+  const body = hasRulebook
+    ? `请你综合三位的汇报，给出今日的最终研判：
+1）大盘研判（情绪冷热、能否开新仓、A/B 系统今日是否开闸）
+2）今日操作思路（偏防守还是进攻、重点关注什么）
+3）**今日可能走强的板块**：即使今天不操作，也要明确列出 2-4 个你判断今日可能走强的板块（板块名 + 一句理由），作为复盘对照。最后用一行「今日可能走强板块：A、B、C」收尾。
+并务必说明：你主要采纳了哪位子助手的哪条结论作为依据（点名「数据员/分析师/情绪面」）。`
+    : `用户【尚未设定核心原则】。请你综合三位的汇报，本次【只研判大盘与板块，不要判断 A/B 系统开闸、不要推荐或点名任何个股】：
+1）大盘研判（情绪冷热、整体环境）
+2）今日大盘操作环境（偏防守还是进攻）
+3）**今日可能走强的板块**：明确列出 2-4 个你判断今日可能走强的板块（板块名 + 一句理由）。最后用一行「今日可能走强板块：A、B、C」收尾。
+并务必说明：你主要采纳了哪位子助手的哪条结论作为依据（点名「数据员/分析师/情绪面」）。`;
   return `${persona}
 ${directives ? `\n${directives}\n` : ''}
 你是主 agent「来财」，正在主持盘前【早会】。三位子助手已分别汇报：
@@ -152,11 +167,7 @@ ${directives ? `\n${directives}\n` : ''}
 ${market}
 ${rulebook}
 
-请你综合三位的汇报，给出今日的最终研判：
-1）大盘研判（情绪冷热、能否开新仓、A/B 系统今日是否开闸）
-2）今日操作思路（偏防守还是进攻、重点关注什么）
-3）**今日可能走强的板块**：即使今天不操作，也要明确列出 2-4 个你判断今日可能走强的板块（板块名 + 一句理由），作为复盘对照。最后用一行「今日可能走强板块：A、B、C」收尾。
-并务必说明：你主要采纳了哪位子助手的哪条结论作为依据（点名「数据员/分析师/情绪面」）。
+${body}
 要求：简洁、可执行、不预测点位。中文、分点输出。
 
 若你引用了上面某几条新闻作为研判依据，请在回答最后另起一行输出：__ADOPT__ 逗号分隔的编号（如 __ADOPT__ N1,N3）；没有引用就不要输出该行。`;
@@ -188,9 +199,13 @@ export function buildEveningReviewPrompt(
   persona: string,
   rulebook: string,
   analysisOut: string,
-  ops: Array<{ stock_code: string; one_liner: string }>
+  ops: Array<{ stock_code: string; one_liner: string }>,
+  hasRulebook: boolean
 ): string {
   const opsText = ops.length ? ops.map((o) => `- ${o.stock_code}：${o.one_liner}`).join('\n') : '（今日无分析/操作记录）';
+  const task = hasRulebook
+    ? '请总结今日经验教训，并判断是否建议调整核心原则；如建议，明确指出改哪条、怎么改（用户将另行确认）。中文、分点、简短。'
+    : '用户尚未设定核心原则。请【只复盘大盘与板块】（早盘对板块的预测是否兑现、情绪冷热变化），不要复盘或点名个股操作、不给基于门槛的规则建议。中文、分点、简短。';
   return `${persona || '你负责复盘总结与规则优化建议。'}
 
 你是晚会上的【复盘员】。分析师的对错判断：
@@ -198,7 +213,7 @@ ${analysisOut}
 今日的分析/操作：
 ${opsText}
 ${rulebook}
-请总结今日经验教训，并判断是否建议调整核心原则；如建议，明确指出改哪条、怎么改（用户将另行确认）。中文、分点、简短。`;
+${task}`;
 }
 
 // 晚会·来财综合：明确早会哪些对哪些错（含板块预测命中与否），总结
@@ -209,8 +224,17 @@ export function buildEveningSynthPrompt(
   dataOut: string,
   analysisOut: string,
   reviewOut: string,
+  hasRulebook: boolean,
   directives?: string
 ): string {
+  const body = hasRulebook
+    ? `请综合给出今日复盘结论：
+1）今日早会研判是否成立（成功/失败，结合收盘）；
+2）**早会预测的板块走强，哪些命中、哪些落空**——逐个点评对错；
+3）今日经验总结，以及是否建议调整核心原则。
+并说明你主要采纳了哪位子助手的哪条结论。中文、分点输出。`
+    : `用户【尚未设定核心原则】。请【只复盘大盘与板块】（板块预测兑现情况、情绪变化、明日大盘关注方向），不要推荐或点名任何个股、不给基于门槛的规则建议。
+并说明你主要采纳了哪位子助手的哪条结论。中文、分点输出。`;
   return `${persona}
 ${directives ? `\n${directives}\n` : ''}
 你是主 agent「来财」，正在主持盘后【晚会】复盘。子助手已分别汇报：
@@ -221,11 +245,7 @@ ${directives ? `\n${directives}\n` : ''}
 ${morning || '（今日无早会记录）'}
 ${market}
 
-请综合给出今日复盘结论：
-1）今日早会研判是否成立（成功/失败，结合收盘）；
-2）**早会预测的板块走强，哪些命中、哪些落空**——逐个点评对错；
-3）今日经验总结，以及是否建议调整核心原则。
-并说明你主要采纳了哪位子助手的哪条结论。中文、分点输出。
+${body}
 
 若你引用了上面某几条新闻作为研判依据，请在回答最后另起一行输出：__ADOPT__ 逗号分隔的编号（如 __ADOPT__ N1,N3）；没有引用就不要输出该行。`;
 }
@@ -268,10 +288,11 @@ export async function generateMorning(userId: string, opts: GenOpts = {}): Promi
   const { text: news, idMap } = buildMorningNewsWithIds();
   const aiCall = opts.aiCall || ((p: string, role: string) => defaultAiCall(userId, p, role));
 
+  const hasRb = !!getActive(userId);
   const dataOut = (await aiCall(buildMorningDataPrompt(personaOf(userId, 'data'), mkt.text, sec.text, news), 'data')).trim();
-  const analysisOut = (await aiCall(buildMorningAnalysisPrompt(personaOf(userId, 'analysis'), mkt.text, rbText, dataOut), 'analysis')).trim();
+  const analysisOut = (await aiCall(buildMorningAnalysisPrompt(personaOf(userId, 'analysis'), mkt.text, rbText, dataOut, hasRb), 'analysis')).trim();
   const qualOut = (await aiCall(buildMorningQualPrompt(personaOf(userId, 'qualitative'), mkt.text, sec.text, news), 'qualitative')).trim();
-  const rawCoreOut = (await aiCall(buildMorningSynthPrompt(persona, mkt.text, rbText, dataOut, analysisOut, qualOut, skillDirectives(userId)), 'core')).trim();
+  const rawCoreOut = (await aiCall(buildMorningSynthPrompt(persona, mkt.text, rbText, dataOut, analysisOut, qualOut, hasRb, skillDirectives(userId)), 'core')).trim();
 
   // 2. 解析 __ADOPT__，标记并留痕
   const { tags, clean: coreOut } = parseAdopt(rawCoreOut);
@@ -313,10 +334,11 @@ export async function generateEvening(userId: string, opts: GenOpts = {}): Promi
   const ops = todaysReports(userId);
   const aiCall = opts.aiCall || ((p: string, role: string) => defaultAiCall(userId, p, role));
 
+  const hasRb = !!getActive(userId);
   const dataOut = (await aiCall(buildEveningDataPrompt(personaOf(userId, 'data'), mkt.text, sec.text), 'data')).trim();
   const analysisOut = (await aiCall(buildEveningAnalysisPrompt(personaOf(userId, 'analysis'), morning, dataOut), 'analysis')).trim();
-  const reviewOut = (await aiCall(buildEveningReviewPrompt(personaOf(userId, 'review'), rbText, analysisOut, ops), 'review')).trim();
-  const rawCoreOut = (await aiCall(buildEveningSynthPrompt(persona, mkt.text, morning, dataOut, analysisOut, reviewOut, skillDirectives(userId)), 'core')).trim();
+  const reviewOut = (await aiCall(buildEveningReviewPrompt(personaOf(userId, 'review'), rbText, analysisOut, ops, hasRb), 'review')).trim();
+  const rawCoreOut = (await aiCall(buildEveningSynthPrompt(persona, mkt.text, morning, dataOut, analysisOut, reviewOut, hasRb, skillDirectives(userId)), 'core')).trim();
 
   // 2. 解析 __ADOPT__，标记并留痕
   const { tags, clean: coreOut } = parseAdopt(rawCoreOut);
