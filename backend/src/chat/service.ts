@@ -31,6 +31,12 @@ const KIND_FRAMING: Record<ChatKind, string> = {
   screen: '按核心原则的选股讨论：解释本次选股结果与依据，回答关于入选/未入选个股的追问；不替用户做买卖决定。',
 };
 
+const CORE_PRINCIPLE_INTERVIEW_FRAMING =
+  '用户还没有核心原则。你要用【引导式半结构化】提问，一次只问 1–2 个问题，循序渐进地了解：' +
+  '① 看基本面还是技术面（或都看）；② 偏好什么股（蓝筹/成长/题材/低估…）；③ 持股周期；' +
+  '④ 买入信号；⑤ 卖出/止损习惯；⑥ 单票仓位、能接受的回撤。' +
+  '聊到信息足够时，提示用户点下方「生成核心原则」按钮。不要替用户编造他没说过的偏好。';
+
 export function createSession(userId: string, kind: ChatKind, refId?: string | null, title?: string): string {
   const id = uuidv4();
   // 个股会话：本地股票库里已有名称就直接用「名称 代码」当标题（即时，无需联网）；
@@ -102,12 +108,12 @@ function addMessage(sessionId: string, role: ChatMessage['role'], content: strin
 // 主 agent 的名字。用户在系统里说「来财」即指主 agent。
 export const AGENT_NAME = '来财';
 
-function buildPrompt(persona: string, kind: ChatKind, history: ChatMessage[], extraContext?: string, directives?: string): string {
+function buildPrompt(persona: string, framing: string, history: ChatMessage[], extraContext?: string, directives?: string): string {
   const convo = history.map((m) => `${m.role === 'user' ? '用户' : '助手'}：${m.content}`).join('\n');
   return `你的名字叫「${AGENT_NAME}」，是用户的操盘主助手；当用户称呼「${AGENT_NAME}」时就是在叫你。
 ${persona}
 ${directives ? `\n${directives}\n` : ''}
-当前场景：${KIND_FRAMING[kind]}${extraContext ? `\n背景资料：\n${extraContext}` : ''}
+当前场景：${framing}${extraContext ? `\n背景资料：\n${extraContext}` : ''}
 
 对话历史：
 ${convo}
@@ -199,7 +205,9 @@ export async function postMessage(userId: string, sessionId: string, content: st
       extra = `当前核心原则【${rb.version.version_label}】人设：${rb.version.persona}\n硬门槛：${g}\n\n原则演进记忆（最近变更，知道为什么是现在这样）：\n${hist}`;
     }
   }
-  const prompt = buildPrompt(persona, session.kind, history, extra, skillDirectives(userId));
+  let framing = KIND_FRAMING[session.kind as ChatKind];
+  if (session.kind === 'core_principle' && !getActive(userId)) framing = CORE_PRINCIPLE_INTERVIEW_FRAMING;
+  const prompt = buildPrompt(persona, framing, history, extra, skillDirectives(userId));
   const aiCall = opts.aiCall || ((p: string) => defaultAiCall(userId, p));
   const { raw } = await aiCall(prompt);
   return addMessage(sessionId, 'assistant', (raw || '').trim() || '（无回复）');
