@@ -343,6 +343,22 @@ function recentCloses(code: string, n: number): number[] {
   return rows.map((r) => r.close);
 }
 
+export interface Bar {
+  date: string;
+  open: number | null;
+  high: number | null;
+  low: number | null;
+  close: number | null;
+  volume: number | null;
+}
+
+export function getRecentBars(code: string, n: number): Bar[] {
+  const rows = getDb()
+    .prepare('SELECT date, open, high, low, close, volume FROM quote_daily WHERE code = ? ORDER BY date DESC LIMIT ?')
+    .all(code, n) as Bar[];
+  return rows.reverse(); // DESC 取最近 n 条后反转为升序
+}
+
 function latestMarket(): { limit_up_count: number | null; limit_down_count: number | null; sse_ma20_slope: number | null } | null {
   return getDb()
     .prepare('SELECT limit_up_count, limit_down_count, sse_ma20_slope FROM market_sentiment ORDER BY date DESC LIMIT 1')

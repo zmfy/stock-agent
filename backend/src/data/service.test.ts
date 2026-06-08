@@ -137,4 +137,19 @@ describe('data/service', () => {
     const st = svc.getSyncStatus('eod');
     expect(st.state).toBe('idle'); expect(st.message).toContain('取消'); expect(st.done).toBeLessThan(3);
   });
+
+  describe('getRecentBars', () => {
+    it('returns recent bars ascending, capped at n, empty for unknown', () => {
+      const db = require('../db').getDb();
+      const code = 'BARS01';
+      for (const d of ['2026-06-01','2026-06-02','2026-06-03','2026-06-04']) {
+        db.prepare('INSERT OR REPLACE INTO quote_daily (code,date,open,high,low,close,volume,source) VALUES (?,?,?,?,?,?,?,?)')
+          .run(code, d, 1, 2, 0.5, Number(d.slice(-2)), 100, 'test');
+      }
+      const bars = svc.getRecentBars(code, 3);
+      expect(bars.map((b: any) => b.date)).toEqual(['2026-06-02','2026-06-03','2026-06-04']);
+      expect(bars[2].close).toBe(4);
+      expect(svc.getRecentBars('NOPE', 5)).toEqual([]);
+    });
+  });
 });
