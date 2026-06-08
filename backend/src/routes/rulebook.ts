@@ -5,6 +5,7 @@ import { successResponse, errorResponse } from '../utils/response';
 import * as svc from '../rulebook/service';
 import { TEMPLATES } from '../rulebook/templates';
 import { proposeChange, applyProposal } from '../rulebook/propose-service';
+import { synthesizeRulebook } from '../rulebook/synthesize-service';
 import { composeTemplates } from '../rulebook/compose';
 import { getMessages } from '../chat/service';
 
@@ -175,6 +176,22 @@ router.post('/propose', async (req: Request, res: Response) => {
     if (e.message === 'NO_MODEL') return errorResponse(res, 400, 'BUSINESS_CONFLICT', '请先在「AI 模型」配置并启用一个可用模型');
     if (e.message === 'PARSE_FAILED') return errorResponse(res, 502, 'UPSTREAM_ERROR', 'agent 提议解析失败，请把诉求说得更具体些再试');
     return errorResponse(res, 502, 'UPSTREAM_ERROR', `提议失败：${e.message || '未知错误'}`);
+  }
+});
+
+// POST /api/rulebook/synthesize { sessionId } — 从访谈对话从零合成整套核心原则(NOT saved)
+router.post('/synthesize', async (req: Request, res: Response) => {
+  const parsed = z.object({ sessionId: z.string().min(1) }).safeParse(req.body);
+  if (!parsed.success) return errorResponse(res, 422, 'VALIDATION_ERROR', '缺少会话');
+  try {
+    const { proposal, suggestedLabel } = await synthesizeRulebook(req.user!.userId, parsed.data.sessionId);
+    successResponse(res, { proposal, suggestedLabel, fromScratch: true });
+  } catch (e: any) {
+    if (e.message === 'NO_MODEL') return errorResponse(res, 400, 'BUSINESS_CONFLICT', '请先在「AI 模型」配置并启用一个可用模型');
+    if (e.message === 'SYNTH_EMPTY') return errorResponse(res, 400, 'BUSINESS_CONFLICT', '还没聊到足够信息，请再多说说你平时怎么选股、怎么买卖');
+    if (e.message === 'PARSE_FAILED') return errorResponse(res, 502, 'UPSTREAM_ERROR', '生成解析失败，请再试一次');
+    if (e.message === 'NOT_FOUND') return errorResponse(res, 404, 'RESOURCE_NOT_FOUND', '会话不存在');
+    return errorResponse(res, 502, 'UPSTREAM_ERROR', `生成失败：${e.message || '未知错误'}`);
   }
 });
 
