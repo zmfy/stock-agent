@@ -54,3 +54,20 @@ describe('buildStockContext', () => {
     expect(mc.buildStockContext('X', null, [])).toBe('');
   });
 });
+
+describe('buildIndexContext', () => {
+  it('renders index close+pct table and sentiment tail; sentiment-only when no bars', () => {
+    const bars = [
+      { date: '2026-06-02', open: 3000, high: 3010, low: 2990, close: 3000, volume: 1 },
+      { date: '2026-06-03', open: 3000, high: 3030, low: 3000, close: 3030, volume: 1 },
+    ];
+    const sent = [{ date: '2026-06-03', limit_up_count: 60, limit_down_count: 8, sse_ma20_slope: 0.2 }];
+    const out = mc.buildIndexContext('000001', bars, sent);
+    expect(out).toContain('000001');
+    expect(out).toContain('3030');
+    expect(out).toContain('涨停');
+    const only = mc.buildIndexContext('000001', [], sent);
+    expect(only).toContain('涨停');
+    expect(only).not.toContain('日期│收│涨跌幅');
+  });
+});

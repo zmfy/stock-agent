@@ -220,3 +220,15 @@ describe('getStockSnapshot depth gate', () => {
     expect(svc.shouldDeepFetch(code)).toBe(false);
   });
 });
+
+describe('getMarketSentimentSeries', () => {
+  it('returns ascending series capped at n', () => {
+    const db = svc.getDb ? svc.getDb() : require('../db').getDb();
+    for (const d of ['2026-06-01','2026-06-02','2026-06-03']) {
+      db.prepare('INSERT OR REPLACE INTO market_sentiment (date,limit_up_count,limit_down_count,sse_ma20_slope,source) VALUES (?,?,?,?,?)')
+        .run(d, 50, 10, 0.1, 'test');
+    }
+    const s = svc.getMarketSentimentSeries(2);
+    expect(s.map((x: any) => x.date)).toEqual(['2026-06-02','2026-06-03']);
+  });
+});

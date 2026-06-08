@@ -73,6 +73,29 @@ function n2(x: number | null | undefined): string {
   return x === null || x === undefined ? '—' : (Math.round(x * 100) / 100).toString();
 }
 
+interface Sentiment { date: string; limit_up_count: number | null; limit_down_count: number | null; sse_ma20_slope: number | null }
+
+export function buildIndexContext(code: string, bars: Bar[], sentiment: Sentiment[]): string {
+  const name = code === '000001' ? '上证指数' : code === '399001' ? '深证成指' : code === '399006' ? '创业板指' : code;
+  const parts: string[] = [`【大盘 ${name}(${code})】`];
+  if (bars.length) {
+    parts.push('日期│收│涨跌幅');
+    for (let i = 0; i < bars.length; i++) {
+      const c = bars[i].close;
+      const prev = i > 0 ? bars[i - 1].close : null;
+      const pct = c != null && prev ? `${(((c - prev) / prev) * 100).toFixed(2)}%` : '—';
+      parts.push(`${bars[i].date}│${n2(c)}│${pct}`);
+    }
+    parts.push(`以上为 ${name} 最近 ${bars.length} 个交易日点位(截至 ${bars[bars.length - 1].date});更早数据本地暂未提供。`);
+  }
+  if (sentiment.length) {
+    const s = sentiment.map((x) => `${x.date}: 涨停${x.limit_up_count ?? '—'}/跌停${x.limit_down_count ?? '—'}/上证20线斜率${n2(x.sse_ma20_slope)}`);
+    parts.push('近期情绪(涨跌停家数/上证20日线斜率):', ...s);
+  }
+  if (!bars.length && !sentiment.length) return '';
+  return parts.join('\n');
+}
+
 export function buildStockContext(code: string, snapshot: StockSnapshot | null, bars: Bar[]): string {
   if (!bars.length && !snapshot) return '';
   const head = snapshot

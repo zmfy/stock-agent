@@ -355,6 +355,13 @@ export function shouldDeepFetch(code: string): boolean {
   return recentCloses(code, 60).length < 60;
 }
 
+export function getMarketSentimentSeries(n: number): Array<{ date: string; limit_up_count: number | null; limit_down_count: number | null; sse_ma20_slope: number | null }> {
+  const rows = getDb()
+    .prepare('SELECT date, limit_up_count, limit_down_count, sse_ma20_slope FROM market_sentiment ORDER BY date DESC LIMIT ?')
+    .all(n) as any[];
+  return rows.reverse();
+}
+
 export interface Bar {
   date: string;
   open: number | null;
