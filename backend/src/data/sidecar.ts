@@ -102,6 +102,17 @@ export async function fetchQuotes(base: string, code: string, days = 120, order?
   };
 }
 
+export async function fetchIndexBars(base: string, code: string, days = 120): Promise<{ source: string | null; rows: QuoteRow[] } | null> {
+  const data = await getJson(`${base}/index/${code}?days=${days}`);
+  const arr = Array.isArray(data) ? data : data?.rows;
+  if (!Array.isArray(arr)) return null;
+  const source = Array.isArray(data) ? null : (data?.source ?? null);
+  return {
+    source,
+    rows: arr.map((r: any) => ({ code, date: String(r.date), open: num(r.open), high: num(r.high), low: num(r.low), close: num(r.close), volume: num(r.volume) })),
+  };
+}
+
 export async function fetchMarket(base: string, order?: string[]): Promise<{ source: string | null; data: { limit_up_count: number | null; limit_down_count: number | null; sse_ma20_slope: number | null } } | null> {
   const d = await getJson(`${base}/market/sentiment${order && order.length ? `?order=${order.join(',')}` : ''}`);
   const data = d?.data ?? (d && !('source' in d) ? d : null);   // 兼容旧裸对象

@@ -179,6 +179,26 @@ describe('data/service', () => {
   });
 });
 
+describe('index bars store + ensure', () => {
+  it('cache + getRecent ascending; ensure fetches when local insufficient', async () => {
+    svc.cacheIndexBars([
+      { code: '000001', date: '2026-06-02', open: 3000, high: 3010, low: 2990, close: 3005, volume: 1 },
+      { code: '000001', date: '2026-06-03', open: 3005, high: 3030, low: 3000, close: 3025, volume: 1 },
+    ], 'test');
+    const bars = svc.getRecentIndexBars('000001', 5);
+    expect(bars.map((b: any) => b.date)).toEqual(['2026-06-02', '2026-06-03']);
+    let fetched = 0;
+    const fetcher = async (_c: string, n: number) => { fetched++; return [
+      { code: '000001', date: '2026-06-04', open: 3025, high: 3050, low: 3020, close: 3040, volume: 1 },
+      { code: '000001', date: '2026-06-05', open: 3040, high: 3060, low: 3030, close: 3055, volume: 1 },
+      { code: '000001', date: '2026-06-06', open: 3055, high: 3070, low: 3050, close: 3060, volume: 1 },
+    ].slice(0, n); };
+    const out = await svc.ensureIndexBars('u1', '000001', 5, { fetcher });
+    expect(fetched).toBe(1);
+    expect(out.length).toBeGreaterThanOrEqual(5);
+  });
+});
+
 describe('getStockSnapshot depth gate', () => {
   it('shouldDeepFetch true when local closes < 60', () => {
     const code = 'DEP01';

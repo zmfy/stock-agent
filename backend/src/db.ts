@@ -149,6 +149,15 @@ function initSchema(): void {
       PRIMARY KEY (code, date)
     );
 
+    CREATE TABLE IF NOT EXISTS index_daily (
+      code TEXT NOT NULL,
+      date TEXT NOT NULL,
+      open REAL, high REAL, low REAL, close REAL, volume REAL,
+      source TEXT,
+      fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (code, date)
+    );
+
     CREATE TABLE IF NOT EXISTS fundamentals (
       code TEXT NOT NULL,
       date TEXT NOT NULL,

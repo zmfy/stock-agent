@@ -1,7 +1,7 @@
 import { getDb } from '../db';
 import { QuoteRow, StockSnapshot } from '../types';
 import { v4 as uuidv4 } from 'uuid';
-import { resolveSidecarBase, fetchFundamentals, fetchQuotes, fetchMarket, fetchName, fetchNews, fetchAllStocks, orderedProviders, fetchRealtime } from './sidecar';
+import { resolveSidecarBase, fetchFundamentals, fetchQuotes, fetchMarket, fetchName, fetchNews, fetchAllStocks, orderedProviders, fetchRealtime, fetchIndexBars } from './sidecar';
 import { recordCollected } from './news-log';
 
 // ---- hot news ----
@@ -401,6 +401,50 @@ export async function ensureStockBars(
     /* 安静降级 */
   }
   return getRecentBars(code, n);
+}
+
+export function cacheIndexBars(rows: QuoteRow[], source: string): number {
+  const db = getDb();
+  const stmt = db.prepare(
+    `INSERT INTO index_daily (code,date,open,high,low,close,volume,source) VALUES (@code,@date,@open,@high,@low,@close,@volume,@source)
+     ON CONFLICT(code,date) DO UPDATE SET open=excluded.open,high=excluded.high,low=excluded.low,close=excluded.close,volume=excluded.volume,source=excluded.source`
+  );
+  const tx = db.transaction((items: QuoteRow[]) => { for (const r of items) stmt.run({ ...r, source }); });
+  tx(rows);
+  return rows.length;
+}
+
+export function getRecentIndexBars(code: string, n: number): Bar[] {
+  const rows = getDb()
+    .prepare('SELECT date, open, high, low, close, volume FROM index_daily WHERE code = ? ORDER BY date DESC LIMIT ?')
+    .all(code, n) as Bar[];
+  return rows.reverse();
+}
+
+async function defaultIndexFetcher(userId: string, code: string, n: number): Promise<Bar[]> {
+  const base = resolveSidecarBase(userId);
+  if (!base) return [];
+  const res = await fetchIndexBars(base, code, n);
+  if (res && res.rows.length) cacheIndexBars(res.rows, res.source ?? 'tdx');
+  return res?.rows.map((r) => ({ date: r.date, open: r.open, high: r.high, low: r.low, close: r.close, volume: r.volume })) ?? [];
+}
+
+export async function ensureIndexBars(
+  userId: string, code: string, n: number,
+  opts: { fetcher?: (code: string, n: number) => Promise<QuoteRow[] | Bar[]> } = {}
+): Promise<Bar[]> {
+  const local = getRecentIndexBars(code, n);
+  if (local.length >= n) return local;
+  try {
+    if (opts.fetcher) {
+      const rows = await opts.fetcher(code, n);
+      const qrows: QuoteRow[] = (rows as any[]).map((r) => ({ code, date: String(r.date), open: r.open ?? null, high: r.high ?? null, low: r.low ?? null, close: r.close ?? null, volume: r.volume ?? null }));
+      if (qrows.length) cacheIndexBars(qrows, 'test');
+    } else {
+      await defaultIndexFetcher(userId, code, n);
+    }
+  } catch { /* 安静降级 */ }
+  return getRecentIndexBars(code, n);
 }
 
 function latestMarket(): { limit_up_count: number | null; limit_down_count: number | null; sse_ma20_slope: number | null } | null {
