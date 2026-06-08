@@ -92,6 +92,8 @@ export const rulebookApi = {
     api.post<{ data: ProposeResult }>('/rulebook/propose', body),
   apply: (versionLabel: string, proposal: any, sessionId?: string) =>
     api.post<{ data: FullRulebook }>('/rulebook/apply', { versionLabel, proposal, sessionId }),
+  synthesize: (sessionId: string) =>
+    api.post<{ data: SynthesizeResult }>('/rulebook/synthesize', { sessionId }),
 };
 
 export interface ProposeResult {
@@ -105,4 +107,11 @@ export interface ProposeResult {
   magnitude: 'major' | 'minor';
   currentLabel: string;
   suggestedLabel: string;
+}
+
+// 从访谈对话从零合成的整套核心原则（无 delta，走完整预览）
+export interface SynthesizeResult {
+  proposal: ProposeResult['proposal'];
+  suggestedLabel: string;
+  fromScratch: true;
 }
