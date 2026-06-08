@@ -13,3 +13,7 @@ dist/
 *.db-wal
 __pycache__/
 *.pyc
+
+# 构建产物（Docker 镜像构建时生成，不入库）
+backend/public/
+frontend/tsconfig.tsbuildinfo
