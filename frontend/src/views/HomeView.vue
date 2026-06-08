@@ -72,7 +72,7 @@
                 {{ active.title || sessionLabel(active) }}
                 <span v-if="active.kind === 'stock'" class="stock-head">
                   <button class="mini" :disabled="analyzing" @click="doAnalyze(active)">{{ analyzing ? '按原则分析中…' : '🔄 重新按核心原则分析' }}</button>
-                  <router-link class="mini" :to="{ path: '/analysis', query: { code: active.ref_id } }">完整报告</router-link>
+                  <button class="mini" @click="openReport(active.ref_id!)">完整报告</button>
                 </span>
                 <button class="mini clear-cur" @click="clearCurrent" title="清空当前会话的消息">🧹 清理</button>
               </div>
@@ -270,6 +270,7 @@
       </section>
     </main>
     <MarkdownModal :open="detailOpen" :text="detailText" @close="detailOpen = false" />
+    <ReportModal :open="reportOpen" :code="reportCode" @close="reportOpen = false" />
   </div>
 </template>
 
@@ -293,6 +294,7 @@ import MeetingsHistoryView from './MeetingsHistoryView.vue';
 import StockPicker from '../components/StockPicker.vue';
 import ClampText from '../components/ClampText.vue';
 import MarkdownModal from '../components/MarkdownModal.vue';
+import ReportModal from '../components/ReportModal.vue';
 
 const auth = useAuthStore();
 
@@ -677,6 +679,14 @@ const detailText = ref('');
 function openDetail(text: string) {
   detailText.value = text;
   detailOpen.value = true;
+}
+
+// 个股完整报告弹层（替代跳转 /analysis）
+const reportOpen = ref(false);
+const reportCode = ref('');
+function openReport(code: string) {
+  reportCode.value = code;
+  reportOpen.value = true;
 }
 
 // 把后台流程错误以「来财发言」写入会话并即时显示。
