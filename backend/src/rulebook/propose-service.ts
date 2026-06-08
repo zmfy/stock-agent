@@ -218,7 +218,9 @@ export async function applyProposal(
 ): Promise<FullRulebook> {
   const active = getActive(userId);
   let note = proposal.note || '规则调整';
-  if (sessionId) {
+  // 首个版本（无 active，如访谈合成）不去 AI 提炼改动理由——既无「改动」可比，也避免多一次可能失败的调用；
+  // proposal.note 已是有意义的说明（如「从访谈合成核心原则」）。
+  if (sessionId && active) {
     const discussion = getMessages(userId, sessionId)
       .map((m: any) => `${m.role === 'user' ? '用户' : '助手'}：${m.content}`)
       .join('\n');

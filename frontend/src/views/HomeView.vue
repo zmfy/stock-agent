@@ -414,7 +414,13 @@ function gateCond(g: Gate) {
   return `${g.op} ${g.threshold}${g.unit}`;
 }
 function buildCpBriefing(rb: FullRulebook | null): string {
-  if (!rb) return '你还没有核心原则。请到「系统设置 → 核心规则」导入一个模板后，再来这里和我探讨优化。';
+  if (!rb)
+    return (
+      '你好，我是来财。你还没有核心原则，我们用聊天的方式一起把它定出来。\n' +
+      '我会问你几个问题，了解你平时怎么选股、怎么买卖；你照实说就行，没想清楚的也没关系。\n\n' +
+      '先聊第一个：你平时主要看公司基本面（业绩、估值），还是看走势（均线、突破），还是两者都看？\n\n' +
+      '（聊得差不多了，点下方「🛠 根据我们的聊天，帮我生成核心原则」，我就帮你总结成一套规则。）'
+    );
   const systems = [...new Set(rb.gates.map((g) => g.system))].sort();
   const blocks = systems
     .map((sys) => {
@@ -636,9 +642,15 @@ async function openCorePrinciple() {
     s = sessions.value.find((x) => x.id === id);
   }
   if (s) {
-    await chatApi.clearMessages(s.id);
-    await open(s);
-    messages.value = [];
+    if (needsInit.value) {
+      // 访谈模式（无核心原则）：保留已有对话，重开不清空，否则会丢失正在进行的访谈记录
+      await open(s);
+    } else {
+      // 修改讨论模式（已有核心原则）：每次重开都重置，基于当前规则重新讨论
+      await chatApi.clearMessages(s.id);
+      await open(s);
+      messages.value = [];
+    }
   }
 }
 async function startInterview() {
