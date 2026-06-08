@@ -152,4 +152,29 @@ describe('data/service', () => {
       expect(svc.getRecentBars('NOPE', 5)).toEqual([]);
     });
   });
+
+  describe('ensureStockBars', () => {
+    it('uses local when enough; otherwise fetches via injected fetcher and caches', async () => {
+      const code = 'ENS01';
+      const db = require('../db').getDb();
+      db.prepare('INSERT OR REPLACE INTO quote_daily (code,date,open,high,low,close,volume,source) VALUES (?,?,?,?,?,?,?,?)').run(code, '2026-05-30', 1,1,1,9,1,'test');
+      let fetched = 0;
+      const fetcher = async (_code: string, n: number) => {
+        fetched++;
+        return [
+          { code, date: '2026-06-01', open: 1, high: 1, low: 1, close: 10, volume: 1 },
+          { code, date: '2026-06-02', open: 1, high: 1, low: 1, close: 11, volume: 1 },
+          { code, date: '2026-06-03', open: 1, high: 1, low: 1, close: 12, volume: 1 },
+          { code, date: '2026-06-04', open: 1, high: 1, low: 1, close: 13, volume: 1 },
+          { code, date: '2026-06-05', open: 1, high: 1, low: 1, close: 14, volume: 1 },
+        ].slice(0, n);
+      };
+      const bars = await svc.ensureStockBars('u1', code, 5, { fetcher });
+      expect(fetched).toBe(1);
+      expect(bars.length).toBeGreaterThanOrEqual(5);
+      const bars2 = await svc.ensureStockBars('u1', code, 5, { fetcher });
+      expect(fetched).toBe(1); // local now sufficient → no second fetch
+      expect(bars2.length).toBeGreaterThanOrEqual(5);
+    });
+  });
 });

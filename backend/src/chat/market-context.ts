@@ -1,4 +1,5 @@
-import { getCachedName, findStockCodeInText } from '../data/service';
+import { getCachedName, findStockCodeInText, Bar } from '../data/service';
+import { StockSnapshot } from '../types';
 
 export const RECENT_BARS_N = 30;
 export const MAX_BARS_N = 500;
@@ -41,4 +42,21 @@ export function detectTarget(message: string, sessionRefId: string | null): Targ
   if (byName) return { kind: 'stock', code: byName };
   if (sessionRefId) return { kind: 'stock', code: sessionRefId };
   return null;
+}
+
+function n2(x: number | null | undefined): string {
+  return x === null || x === undefined ? '—' : (Math.round(x * 100) / 100).toString();
+}
+
+export function buildStockContext(code: string, snapshot: StockSnapshot | null, bars: Bar[]): string {
+  if (!bars.length && !snapshot) return '';
+  const head = snapshot
+    ? `【${code} ${snapshot.name ?? ''}】现价 ${n2(snapshot.close)}｜MA20 ${n2(snapshot.ma20)}｜MA60 ${n2(snapshot.ma60)}｜PE ${n2(snapshot.pe)}｜PB ${n2(snapshot.pb)}｜ROE ${n2(snapshot.roe_ttm)}%｜年内高 ${n2(snapshot.year_high)}`
+    : `【${code}】`;
+  const tableHead = '日期│开│高│低│收│量';
+  const rows = bars.map((b) => `${b.date}│${n2(b.open)}│${n2(b.high)}│${n2(b.low)}│${n2(b.close)}│${n2(b.volume)}`);
+  const note = bars.length
+    ? `以上为 ${code} 最近 ${bars.length} 个交易日日线(截至 ${bars[bars.length - 1].date});更早数据本地暂未提供。这些数字系统已算好，请勿臆造窗口外数据。`
+    : '本地暂无该股历史行情，可在「数据」页同步后再问。';
+  return [head, tableHead, ...rows, note].join('\n');
 }

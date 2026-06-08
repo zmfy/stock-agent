@@ -366,6 +366,38 @@ export function getRecentBars(code: string, n: number): Bar[] {
   return rows.reverse(); // DESC 取最近 n 条后反转为升序
 }
 
+// 默认抓取器：走 sidecar 取 n 日线并缓存。
+async function defaultBarFetcher(userId: string, code: string, n: number): Promise<Bar[]> {
+  const base = resolveSidecarBase(userId);
+  if (!base) return [];
+  const res = await fetchQuotes(base, code, n);
+  if (res && res.rows.length) cacheQuotes(res.rows, res.source ?? 'tdx');
+  return res?.rows.map((r) => ({ date: r.date, open: r.open, high: r.high, low: r.low, close: r.close, volume: r.volume })) ?? [];
+}
+
+// 本地够(≥n)就用本地；不足则用 fetcher 抓取并缓存后再读本地。fetcher 可注入(测试)。
+export async function ensureStockBars(
+  userId: string,
+  code: string,
+  n: number,
+  opts: { fetcher?: (code: string, n: number) => Promise<Bar[] | QuoteRow[]> } = {}
+): Promise<Bar[]> {
+  const local = getRecentBars(code, n);
+  if (local.length >= n) return local;
+  try {
+    if (opts.fetcher) {
+      const rows = await opts.fetcher(code, n);
+      const qrows: QuoteRow[] = (rows as any[]).map((r) => ({ code, date: String(r.date), open: r.open ?? null, high: r.high ?? null, low: r.low ?? null, close: r.close ?? null, volume: r.volume ?? null }));
+      if (qrows.length) cacheQuotes(qrows, 'test');
+    } else {
+      await defaultBarFetcher(userId, code, n);
+    }
+  } catch {
+    /* 安静降级 */
+  }
+  return getRecentBars(code, n);
+}
+
 function latestMarket(): { limit_up_count: number | null; limit_down_count: number | null; sse_ma20_slope: number | null } | null {
   return getDb()
     .prepare('SELECT limit_up_count, limit_down_count, sse_ma20_slope FROM market_sentiment ORDER BY date DESC LIMIT 1')
