@@ -485,11 +485,34 @@ def market_sentiment(order: str = ""):
     return {"source": None, "data": {}}
 
 
+# 指数日线的新浪兜底（ak.stock_zh_index_daily 在本网络可用；eastmoney 的 index_zh_a_hist 常被 RST）。
+_INDEX_SINA_SYMBOL = {"000001": "sh000001", "399001": "sz399001", "399006": "sz399006"}
+
+def _index_sina(code: str, days: int):
+    sym = _INDEX_SINA_SYMBOL.get(code)
+    if not sym:
+        return None
+    try:
+        df = ak.stock_zh_index_daily(symbol=sym).tail(days)
+        return [
+            {"date": str(r.get("date"))[:10], "open": _f(r.get("open")), "high": _f(r.get("high")), "low": _f(r.get("low")), "close": _f(r.get("close")), "volume": _f(r.get("volume"))}
+            for _, r in df.iterrows()
+        ]
+    except Exception:
+        return None
+
+
 @app.get("/index/{code}")
 def index_endpoint(code: str, days: int = 120):
-    """指数日线 OHLC（不复权）。code: 000001=上证, 399001=深成指, 399006=创业板指。"""
+    """指数日线 OHLC（不复权）。code: 000001=上证, 399001=深成指, 399006=创业板指。
+    通达信优先；取不到（如 TDX 未连/无服务器）则退新浪。"""
     rows = _timed(lambda: tdx.index_bars(code, days), 10)
-    return {"rows": rows or [], "source": "tdx"}
+    if rows:
+        return {"rows": rows, "source": "tdx"}
+    sina = _timed(lambda: _index_sina(code, days), 15)
+    if sina:
+        return {"rows": sina, "source": "sina"}
+    return {"rows": [], "source": None}
 
 
 @app.get("/tdx/servers/test")
