@@ -100,6 +100,12 @@ export function clearAll(userId: string): void {
   db.prepare('DELETE FROM chat_sessions WHERE user_id = ?').run(userId);
 }
 
+// 往会话里写一条助手消息(不调 AI)——把后台流程(选股/分析/早晚会)的错误以「来财发言」落到会话。
+export function addAssistantNote(userId: string, sessionId: string, content: string): ChatMessage | null {
+  if (!ownSession(userId, sessionId)) return null;
+  return addMessage(sessionId, 'assistant', content);
+}
+
 function addMessage(sessionId: string, role: ChatMessage['role'], content: string): ChatMessage {
   const id = uuidv4();
   getDb().prepare('INSERT INTO chat_messages (id, session_id, role, content) VALUES (?, ?, ?, ?)').run(id, sessionId, role, content);

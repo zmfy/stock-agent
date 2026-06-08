@@ -72,8 +72,9 @@
                 {{ active.title || sessionLabel(active) }}
                 <span v-if="active.kind === 'stock'" class="stock-head">
                   <button class="mini" :disabled="analyzing" @click="doAnalyze(active)">{{ analyzing ? '按原则分析中…' : '🔄 重新按核心原则分析' }}</button>
-                  <router-link class="mini" :to="{ path: '/analysis', query: { code: active.ref_id } }">完整报告</router-link>
+                  <button class="mini" @click="openReport(active.ref_id!)">完整报告</button>
                 </span>
+                <button class="mini clear-cur" @click="clearCurrent" title="清空当前会话的消息">🧹 清理</button>
               </div>
               <div v-if="analyzing" class="analyzing">正在按你的核心原则分析 {{ active.ref_id }} …</div>
               <div v-if="active && generating.has(active.kind)" class="gen-banner">
@@ -83,7 +84,7 @@
                 生成失败：{{ genErr[active.kind] }}（可再次点击对应按钮重试）
               </div>
               <div v-if="briefing && briefingTime" class="briefing-time muted">🕐 生成于 {{ fmtCN(briefingTime) }}</div>
-              <div v-if="briefing" class="briefing">{{ briefing }}</div>
+              <div v-if="briefing" class="briefing"><ClampText :text="briefing" @detail="openDetail" /></div>
 
               <template v-if="active?.kind === 'screen' && screen">
                 <div class="screen-box">
@@ -120,7 +121,7 @@
 
               <div class="msgs" ref="msgsEl">
                 <div v-for="m in messages" :key="m.id" class="msg" :class="m.role">
-                  <div class="bubble">{{ m.content }}</div>
+                  <div class="bubble"><ClampText :text="m.content" @detail="openDetail" /></div>
                   <div v-if="m.created_at" class="mtime">{{ fmtTime(m.created_at) }}</div>
                 </div>
                 <div v-if="sending" class="msg assistant"><div class="bubble typing">思考中…</div></div>
@@ -244,7 +245,7 @@
                 <div class="cal-nav">
                   <button class="mini" @click="prevMonth">‹</button>
                   <span>{{ calYear }} 年 {{ calMonth }} 月</span>
-                  <button class="mini" @click="nextMonth">›</button>
+                  <button class="mini" @click="nextMonth" :disabled="atCalMax">›</button>
                 </div>
                 <div class="cal-grid cal-head">
                   <span v-for="w in ['一','二','三','四','五','六','日']" :key="w">{{ w }}</span>
@@ -268,6 +269,8 @@
         <button v-if="!opsOpen" class="ops-fab" @click="opsOpen = true" title="显示操作框">⚙ 操作</button>
       </section>
     </main>
+    <MarkdownModal :open="detailOpen" :text="detailText" @close="detailOpen = false" />
+    <ReportModal :open="reportOpen" :code="reportCode" @close="reportOpen = false" />
   </div>
 </template>
 
@@ -289,6 +292,9 @@ import DataView from './DataView.vue';
 import SettingsView from './SettingsView.vue';
 import MeetingsHistoryView from './MeetingsHistoryView.vue';
 import StockPicker from '../components/StockPicker.vue';
+import ClampText from '../components/ClampText.vue';
+import MarkdownModal from '../components/MarkdownModal.vue';
+import ReportModal from '../components/ReportModal.vue';
 
 const auth = useAuthStore();
 
@@ -341,6 +347,15 @@ const calLead = computed(() => {
   const first = `${calYear.value}-${String(calMonth.value).padStart(2, '0')}-01`;
   return (new Date(first + 'T00:00:00Z').getUTCDay() + 6) % 7;
 });
+// 日历封顶：只显示到当年 12 月；每年 11/30 之后才放开到明年 12 月。
+const calMax = (() => {
+  const y = Number(calToday.slice(0, 4));
+  const m = Number(calToday.slice(5, 7));
+  const d = Number(calToday.slice(8, 10));
+  const afterNov30 = m > 11 || (m === 11 && d >= 30);
+  return { year: afterNov30 ? y + 1 : y, month: 12 };
+})();
+const atCalMax = computed(() => calYear.value > calMax.year || (calYear.value === calMax.year && calMonth.value >= calMax.month));
 async function loadCalendar() {
   try {
     calDays.value = (await dataApi.tradeCalendar(calYear.value, calMonth.value)).days;
@@ -350,13 +365,19 @@ async function loadCalendar() {
 }
 function toggleCalendar() {
   calOpen.value = !calOpen.value;
-  if (calOpen.value && !calDays.value.length) loadCalendar();
+  // 每次打开都回到当前月份（不记忆上次翻到哪），并重新加载。
+  if (calOpen.value) {
+    calYear.value = Number(calToday.slice(0, 4));
+    calMonth.value = Number(calToday.slice(5, 7));
+    loadCalendar();
+  }
 }
 function prevMonth() {
   if (calMonth.value === 1) { calMonth.value = 12; calYear.value--; } else calMonth.value--;
   loadCalendar();
 }
 function nextMonth() {
+  if (atCalMax.value) return; // 封顶：不允许翻到当年(或明年)12 月之后
   if (calMonth.value === 12) { calMonth.value = 1; calYear.value++; } else calMonth.value++;
   loadCalendar();
 }
@@ -487,7 +508,9 @@ async function propose() {
     proposal.value = (await rulebookApi.propose({ sessionId: active.value.id })).data.data;
     proposedAt.value = new Date().toISOString();
   } catch (e: any) {
-    chatErr.value = e.response?.data?.message || '提议失败';
+    const msg = e.response?.data?.message || '提议失败';
+    chatErr.value = msg;
+    await noteErrorToSession(active.value?.id, `提议修改失败：${msg}`);
   } finally {
     proposing.value = false;
   }
@@ -504,7 +527,9 @@ async function synthesizePrinciple() {
     synthFromScratch.value = true;
     proposedAt.value = new Date().toISOString();
   } catch (e: any) {
-    chatErr.value = e.response?.data?.message || '生成失败';
+    const msg = e.response?.data?.message || '生成失败';
+    chatErr.value = msg;
+    await noteErrorToSession(active.value?.id, `生成核心原则失败：${msg}`);
   } finally {
     synthesizing.value = false;
   }
@@ -588,7 +613,9 @@ async function doAnalyze(s: ChatSession) {
     messages.value = (await chatApi.getMessages(s.id)).data.data;
     scrollDown();
   } catch (e: any) {
-    chatErr.value = e.response?.data?.message || '分析失败';
+    const msg = e.response?.data?.message || '分析失败';
+    chatErr.value = msg;
+    await noteErrorToSession(s.id, `分析失败：${msg}`);
   } finally {
     analyzing.value = false;
     // refresh the rail title even on block — the name is resolved independently of analysis
@@ -632,6 +659,49 @@ async function clearAllChats() {
   active.value = null;
   messages.value = [];
   await loadSessions();
+}
+
+// 清空「当前」会话的消息（持久化），会话本身保留。
+async function clearCurrent() {
+  if (!active.value) return;
+  if (!confirm('清空当前会话的消息？（会话保留，消息不可恢复）')) return;
+  try {
+    await chatApi.clearMessages(active.value.id);
+    messages.value = [];
+  } catch (e: any) {
+    chatErr.value = e.response?.data?.message || '清理失败';
+  }
+}
+
+// 详情弹层（3 行折叠 → 点「详细」看全文 markdown）
+const detailOpen = ref(false);
+const detailText = ref('');
+function openDetail(text: string) {
+  detailText.value = text;
+  detailOpen.value = true;
+}
+
+// 个股完整报告弹层（替代跳转 /analysis）
+const reportOpen = ref(false);
+const reportCode = ref('');
+function openReport(code: string) {
+  reportCode.value = code;
+  reportOpen.value = true;
+}
+
+// 把后台流程错误以「来财发言」写入会话并即时显示。
+async function noteErrorToSession(sessionId: string | undefined | null, msg: string) {
+  if (!sessionId) return;
+  try {
+    const m = (await chatApi.postNote(sessionId, `⚠️ ${msg}`)).data.data;
+    if (active.value?.id === sessionId) {
+      messages.value.push(m);
+      await nextTick();
+      if (msgsEl.value) msgsEl.value.scrollTop = msgsEl.value.scrollHeight;
+    }
+  } catch {
+    /* 兜底：postNote 失败就不阻塞 */
+  }
 }
 
 async function openCorePrinciple() {
@@ -688,7 +758,9 @@ async function genMeeting(kind: 'morning' | 'evening') {
     .generate(kind)
     .then(() => loadMeetings())
     .catch((e: any) => {
-      genErr[kind] = e.response?.data?.message || '生成失败';
+      const msg = e.response?.data?.message || '生成失败';
+      genErr[kind] = msg;
+      noteErrorToSession(sessions.value.find((x) => x.kind === kind)?.id, `${kind === 'morning' ? '早会' : '晚会'}生成失败：${msg}`);
     })
     .finally(() => {
       generating.delete(kind);
@@ -771,7 +843,9 @@ async function runScreen() {
       return loadScreenHistory();
     })
     .catch((e: any) => {
-      genErr['screen'] = e.response?.data?.message || '选股失败';
+      const msg = e.response?.data?.message || '选股失败';
+      genErr['screen'] = msg;
+      noteErrorToSession(sessions.value.find((x) => x.kind === 'screen')?.id, `选股失败：${msg}`);
     })
     .finally(() => {
       generating.delete('screen');

@@ -15,6 +15,58 @@ from datetime import timedelta
 # Bound all upstream network calls so a blocked/slow source fails fast instead of hanging.
 socket.setdefaulttimeout(20)
 
+
+# 出站取数(akshare 底层走 requests)统一伪装浏览器 header + 429/5xx 退避重试。
+# 财经站点对裸 python-requests / 高频请求常返 429/403;装上浏览器 UA + Retry 降低被封概率。
+def _install_http_hardening():
+    try:
+        import requests
+        from requests.adapters import HTTPAdapter
+        from urllib3.util.retry import Retry
+
+        ua = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+              "(KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36")
+        common = {
+            "User-Agent": ua,
+            "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+            "Accept": "text/html,application/json,application/xhtml+xml,*/*;q=0.8",
+        }
+        # 默认 headers(新建 Session 都带上)
+        try:
+            requests.utils.default_headers().update(common)
+        except Exception:
+            pass
+
+        retry = Retry(total=4, connect=2, read=2, backoff_factor=0.6,
+                      status_forcelist=[429, 500, 502, 503, 504],
+                      allowed_methods=frozenset(["GET", "POST"]),
+                      respect_retry_after_header=True, raise_on_status=False)
+
+        _orig_request = requests.sessions.Session.request
+
+        def _patched(self, method, url, **kwargs):
+            # 注入浏览器 UA(若调用方没显式给)
+            headers = kwargs.get("headers") or {}
+            for k, v in common.items():
+                headers.setdefault(k, v)
+            kwargs["headers"] = headers
+            # 给该 session 挂上带 Retry 的 adapter(只挂一次)
+            if not getattr(self, "_hardened", False):
+                try:
+                    self.mount("https://", HTTPAdapter(max_retries=retry))
+                    self.mount("http://", HTTPAdapter(max_retries=retry))
+                except Exception:
+                    pass
+                self._hardened = True
+            return _orig_request(self, method, url, **kwargs)
+
+        requests.sessions.Session.request = _patched
+    except Exception:
+        pass
+
+
+_install_http_hardening()
+
 from fastapi import FastAPI
 import akshare as ak
 import tdx

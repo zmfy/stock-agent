@@ -14,6 +14,15 @@
       <span class="ov-item">股票库 {{ fmtCNDate(jobs.stock_universe?.last_success_at) }}</span>
       <span class="ov-item">行情 {{ fmtCNDate(jobs.eod?.last_success_at) }}</span>
       <span v-if="anySyncing" class="ov-item syncing">⟳ 同步中…</span>
+      <!-- admin: 后台有任务就显示进度 + 强制中止(任意子标签都可见) -->
+      <template v-if="isAdmin">
+        <span v-for="j in (['stock_universe','eod'] as const)" :key="j">
+          <span v-if="jobs[j]?.state === 'running'" class="ov-item running">
+            ⏳ {{ j === 'stock_universe' ? '股票库' : '行情' }} {{ jobs[j].done }}/{{ jobs[j].total }}（{{ jobPct(j) }}%）
+            <button class="ov-stop" @click="doForceStop(j)">⛔ 强制中止</button>
+          </span>
+        </span>
+      </template>
       <span v-if="!source.sidecarConfigured" class="ov-hint">可在「能力插件」启用 AkShare；仍可手动上传 CSV。</span>
     </section>
 
@@ -506,8 +515,10 @@ function runDisabledTitle(job: 'stock_universe' | 'eod') {
 }
 
 async function doRun(job: 'stock_universe' | 'eod') {
+  // 乐观:点击立刻显示进度条/「启动中…」,不等后台 + 轮询追上(否则会"点了没反应,等一会才变")。
+  jobs[job] = { ...(jobs[job] || {}), state: 'running', done: 0, total: jobs[job]?.total || 0, message: '启动中…' } as any;
   try { await dataApi.runJob(job); } catch { /* 409 locked — ignore */ }
-  refreshJob(job);
+  await refreshJob(job);
 }
 
 async function doCancel(job: 'stock_universe' | 'eod') {
@@ -539,11 +550,10 @@ onMounted(async () => {
   await refreshJob('eod');
   runProbe();
   loadNewsLog();
+  // 始终刷新两个任务状态（不只在已知 running 时）——这样后台(cron/别处)起的任务，admin 一进页面也能看到进度。
   jobTimer = setInterval(() => {
-    (['stock_universe', 'eod'] as const).forEach((j) => {
-      if (jobs[j]?.state === 'running') refreshJob(j);
-    });
-  }, 1500);
+    (['stock_universe', 'eod'] as const).forEach((j) => refreshJob(j));
+  }, 2500);
 });
 </script>
 
@@ -553,6 +563,8 @@ onMounted(async () => {
 .overview { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; padding: 10px 14px; background: #f7faff; border: 1px solid #d6e4ff; border-radius: 8px; margin-top: 12px; font-size: 13px; }
 .ov-item { color: #334; }
 .ov-item.ok b { color: #389e0d; }
+.ov-item.running { color: #d46b08; font-weight: 600; }
+.ov-stop { margin-left: 6px; font-size: 12px; color: #fff; background: #e5484d; border: none; border-radius: 5px; padding: 1px 7px; cursor: pointer; }
 .ov-item.warn b { color: #cf1322; }
 .ov-item.syncing { color: #1677ff; }
 .ov-hint { color: #888; margin-left: auto; }
