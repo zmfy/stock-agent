@@ -57,8 +57,10 @@ export async function buildMarketInjection(
   const n = parseTimeWindow(message);
   try {
     if (target.kind === 'stock') {
-      const bars = await ensureStockBars(userId, target.code, n);
+      // 先取快照：本地行情浅时它会深取至多 250 根入库；随后 ensureStockBars 多半命中本地、
+      // 不再二次联网（避免「ensureStockBars 取 N + 快照又取 250」的重复取数）。
       const snap = await getStockSnapshot(userId, target.code).catch(() => null);
+      const bars = await ensureStockBars(userId, target.code, n);
       return buildStockContext(target.code, snap, bars);
     }
     return ''; // index：后续任务实现
