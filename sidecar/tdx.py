@@ -283,6 +283,32 @@ def test_servers():
     return out
 
 
+def index_bars(code, days=120):
+    """上证/深证指数日线（不复权）。返回升序 [{date,open,high,low,close,volume}]。
+    code: '000001'(上证), '399001'(深成指), '399006'(创业板指)。
+    通达信 c.index() 直接以这三个 symbol 返回指数点位（非个股价格）。
+    """
+    def fn(c):
+        raw = c.index(symbol=code, frequency=9, offset=days)
+        if raw is None or len(raw) == 0:
+            return []
+        bars = []
+        for _, r in raw.iterrows():
+            d = str(r.get("datetime") or r.get("date"))[:10]
+            bars.append({
+                "date": d,
+                "open": _f(r.get("open")),
+                "high": _f(r.get("high")),
+                "low": _f(r.get("low")),
+                "close": _f(r.get("close")),
+                "volume": _f(r.get("vol") if "vol" in r.index else r.get("volume")),
+            })
+        bars.sort(key=lambda b: b["date"])
+        return bars
+    result = _call(fn)
+    return result if result is not None else []
+
+
 def get_server():
     return {"addr": _server[0], "port": _server[1]} if _server else None
 

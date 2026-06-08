@@ -485,6 +485,13 @@ def market_sentiment(order: str = ""):
     return {"source": None, "data": {}}
 
 
+@app.get("/index/{code}")
+def index_endpoint(code: str, days: int = 120):
+    """指数日线 OHLC（不复权）。code: 000001=上证, 399001=深成指, 399006=创业板指。"""
+    rows = _timed(lambda: tdx.index_bars(code, days), 10)
+    return {"rows": rows or [], "source": "tdx"}
+
+
 @app.get("/tdx/servers/test")
 def tdx_servers_test():
     return {"servers": tdx.test_servers()}
