@@ -1,4 +1,4 @@
-import { getCachedName, findStockCodeInText, Bar, ensureStockBars, getStockSnapshot } from '../data/service';
+import { getCachedName, findStockCodeInText, Bar, ensureStockBars, getStockSnapshot, ensureIndexBars, getMarketSentimentSeries } from '../data/service';
 import { StockSnapshot } from '../types';
 
 export const RECENT_BARS_N = 30;
@@ -63,7 +63,10 @@ export async function buildMarketInjection(
       const bars = await ensureStockBars(userId, target.code, n);
       return buildStockContext(target.code, snap, bars);
     }
-    return ''; // index：后续任务实现
+    // index
+    const ibars = await ensureIndexBars(userId, target.code, n);
+    const sent = getMarketSentimentSeries(Math.min(n, 30));
+    return buildIndexContext(target.code, ibars, sent);
   } catch {
     return '';
   }
