@@ -170,6 +170,12 @@ export async function tdxSetServer(base: string, addr: string, port: number): Pr
   await postJson(`${base}/tdx/server?addr=${encodeURIComponent(addr)}&port=${port}`, 8000);
 }
 
+// sidecar 当前实际生效的 TDX 服务器（用于校验「重推」是否成功）。
+export async function tdxGetServerLive(base: string): Promise<{ addr: string; port: number } | null> {
+  const d = await getJson(`${base}/tdx/server`, 8000);
+  return d?.server ?? null;
+}
+
 function num(v: unknown): number | null {
   const n = typeof v === 'string' ? parseFloat(v) : (v as number);
   return typeof n === 'number' && isFinite(n) ? n : null;

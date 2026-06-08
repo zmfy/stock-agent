@@ -114,8 +114,29 @@ if (require.main === module) {
       const sv = getTdxServerSetting();
       if (sv) {
         const [a, p] = sv.split(':');
-        const base = sidecarMod.resolveSidecarBase(admin.id);
-        if (base) sidecarMod.tdxSetServer(base, a, Number(p)).catch(() => {});
+        const adminId = admin.id;
+        // 健壮重推：等 sidecar healthy → 推送 → GET 校验生效 → 重试(最多 ~2 分钟)。
+        // 旧版只 fire-and-forget 一次且吞错，常输给 sidecar 启动竞态 → 服务器没推上去 →
+        // sidecar 走 bestip(本网络连不通)→ 静默降级到新浪/百度。务必确认推成功。
+        (async () => {
+          for (let i = 0; i < 24; i++) {
+            const base = sidecarMod.resolveSidecarBase(adminId);
+            if (base && (await sidecarMod.pingHealth(base).catch(() => false))) {
+              try {
+                await sidecarMod.tdxSetServer(base, a, Number(p));
+                const live = await sidecarMod.tdxGetServerLive(base);
+                if (live && live.addr === a && Number(live.port) === Number(p)) {
+                  console.log(`[startup] TDX 服务器已应用到 sidecar：${sv}`);
+                  return;
+                }
+              } catch {
+                /* retry */
+              }
+            }
+            await new Promise((r) => setTimeout(r, 5000));
+          }
+          console.warn(`[startup] 未能把 TDX 服务器 ${sv} 应用到 sidecar（已重试 ~2 分钟），将走兜底源`);
+        })();
       }
     }
   });
