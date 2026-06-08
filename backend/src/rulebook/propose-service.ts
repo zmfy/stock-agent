@@ -170,7 +170,7 @@ export function nextLabel(current: string, magnitude: 'major' | 'minor'): string
   return `${current} ${magnitude === 'major' ? 'v2.0' : 'v1.1'}`;
 }
 
-async function defaultAiCall(userId: string, prompt: string): Promise<string> {
+export async function defaultAiCall(userId: string, prompt: string): Promise<string> {
   const cfg = getModelForRole(userId, 'review') || getModelForRole(userId, 'core');
   if (!cfg) throw new Error('NO_MODEL');
   const style = getProvider(cfg.provider)?.apiStyle || 'openai';
