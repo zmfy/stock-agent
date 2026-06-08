@@ -124,7 +124,7 @@
                   <div v-if="m.created_at" class="mtime">{{ fmtTime(m.created_at) }}</div>
                 </div>
                 <div v-if="sending" class="msg assistant"><div class="bubble typing">思考中…</div></div>
-        <div v-if="proposal" class="msg assistant">
+        <div v-if="proposal && !synthFromScratch" class="msg assistant">
           <div class="bubble proposal-card">
             <h4>修改提议（{{ proposal.magnitude === 'major' ? '较大改动' : '微调' }}）：{{ proposal.currentLabel }} → <b>{{ proposal.suggestedLabel }}</b></h4>
             <p v-if="proposal.delta.personaChanged">· 人设有改动</p>
@@ -138,7 +138,30 @@
             <p v-if="proposedAt" class="muted">🕐 {{ fmtCN(proposedAt) }}</p>
             <div class="ops">
               <button :disabled="applying || noChange" @click="applyProposal">采纳并升级到 {{ proposal.suggestedLabel }}</button>
-              <button @click="proposal = null">放弃</button>
+              <button @click="proposal = null; synthFromScratch = false">放弃</button>
+            </div>
+          </div>
+        </div>
+        <div v-if="proposal && synthFromScratch" class="msg assistant">
+          <div class="bubble proposal-card">
+            <h4>📋 来财据我们的聊天生成的核心原则：<b>{{ proposal.suggestedLabel }}</b></h4>
+            <p class="synth-persona"><b>人设：</b>{{ (proposal as any).proposal.persona }}</p>
+            <div v-for="sys in synthSystems" :key="sys" class="synth-sys">
+              <b>{{ sys }} 系统硬门槛：</b>
+              <ul>
+                <li v-for="g in (proposal as any).proposal.gates.filter((x: any) => x.system === sys)" :key="g.gate_key">
+                  {{ g.label }}：{{ gateCond(g) }}{{ g.veto ? '（一票否决）' : '' }}
+                </li>
+              </ul>
+            </div>
+            <div v-if="(proposal as any).proposal.softRules.length" class="synth-soft">
+              <b>软判断：</b>
+              <ul><li v-for="(s, i) in (proposal as any).proposal.softRules" :key="i">{{ (s as any).text }}</li></ul>
+            </div>
+            <p v-if="proposedAt" class="muted">🕐 {{ fmtCN(proposedAt) }}</p>
+            <div class="ops">
+              <button :disabled="applying" @click="applyProposal">采纳并保存为 {{ proposal.suggestedLabel }}</button>
+              <button @click="proposal = null; synthFromScratch = false">放弃</button>
             </div>
           </div>
         </div>
@@ -181,6 +204,9 @@
                 </label>
               </div>
               <button :disabled="!tplSelected.length" @click="previewCompose">预览组合（{{ tplSelected.length }}）</button>
+              <div class="tpl-interview-entry">
+                <a href="#" @click.prevent="startInterview">或：我还没想好，帮我从聊天聊出一套 →</a>
+              </div>
 
               <div v-if="composeRes" class="composeprev">
                 <p v-if="!composeRes.conflict" class="ok-msg">✅ 无冲突，将合并为一套：{{ composeRes.versionLabel }}</p>
@@ -202,7 +228,10 @@
             <!-- 让 agent 提议修改（进入核心原则讨论后显示，在换模板按钮下边） -->
             <template v-if="active?.kind === 'core_principle'">
               <div class="propose-bar">
-                <button class="propose-btn" :disabled="proposing" @click="propose">
+                <button v-if="needsInit" class="propose-btn" :disabled="synthesizing" @click="synthesizePrinciple">
+                  <span v-if="synthesizing" class="spinner"></span>{{ synthesizing ? '来财生成中…' : '🛠 根据我们的聊天，帮我生成核心原则' }}
+                </button>
+                <button v-else class="propose-btn" :disabled="proposing" @click="propose">
                   <span v-if="proposing" class="spinner"></span>{{ proposing ? 'agent 拟定中…' : '🛠 根据本次讨论，让 agent 提议修改规则' }}
                 </button>
               </div>
@@ -425,9 +454,15 @@ const proposal = ref<ProposeResult | null>(null);
 const proposedAt = ref<string>('');
 const proposing = ref(false);
 const applying = ref(false);
+const synthesizing = ref(false);
+const synthFromScratch = ref(false);
 const noChange = computed(() => {
   const d = proposal.value?.delta;
   return !!d && !d.personaChanged && !d.gates.changed.length && !d.gates.added.length && !d.gates.removed.length && !d.softRules.added.length && !d.softRules.removed.length && !d.positionRulesChangedKeys.length;
+});
+const synthSystems = computed<string[]>(() => {
+  const gs = ((proposal.value as any)?.proposal?.gates || []) as Array<{ system: string }>;
+  return [...new Set(gs.map((g) => g.system))].sort();
 });
 
 const adoptedNews = computed<Array<{ content_id: string; title: string }>>(() => {
@@ -452,6 +487,23 @@ async function propose() {
   }
 }
 
+async function synthesizePrinciple() {
+  if (!active.value) return;
+  synthesizing.value = true;
+  chatErr.value = '';
+  try {
+    const r = (await rulebookApi.synthesize(active.value.id)).data.data;
+    // 复用 proposal 展示通道：合成结果只有 proposal + suggestedLabel（无 delta），标记 fromScratch 走完整预览
+    proposal.value = { proposal: r.proposal, suggestedLabel: r.suggestedLabel } as any;
+    synthFromScratch.value = true;
+    proposedAt.value = new Date().toISOString();
+  } catch (e: any) {
+    chatErr.value = e.response?.data?.message || '生成失败';
+  } finally {
+    synthesizing.value = false;
+  }
+}
+
 async function applyProposal() {
   if (!proposal.value) return;
   applying.value = true;
@@ -460,6 +512,8 @@ async function applyProposal() {
     await rulebookApi.apply(label, proposal.value.proposal, active.value?.id);
     proposal.value = null;
     activeRulebook.value = (await rulebookApi.getActive()).data.data;
+    needsInit.value = false;
+    synthFromScratch.value = false;
     messages.value.push({
       id: 'local-applied-' + Date.now(),
       session_id: active.value?.id || '',
@@ -969,4 +1023,10 @@ onMounted(async () => {
 .cp-cta-btn:hover { filter: brightness(1.05); }
 .cp-cta-alt { margin-top: 10px; font-size: 12px; }
 .cp-cta-alt a { color: #888; }
+.synth-persona { margin: 4px 0; }
+.synth-sys { margin: 6px 0; }
+.synth-sys ul, .synth-soft ul { margin: 2px 0 2px 16px; padding: 0; }
+.synth-sys li, .synth-soft li { font-size: 13px; }
+.tpl-interview-entry { margin: 6px 0; font-size: 12px; }
+.tpl-interview-entry a { color: var(--accent, #2a8a2a); }
 </style>
