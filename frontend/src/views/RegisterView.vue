@@ -67,8 +67,9 @@ async function submit() {
 .register { max-width: 420px; margin: 48px auto; display: flex; flex-direction: column; padding: 0 16px; }
 form { display: flex; flex-direction: column; gap: 10px; }
 .hint { color: #888; }
-.disclaimer { background: #fbf6ef; border: 1px solid #e7ddd0; border-radius: 8px; padding: 10px 12px; max-height: 200px; overflow-y: auto; font-size: 12px; line-height: 1.7; color: #5b5043; }
-.disclaimer h3 { margin: 0 0 6px; font-size: 14px; color: #4a3b2a; }
+.disclaimer { background: #fdecef; border: 1.5px solid #f0a8bc; border-radius: 8px; padding: 12px 14px; max-height: 220px; overflow-y: auto; font-size: 12.5px; line-height: 1.75; color: #6b3a48; }
+.disclaimer h3 { margin: 0 0 6px; font-size: 15px; color: #c0143c; }
+.disclaimer b { color: #c0143c; }
 .disclaimer p { margin: 4px 0; }
 .agree { display: flex; align-items: center; gap: 6px; font-size: 13px; }
 button { background: #e5484d; color: #fff; border: none; border-radius: 7px; padding: 10px; font-weight: 700; cursor: pointer; }

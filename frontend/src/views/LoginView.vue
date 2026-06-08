@@ -58,7 +58,10 @@
         </label>
         <button type="submit" :disabled="loading">{{ loading ? '登录中…' : '登 录' }}</button>
         <p class="err" v-if="error">{{ error }}</p>
-        <p class="risk">⚠️ 投资有风险，本系统仅为研究辅助，不构成投资建议，据此操作盈亏自负。</p>
+        <div class="disclaimer">
+          <b>⚠️ 免责声明</b>
+          本工具仅为个人投资纪律与复盘的辅助工具，所有分析、判定与建议均由 AI 依据你自设的规则生成，<b>仅供参考，不构成任何投资建议</b>。买卖由你自行决策、盈亏自负。
+        </div>
       </form>
     </section>
   </div>
@@ -122,7 +125,8 @@ button { margin-top: 6px; background: #e5484d; color: #fff; border: none; border
 button:hover:not(:disabled) { background: #d23b40; }
 button:disabled { opacity: 0.6; cursor: not-allowed; }
 .err { color: var(--danger); font-size: 13px; margin: 0; }
-.risk { font-size: 12px; color: #b07; background: #fdecef; border: 1px solid #f6cdd8; border-radius: 7px; padding: 7px 10px; margin: 2px 0 0; line-height: 1.6; }
+.disclaimer { font-size: 12.5px; color: #9a2843; background: #fdecef; border: 1.5px solid #f0a8bc; border-radius: 8px; padding: 10px 12px; margin: 4px 0 0; line-height: 1.7; }
+.disclaimer b { color: #c0143c; }
 
 @media (max-width: 720px) {
   .login { flex-direction: column; }

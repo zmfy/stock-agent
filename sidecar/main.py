@@ -491,28 +491,61 @@ def news(limit: int = 20, order: str = ""):
     return {"source": None, "rows": []}
 
 
+# 热门板块 + 成分:东方财富(_em)在本网络常被 RST → 退新浪(stock_sector_spot/detail，行业板块)。
+# 契约保持「按板块名」：hot 返回名字，cons 收名字（新浪路径内部把名字解析成 sina label 再取成分）。
+def _sina_sector_spot():
+    return ak.stock_sector_spot(indicator="行业")  # cols: label, 板块, 涨跌幅 ...
+
+def _sina_label_for(name: str):
+    try:
+        s = _sina_sector_spot()
+        row = s[s["板块"].astype(str) == str(name)]
+        return str(row.iloc[0]["label"]) if not row.empty else None
+    except Exception:
+        return None
+
+
 @app.get("/sectors/hot")
 def sectors_hot(top: int = 5):
+    # 1) 东方财富
     try:
         df = ak.stock_board_industry_name_em()
-        col = "涨跌幅" if "涨跌幅" in df.columns else None
-        if col:
-            df = df.sort_values(col, ascending=False)
-        rows = []
-        for _, r in df.head(top).iterrows():
-            rows.append({"name": r.get("板块名称") or r.get("板块"), "change": _f(r.get("涨跌幅"))})
-        return [x for x in rows if x["name"]]
+        if df is not None and len(df):
+            col = "涨跌幅" if "涨跌幅" in df.columns else None
+            if col:
+                df = df.sort_values(col, ascending=False)
+            rows = [{"name": r.get("板块名称") or r.get("板块"), "change": _f(r.get("涨跌幅"))} for _, r in df.head(top).iterrows()]
+            rows = [x for x in rows if x["name"]]
+            if rows:
+                return rows
+    except Exception:
+        pass
+    # 2) 新浪(行业板块) 兜底
+    try:
+        s = _sina_sector_spot().sort_values("涨跌幅", ascending=False)
+        return [{"name": str(r.get("板块")), "change": _f(r.get("涨跌幅"))} for _, r in s.head(top).iterrows() if r.get("板块")]
     except Exception:
         return []
 
 
 @app.get("/sectors/{name}/cons")
 def sector_cons(name: str):
+    # 1) 东方财富
     try:
         df = ak.stock_board_industry_cons_em(symbol=name)
-        return [{"code": str(r.get("代码")), "name": r.get("名称")} for _, r in df.iterrows()]
+        if df is not None and len(df):
+            return [{"code": str(r.get("代码")), "name": r.get("名称")} for _, r in df.iterrows()]
     except Exception:
-        return []
+        pass
+    # 2) 新浪兜底：名字 → label → 成分(code)
+    try:
+        label = _sina_label_for(name)
+        if label:
+            d = ak.stock_sector_detail(sector=label)
+            return [{"code": str(r.get("code"))[-6:], "name": r.get("name")} for _, r in d.iterrows() if r.get("code")]
+    except Exception:
+        pass
+    return []
 
 
 def _mkt_prefix(code: str) -> str:
