@@ -11,6 +11,7 @@ import { getLatestReportByCode } from '../analysis/report-service';
 import { getTodayContent } from '../meetings/service';
 import { getActive, listVersionHistory } from '../rulebook/service';
 import { getLatest as getLatestScreen } from '../screen/service';
+import { buildMarketInjection } from './market-context';
 
 export type ChatKind = 'general' | 'core_principle' | 'stock' | 'morning' | 'evening' | 'screen';
 
@@ -203,6 +204,15 @@ export async function postMessage(userId: string, sessionId: string, content: st
         .map((v) => `· ${v.version_label}（${(v.created_at || '').slice(0, 10)}）：${v.note || '（无说明）'}`)
         .join('\n');
       extra = `当前核心原则【${rb.version.version_label}】人设：${rb.version.persona}\n硬门槛：${g}\n\n原则演进记忆（最近变更，知道为什么是现在这样）：\n${hist}`;
+    }
+  }
+  // 行情数据注入（个股/大盘，动态窗口）。仅当调用方未显式传 extraContext 时。
+  if (!opts.extraContext) {
+    try {
+      const mc = await buildMarketInjection(userId, session.kind, session.ref_id ?? null, content);
+      if (mc) extra = [extra, mc].filter(Boolean).join('\n\n');
+    } catch {
+      /* 安静降级 */
     }
   }
   let framing = KIND_FRAMING[session.kind as ChatKind];

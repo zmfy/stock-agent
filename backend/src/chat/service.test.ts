@@ -30,6 +30,47 @@ describe('chat service', () => {
   });
 });
 
+describe('postMessage injects market context for stock target', () => {
+  it('stock session prompt includes recent bars table', async () => {
+    const U = 'u-mc-inject';
+    const code = 'INJ01';
+    const chat = require('./service');
+    const { getDb } = require('../db');
+    const db = getDb();
+    const days = ['2026-04-01','2026-04-02','2026-04-03','2026-04-04','2026-04-07'];
+    days.forEach((d, i) => db.prepare('INSERT OR REPLACE INTO quote_daily (code,date,open,high,low,close,volume,source) VALUES (?,?,?,?,?,?,?,?)').run(code, d, 1,1,1, 100+i, 1, 'test'));
+    const sid = chat.createSession(U, 'stock', code, `个股 ${code}`);
+    let captured = '';
+    await chat.postMessage(U, sid, '最近走势如何', {
+      aiCall: async (p: string) => { captured = p; return { raw: 'ok', provider: 'p', model: 'm' }; },
+    });
+    expect(captured).toContain('日期│开│高│低│收│量');
+    expect(captured).toContain(code);
+  });
+});
+
+describe('postMessage injects index context for 大盘 target', () => {
+  it('general chat about 大盘 includes index/sentiment block', async () => {
+    const U = 'u-mc-index';
+    const chat = require('./service');
+    const { getDb } = require('../db');
+    const db = getDb();
+    for (const d of ['2026-06-01','2026-06-02','2026-06-03','2026-06-04','2026-06-05']) {
+      db.prepare('INSERT OR REPLACE INTO index_daily (code,date,open,high,low,close,volume,source) VALUES (?,?,?,?,?,?,?,?)')
+        .run('000001', d, 3000,3010,2990, 3000 + Number(d.slice(-2)), 1, 'test');
+      db.prepare('INSERT OR REPLACE INTO market_sentiment (date,limit_up_count,limit_down_count,sse_ma20_slope,source) VALUES (?,?,?,?,?)')
+        .run(d, 50, 10, 0.1, 'test');
+    }
+    const sid = chat.createSession(U, 'general', null, '闲聊');
+    let captured = '';
+    await chat.postMessage(U, sid, '大盘最近走势如何', {
+      aiCall: async (p: string) => { captured = p; return { raw: 'ok', provider: 'p', model: 'm' }; },
+    });
+    expect(captured).toContain('大盘');
+    expect(captured).toContain('涨停');
+  });
+});
+
 describe('core_principle framing branches on rulebook presence', () => {
   const chat = require('./service');
   const rb = require('../rulebook/service');

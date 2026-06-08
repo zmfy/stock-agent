@@ -137,4 +137,98 @@ describe('data/service', () => {
     const st = svc.getSyncStatus('eod');
     expect(st.state).toBe('idle'); expect(st.message).toContain('取消'); expect(st.done).toBeLessThan(3);
   });
+
+  describe('getRecentBars', () => {
+    it('returns recent bars ascending, capped at n, empty for unknown', () => {
+      const db = require('../db').getDb();
+      const code = 'BARS01';
+      for (const d of ['2026-06-01','2026-06-02','2026-06-03','2026-06-04']) {
+        db.prepare('INSERT OR REPLACE INTO quote_daily (code,date,open,high,low,close,volume,source) VALUES (?,?,?,?,?,?,?,?)')
+          .run(code, d, 1, 2, 0.5, Number(d.slice(-2)), 100, 'test');
+      }
+      const bars = svc.getRecentBars(code, 3);
+      expect(bars.map((b: any) => b.date)).toEqual(['2026-06-02','2026-06-03','2026-06-04']);
+      expect(bars[2].close).toBe(4);
+      expect(svc.getRecentBars('NOPE', 5)).toEqual([]);
+    });
+  });
+
+  describe('ensureStockBars', () => {
+    it('uses local when enough; otherwise fetches via injected fetcher and caches', async () => {
+      const code = 'ENS01';
+      const db = require('../db').getDb();
+      db.prepare('INSERT OR REPLACE INTO quote_daily (code,date,open,high,low,close,volume,source) VALUES (?,?,?,?,?,?,?,?)').run(code, '2026-05-30', 1,1,1,9,1,'test');
+      let fetched = 0;
+      const fetcher = async (_code: string, n: number) => {
+        fetched++;
+        return [
+          { code, date: '2026-06-01', open: 1, high: 1, low: 1, close: 10, volume: 1 },
+          { code, date: '2026-06-02', open: 1, high: 1, low: 1, close: 11, volume: 1 },
+          { code, date: '2026-06-03', open: 1, high: 1, low: 1, close: 12, volume: 1 },
+          { code, date: '2026-06-04', open: 1, high: 1, low: 1, close: 13, volume: 1 },
+          { code, date: '2026-06-05', open: 1, high: 1, low: 1, close: 14, volume: 1 },
+        ].slice(0, n);
+      };
+      const bars = await svc.ensureStockBars('u1', code, 5, { fetcher });
+      expect(fetched).toBe(1);
+      expect(bars.length).toBeGreaterThanOrEqual(5);
+      const bars2 = await svc.ensureStockBars('u1', code, 5, { fetcher });
+      expect(fetched).toBe(1); // local now sufficient → no second fetch
+      expect(bars2.length).toBeGreaterThanOrEqual(5);
+    });
+  });
+});
+
+describe('index bars store + ensure', () => {
+  it('cache + getRecent ascending; ensure fetches when local insufficient', async () => {
+    svc.cacheIndexBars([
+      { code: '000001', date: '2026-06-02', open: 3000, high: 3010, low: 2990, close: 3005, volume: 1 },
+      { code: '000001', date: '2026-06-03', open: 3005, high: 3030, low: 3000, close: 3025, volume: 1 },
+    ], 'test');
+    const bars = svc.getRecentIndexBars('000001', 5);
+    expect(bars.map((b: any) => b.date)).toEqual(['2026-06-02', '2026-06-03']);
+    let fetched = 0;
+    const fetcher = async (_c: string, n: number) => { fetched++; return [
+      { code: '000001', date: '2026-06-04', open: 3025, high: 3050, low: 3020, close: 3040, volume: 1 },
+      { code: '000001', date: '2026-06-05', open: 3040, high: 3060, low: 3030, close: 3055, volume: 1 },
+      { code: '000001', date: '2026-06-06', open: 3055, high: 3070, low: 3050, close: 3060, volume: 1 },
+    ].slice(0, n); };
+    const out = await svc.ensureIndexBars('u1', '000001', 5, { fetcher });
+    expect(fetched).toBe(1);
+    expect(out.length).toBeGreaterThanOrEqual(5);
+  });
+});
+
+describe('getStockSnapshot depth gate', () => {
+  it('shouldDeepFetch true when local closes < 60', () => {
+    const code = 'DEP01';
+    const { getDb } = require('../db');
+    const db = getDb();
+    for (let i = 0; i < 10; i++) {
+      db.prepare('INSERT OR REPLACE INTO quote_daily (code,date,close,source) VALUES (?,?,?,?)').run(code, `2026-05-${(i+1).toString().padStart(2,'0')}`, 5, 'test');
+    }
+    expect(svc.shouldDeepFetch(code)).toBe(true);
+  });
+  it('shouldDeepFetch false when local closes >= 60', () => {
+    const code = 'DEP02';
+    const { getDb } = require('../db');
+    const db = getDb();
+    for (let i = 0; i < 60; i++) {
+      const d = new Date(Date.UTC(2026, 0, 1 + i)).toISOString().slice(0, 10);
+      db.prepare('INSERT OR REPLACE INTO quote_daily (code,date,close,source) VALUES (?,?,?,?)').run(code, d, 5, 'test');
+    }
+    expect(svc.shouldDeepFetch(code)).toBe(false);
+  });
+});
+
+describe('getMarketSentimentSeries', () => {
+  it('returns ascending series capped at n', () => {
+    const db = svc.getDb ? svc.getDb() : require('../db').getDb();
+    for (const d of ['2026-06-01','2026-06-02','2026-06-03']) {
+      db.prepare('INSERT OR REPLACE INTO market_sentiment (date,limit_up_count,limit_down_count,sse_ma20_slope,source) VALUES (?,?,?,?,?)')
+        .run(d, 50, 10, 0.1, 'test');
+    }
+    const s = svc.getMarketSentimentSeries(2);
+    expect(s.map((x: any) => x.date)).toEqual(['2026-06-02','2026-06-03']);
+  });
 });

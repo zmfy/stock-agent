@@ -1,7 +1,7 @@
 import { getDb } from '../db';
 import { QuoteRow, StockSnapshot } from '../types';
 import { v4 as uuidv4 } from 'uuid';
-import { resolveSidecarBase, fetchFundamentals, fetchQuotes, fetchMarket, fetchName, fetchNews, fetchAllStocks, orderedProviders, fetchRealtime } from './sidecar';
+import { resolveSidecarBase, fetchFundamentals, fetchQuotes, fetchMarket, fetchName, fetchNews, fetchAllStocks, orderedProviders, fetchRealtime, fetchIndexBars } from './sidecar';
 import { recordCollected } from './news-log';
 
 // ---- hot news ----
@@ -239,6 +239,13 @@ export function searchStocks(q: string, limit = 20): Array<{ code: string; name:
     .all(`${s}%`, like, `${lower}%`, `% ${lower}%`, s, lower, `% ${lower} %`, `${s}%`, limit) as Array<{ code: string; name: string }>;
 }
 
+export function findStockCodeInText(message: string): string | null {
+  const row = getDb()
+    .prepare("SELECT code FROM stock_names WHERE INSTR(?, name) > 0 ORDER BY LENGTH(name) DESC LIMIT 1")
+    .get(message) as { code: string } | undefined;
+  return row?.code ?? null;
+}
+
 export function getCachedName(code: string): string | null {
   const row = getDb().prepare('SELECT name FROM stock_names WHERE code = ?').get(code) as { name: string } | undefined;
   return row?.name ?? null;
@@ -343,6 +350,110 @@ function recentCloses(code: string, n: number): number[] {
   return rows.map((r) => r.close);
 }
 
+// 本地行情深度不足 60 根 → 需要深取（保证 ma60/year_high 准）。
+export function shouldDeepFetch(code: string): boolean {
+  return recentCloses(code, 60).length < 60;
+}
+
+export function getMarketSentimentSeries(n: number): Array<{ date: string; limit_up_count: number | null; limit_down_count: number | null; sse_ma20_slope: number | null }> {
+  const rows = getDb()
+    .prepare('SELECT date, limit_up_count, limit_down_count, sse_ma20_slope FROM market_sentiment ORDER BY date DESC LIMIT ?')
+    .all(n) as any[];
+  return rows.reverse();
+}
+
+export interface Bar {
+  date: string;
+  open: number | null;
+  high: number | null;
+  low: number | null;
+  close: number | null;
+  volume: number | null;
+}
+
+export function getRecentBars(code: string, n: number): Bar[] {
+  const rows = getDb()
+    .prepare('SELECT date, open, high, low, close, volume FROM quote_daily WHERE code = ? ORDER BY date DESC LIMIT ?')
+    .all(code, n) as Bar[];
+  return rows.reverse(); // DESC 取最近 n 条后反转为升序
+}
+
+// 默认抓取器：走 sidecar 取 n 日线并缓存。
+async function defaultBarFetcher(userId: string, code: string, n: number): Promise<Bar[]> {
+  const base = resolveSidecarBase(userId);
+  if (!base) return [];
+  const res = await fetchQuotes(base, code, n);
+  if (res && res.rows.length) cacheQuotes(res.rows, res.source ?? 'tdx');
+  return res?.rows.map((r) => ({ date: r.date, open: r.open, high: r.high, low: r.low, close: r.close, volume: r.volume })) ?? [];
+}
+
+// 本地够(≥n)就用本地；不足则用 fetcher 抓取并缓存后再读本地。fetcher 可注入(测试)。
+export async function ensureStockBars(
+  userId: string,
+  code: string,
+  n: number,
+  opts: { fetcher?: (code: string, n: number) => Promise<Bar[] | QuoteRow[]> } = {}
+): Promise<Bar[]> {
+  const local = getRecentBars(code, n);
+  if (local.length >= n) return local;
+  try {
+    if (opts.fetcher) {
+      const rows = await opts.fetcher(code, n);
+      const qrows: QuoteRow[] = (rows as any[]).map((r) => ({ code, date: String(r.date), open: r.open ?? null, high: r.high ?? null, low: r.low ?? null, close: r.close ?? null, volume: r.volume ?? null }));
+      if (qrows.length) cacheQuotes(qrows, 'test');
+    } else {
+      await defaultBarFetcher(userId, code, n);
+    }
+  } catch {
+    /* 安静降级 */
+  }
+  return getRecentBars(code, n);
+}
+
+export function cacheIndexBars(rows: QuoteRow[], source: string): number {
+  const db = getDb();
+  const stmt = db.prepare(
+    `INSERT INTO index_daily (code,date,open,high,low,close,volume,source) VALUES (@code,@date,@open,@high,@low,@close,@volume,@source)
+     ON CONFLICT(code,date) DO UPDATE SET open=excluded.open,high=excluded.high,low=excluded.low,close=excluded.close,volume=excluded.volume,source=excluded.source`
+  );
+  const tx = db.transaction((items: QuoteRow[]) => { for (const r of items) stmt.run({ ...r, source }); });
+  tx(rows);
+  return rows.length;
+}
+
+export function getRecentIndexBars(code: string, n: number): Bar[] {
+  const rows = getDb()
+    .prepare('SELECT date, open, high, low, close, volume FROM index_daily WHERE code = ? ORDER BY date DESC LIMIT ?')
+    .all(code, n) as Bar[];
+  return rows.reverse();
+}
+
+async function defaultIndexFetcher(userId: string, code: string, n: number): Promise<Bar[]> {
+  const base = resolveSidecarBase(userId);
+  if (!base) return [];
+  const res = await fetchIndexBars(base, code, n);
+  if (res && res.rows.length) cacheIndexBars(res.rows, res.source ?? 'tdx');
+  return res?.rows.map((r) => ({ date: r.date, open: r.open, high: r.high, low: r.low, close: r.close, volume: r.volume })) ?? [];
+}
+
+export async function ensureIndexBars(
+  userId: string, code: string, n: number,
+  opts: { fetcher?: (code: string, n: number) => Promise<QuoteRow[] | Bar[]> } = {}
+): Promise<Bar[]> {
+  const local = getRecentIndexBars(code, n);
+  if (local.length >= n) return local;
+  try {
+    if (opts.fetcher) {
+      const rows = await opts.fetcher(code, n);
+      const qrows: QuoteRow[] = (rows as any[]).map((r) => ({ code, date: String(r.date), open: r.open ?? null, high: r.high ?? null, low: r.low ?? null, close: r.close ?? null, volume: r.volume ?? null }));
+      if (qrows.length) cacheIndexBars(qrows, 'test');
+    } else {
+      await defaultIndexFetcher(userId, code, n);
+    }
+  } catch { /* 安静降级 */ }
+  return getRecentIndexBars(code, n);
+}
+
 function latestMarket(): { limit_up_count: number | null; limit_down_count: number | null; sse_ma20_slope: number | null } | null {
   return getDb()
     .prepare('SELECT limit_up_count, limit_down_count, sse_ma20_slope FROM market_sentiment ORDER BY date DESC LIMIT 1')
@@ -381,7 +492,7 @@ export async function refreshStock(userId: string, code: string, order?: string[
   const base = resolveSidecarBase(userId);
   if (!base) return;
   const ord = order ?? (await safeOrder(base, 'fundamentals'));
-  const [f, q] = await Promise.all([fetchFundamentals(base, code, ord), fetchQuotes(base, code, 120)]);
+  const [f, q] = await Promise.all([fetchFundamentals(base, code, ord), fetchQuotes(base, code, 250)]);
   if (f) cacheFundamentals(code, today(), f.data, f.source ?? 'akshare');
   if (q && q.rows.length) cacheQuotes(q.rows, q.source ?? 'akshare');
 }
@@ -401,9 +512,8 @@ export async function refreshMarket(userId: string, order?: string[]): Promise<b
 export async function getStockSnapshot(userId: string, code: string): Promise<StockSnapshot> {
   // If we have no quotes/fundamentals cached for this code, try a refresh (best-effort).
   // Pass explicit empty order so on-demand snapshot path skips the probe round-trip.
-  const haveQuotes = recentCloses(code, 1).length > 0;
   const haveFund = !!latestFundamentals(code);
-  if (!haveQuotes || !haveFund) {
+  if (shouldDeepFetch(code) || !haveFund) {
     await refreshStock(userId, code, []).catch(() => {});
   }
   if (!latestMarket()) {
