@@ -18,6 +18,7 @@ import chatRoutes from './routes/chat';
 import meetingsRoutes from './routes/meetings';
 import screenRoutes from './routes/screen';
 import accountRoutes from './routes/account';
+import cronRoutes from './routes/cron';
 
 export function createApp(): express.Express {
   const app = express();
@@ -66,6 +67,7 @@ export function createApp(): express.Express {
   app.use('/api/ai', aiRoutes);
   app.use('/api/plugins', pluginRoutes);
   app.use('/api/data', dataRoutes);
+  app.use('/api/cron', cronRoutes);
   app.use('/api/analysis', aiLimiter, analysisRoutes);
   app.use('/api/agent', agentRoutes);
   app.use('/api/chat', aiLimiter, chatRoutes);
