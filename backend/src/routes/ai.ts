@@ -1,10 +1,12 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
-import { authMiddleware } from '../middleware/auth';
+import { authMiddleware, adminMiddleware } from '../middleware/auth';
 import { successResponse, errorResponse } from '../utils/response';
 import { PROVIDERS, getProvider } from '../ai/providers';
 import { chat } from '../ai/manager';
 import * as svc from '../ai/service';
+import { getDb } from '../db';
+import { getUsageForConfig, resetConfigUsage } from '../ai/usage';
 
 const router = Router();
 router.use(authMiddleware);
@@ -62,6 +64,7 @@ const roleSchema = z.object({
   mode: z.enum(['manual', 'auto']),
   provider: z.string().nullable().optional(),
   model: z.string().nullable().optional(),
+  sharedConfigId: z.string().nullable().optional(),
 });
 
 // POST /api/ai/roles/auto-assign — main agent assigns models to all task roles
@@ -127,6 +130,64 @@ router.post('/configs/:provider/test', async (req: Request, res: Response) => {
   } catch (e: any) {
     successResponse(res, { ok: false, error: e.message || '连接失败' });
   }
+});
+
+// ---- admin 共享模型 + 配额 ----
+const shareSchema = z.object({
+  shared: z.boolean(),
+  maxTokens: z.number().int().min(0).optional(),
+  periodSeconds: z.number().int().min(0).optional(),
+});
+
+router.post('/configs/:provider/share', adminMiddleware, (req: Request, res: Response) => {
+  const parsed = shareSchema.safeParse(req.body);
+  if (!parsed.success) return errorResponse(res, 422, 'VALIDATION_ERROR', '参数校验失败');
+  try {
+    svc.setShared(req.user!.userId, req.params.provider, parsed.data);
+    successResponse(res, null, parsed.data.shared ? '已共享' : '已取消共享');
+  } catch (e: any) {
+    if (e.message === 'NOT_FOUND') return errorResponse(res, 404, 'RESOURCE_NOT_FOUND', '请先配置该模型再共享');
+    return errorResponse(res, 400, 'BUSINESS_CONFLICT', e.message || '操作失败');
+  }
+});
+
+// 仅 owner admin 可访问某共享模型的用量；返回该 config（含周期）或写 403。
+function ownShared(req: Request, res: Response): { id: string; share_period_seconds: number } | null {
+  const r = getDb()
+    .prepare('SELECT id, share_period_seconds FROM ai_configs WHERE id = ? AND user_id = ?')
+    .get(req.params.configId, req.user!.userId) as { id: string; share_period_seconds: number } | undefined;
+  if (!r) {
+    errorResponse(res, 403, 'AUTH_FORBIDDEN', '无权访问');
+    return null;
+  }
+  return r;
+}
+
+router.get('/shared/:configId/usage', adminMiddleware, (req: Request, res: Response) => {
+  const cfg = ownShared(req, res);
+  if (!cfg) return;
+  const rows = getUsageForConfig(cfg.id, cfg.share_period_seconds);
+  const total = rows.reduce((s, r) => s + r.total_tokens, 0);
+  successResponse(res, { total, periodSeconds: cfg.share_period_seconds, rows });
+});
+
+router.post('/shared/:configId/reset-usage', adminMiddleware, (req: Request, res: Response) => {
+  const cfg = ownShared(req, res);
+  if (!cfg) return;
+  resetConfigUsage(cfg.id);
+  successResponse(res, null, '已清零');
+});
+
+// ---- 所有用户：看共享模型 + opt-out ----
+router.get('/shared', (req: Request, res: Response) => {
+  successResponse(res, svc.listSharedForUser(req.user!.userId));
+});
+
+router.post('/shared/:configId/enable', (req: Request, res: Response) => {
+  const parsed = z.object({ enabled: z.boolean() }).safeParse(req.body);
+  if (!parsed.success) return errorResponse(res, 422, 'VALIDATION_ERROR', '参数校验失败');
+  svc.setSharedOptout(req.user!.userId, req.params.configId, parsed.data.enabled);
+  successResponse(res, null, parsed.data.enabled ? '已启用' : '已停用');
 });
 
 export default router;

@@ -129,3 +129,40 @@ describe('ai routes', () => {
     expect(res.status).toBe(422);
   });
 });
+
+describe('shared models', () => {
+  it('non-admin cannot toggle share', async () => {
+    const r = await request(app).post('/api/ai/configs/deepseek/share').set(h(userTok)).send({ shared: true });
+    expect(r.status).toBe(403);
+  });
+
+  it('admin shares own config with quota; GET /ai/shared exposes no key', async () => {
+    await request(app).put('/api/ai/configs/deepseek').set(h(adminTok)).send({ apiKey: 'sk-abc12345', baseUrl: '', model: 'deepseek-chat' });
+    const sh = await request(app).post('/api/ai/configs/deepseek/share').set(h(adminTok)).send({ shared: true, maxTokens: 1000, periodSeconds: 18000 });
+    expect(sh.status).toBe(200);
+    const list = await request(app).get('/api/ai/shared').set(h(userTok));
+    expect(list.status).toBe(200);
+    expect(JSON.stringify(list.body.data)).not.toMatch(/sk-abc/);
+    expect(list.body.data[0]).toMatchObject({ provider: 'deepseek' });
+    expect(list.body.data[0].quota).toMatchObject({ cap: 1000 });
+  });
+
+  it('user opt-out toggle works', async () => {
+    const cfgId = (await request(app).get('/api/ai/shared').set(h(userTok))).body.data[0].configId;
+    expect((await request(app).post(`/api/ai/shared/${cfgId}/enable`).set(h(userTok)).send({ enabled: false })).status).toBe(200);
+    expect((await request(app).post(`/api/ai/shared/${cfgId}/enable`).set(h(userTok)).send({ enabled: true })).status).toBe(200);
+  });
+
+  it('usage endpoint is admin + owner only', async () => {
+    const cfgId = (await request(app).get('/api/ai/shared').set(h(userTok))).body.data[0].configId;
+    expect((await request(app).get(`/api/ai/shared/${cfgId}/usage`).set(h(userTok))).status).toBe(403);
+    const ok = await request(app).get(`/api/ai/shared/${cfgId}/usage`).set(h(adminTok));
+    expect(ok.status).toBe(200);
+    expect(ok.body.data).toHaveProperty('total');
+  });
+
+  it('rejects bad share payload (422)', async () => {
+    const r = await request(app).post('/api/ai/configs/deepseek/share').set(h(adminTok)).send({ shared: 'yes' });
+    expect(r.status).toBe(422);
+  });
+});
