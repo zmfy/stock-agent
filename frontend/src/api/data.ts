@@ -1,5 +1,14 @@
 import api from './client';
 
+export interface ProxyConfig {
+  enabled: boolean;
+  scheme: 'http' | 'socks5';
+  host: string;
+  port: number;
+  username: string;
+  password: string;
+}
+
 export interface StockSnapshot {
   code: string;
   name: string | null;
@@ -59,6 +68,9 @@ export const dataApi = {
   tdxTestServers: () => api.get('/data/tdx/servers/test').then((r) => r.data.data.servers as Array<{ site: string; addr: string; port: number; ok: boolean; latency_ms: number | null }>),
   tdxGetServer: () => api.get('/data/tdx/server').then((r) => r.data.data.server as string),
   tdxSetServer: (addr: string, port: number) => api.post('/data/tdx/server', { addr, port }).then((r) => r.data.data.server as string),
+  getProxy: () => api.get('/data/proxy').then((r) => r.data.data as { config: ProxyConfig; live: any }),
+  setProxy: (cfg: ProxyConfig) => api.post('/data/proxy', cfg).then((r) => r.data.data as { config: ProxyConfig; live: any }),
+  testProxy: (cfg?: ProxyConfig) => api.post('/data/proxy/test', cfg || {}).then((r) => r.data.data as { ok: boolean; latency_ms: number; source: string | null; error: string | null }),
   jobLog: (job: 'stock_universe' | 'eod') => api.get(`/data/${job}/log`).then((r) => r.data.data as Array<{ ts: string; level: string; message: string }>),
   listSources: () => api.get<{ data: DataSource[] }>('/data/sources'),
   catalog: () => api.get<{ data: Array<{ name: string; base_url: string; note: string }> }>('/data/sources/catalog'),
