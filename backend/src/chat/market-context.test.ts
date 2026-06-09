@@ -70,4 +70,24 @@ describe('buildIndexContext', () => {
     expect(only).toContain('涨停');
     expect(only).not.toContain('日期│收│涨跌幅');
   });
+
+  it('warns when data is stale (latest < expectedLatest)', () => {
+    const bars = [{ date: '2026-06-08', open: 3000, high: 3010, low: 2990, close: 3000, volume: 1 }];
+    const sent = [{ date: '2026-06-08', limit_up_count: 57, limit_down_count: 35, sse_ma20_slope: -13.3 }];
+    const out = mc.buildIndexContext('000001', bars, sent, '2026-06-09');
+    expect(out).toContain('未取到最新');
+    expect(out).toContain('2026-06-08'); // states the cutoff date
+    expect(out).toContain('2026-06-09'); // states the expected trading day
+  });
+
+  it('no warning when data is fresh (latest >= expectedLatest)', () => {
+    const bars = [{ date: '2026-06-09', open: 3000, high: 3010, low: 2990, close: 3000, volume: 1 }];
+    const out = mc.buildIndexContext('000001', bars, [], '2026-06-09');
+    expect(out).not.toContain('未取到最新');
+  });
+
+  it('warns hard when nothing available but expected set', () => {
+    const out = mc.buildIndexContext('000001', [], [], '2026-06-09');
+    expect(out).toContain('暂时取不到大盘数据');
+  });
 });

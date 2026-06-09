@@ -254,3 +254,31 @@ describe('proxy config', () => {
     expect(svc.getProxyConfig()).toEqual({ enabled: true, scheme: 'socks5', host: '1.2.3.4', port: 1080, username: 'u', password: 'p' });
   });
 });
+
+describe('ensureIndexBars freshness (refetch when stale, not just when count low)', () => {
+  it('refetches when local latest < freshThrough even though row count is sufficient', async () => {
+    const code = 'IDXFRESH1';
+    svc.cacheIndexBars([
+      { code, date: '2026-06-05', open: 1, high: 1, low: 1, close: 3000, volume: 1 },
+      { code, date: '2026-06-08', open: 1, high: 1, low: 1, close: 3010, volume: 1 },
+    ], 'seed');
+    let called = 0;
+    const fetcher = async () => { called++; return [{ code, date: '2026-06-09', open: 1, high: 1, low: 1, close: 3020, volume: 1 }]; };
+    const bars = await svc.ensureIndexBars('u', code, 2, { fetcher, freshThrough: '2026-06-09' });
+    expect(called).toBe(1);
+    expect(bars[bars.length - 1].date).toBe('2026-06-09');
+  });
+
+  it('does NOT refetch when local is already fresh enough', async () => {
+    const code = 'IDXFRESH2';
+    svc.cacheIndexBars([
+      { code, date: '2026-06-08', open: 1, high: 1, low: 1, close: 3010, volume: 1 },
+      { code, date: '2026-06-09', open: 1, high: 1, low: 1, close: 3020, volume: 1 },
+    ], 'seed');
+    let called = 0;
+    const fetcher = async () => { called++; return []; };
+    const bars = await svc.ensureIndexBars('u', code, 2, { fetcher, freshThrough: '2026-06-09' });
+    expect(called).toBe(0);
+    expect(bars.length).toBe(2);
+  });
+});

@@ -1,5 +1,15 @@
 import { getCachedName, findStockCodeInText, Bar, ensureStockBars, getStockSnapshot, ensureIndexBars, getMarketSentimentSeries } from '../data/service';
+import { lastTradingDayBefore } from '../data/trade-calendar';
 import { StockSnapshot } from '../types';
+
+// 北京日历日（YYYY-MM-DD）。
+function beijingToday(): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai' }).format(new Date());
+}
+// 当前「应当已有收盘数据的最近交易日」= 严格早于今日的最近交易日（今日盘中/未收盘不强求）。
+export function expectedLatestTradingDay(): string {
+  return lastTradingDayBefore(beijingToday());
+}
 
 export const RECENT_BARS_N = 30;
 export const MAX_BARS_N = 500;
@@ -64,9 +74,10 @@ export async function buildMarketInjection(
       return buildStockContext(target.code, snap, bars);
     }
     // index
-    const ibars = await ensureIndexBars(userId, target.code, n);
+    const expected = expectedLatestTradingDay();
+    const ibars = await ensureIndexBars(userId, target.code, n, { freshThrough: expected });
     const sent = getMarketSentimentSeries(Math.min(n, 30));
-    return buildIndexContext(target.code, ibars, sent);
+    return buildIndexContext(target.code, ibars, sent, expected);
   } catch {
     return '';
   }
@@ -78,9 +89,20 @@ function n2(x: number | null | undefined): string {
 
 interface Sentiment { date: string; limit_up_count: number | null; limit_down_count: number | null; sse_ma20_slope: number | null }
 
-export function buildIndexContext(code: string, bars: Bar[], sentiment: Sentiment[]): string {
+export function buildIndexContext(code: string, bars: Bar[], sentiment: Sentiment[], expectedLatest?: string): string {
   const name = code === '000001' ? '上证指数' : code === '399001' ? '深证成指' : code === '399006' ? '创业板指' : code;
   const parts: string[] = [`【大盘 ${name}(${code})】`];
+  // 新鲜度判定：取 bars / sentiment 里最新的日期，若早于「应有的最近交易日」则明确告知数据陈旧、不可冒充最新。
+  if (expectedLatest) {
+    const latestBar = bars.length ? bars[bars.length - 1].date : '';
+    const latestSent = sentiment.length ? sentiment[sentiment.length - 1].date : '';
+    const latest = [latestBar, latestSent].filter(Boolean).sort().pop() || '';
+    if (!latest) {
+      parts.push(`⚠️ 暂时取不到大盘数据(数据源不可达)。请勿臆造点位；如需最新，请稍后重试或在「数据」页测速选用通达信服务器。`);
+    } else if (latest < expectedLatest) {
+      parts.push(`⚠️ 未取到最新行情(数据源暂不可达)。以下为截至 ${latest} 的数据，并非最新交易日(${expectedLatest})；回答时务必说明数据截止到 ${latest}，不要把它当作最新一天。`);
+    }
+  }
   if (bars.length) {
     parts.push('日期│收│涨跌幅');
     for (let i = 0; i < bars.length; i++) {
@@ -95,7 +117,8 @@ export function buildIndexContext(code: string, bars: Bar[], sentiment: Sentimen
     const s = sentiment.map((x) => `${x.date}: 涨停${x.limit_up_count ?? '—'}/跌停${x.limit_down_count ?? '—'}/上证20线斜率${n2(x.sse_ma20_slope)}`);
     parts.push('近期情绪(涨跌停家数/上证20日线斜率):', ...s);
   }
-  if (!bars.length && !sentiment.length) return '';
+  // 仅有标题(无数据、无警告)才返回空；若已加陈旧/取不到的警告则保留输出。
+  if (parts.length <= 1) return '';
   return parts.join('\n');
 }
 

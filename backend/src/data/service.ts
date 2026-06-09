@@ -445,10 +445,14 @@ async function defaultIndexFetcher(userId: string, code: string, n: number): Pro
 
 export async function ensureIndexBars(
   userId: string, code: string, n: number,
-  opts: { fetcher?: (code: string, n: number) => Promise<QuoteRow[] | Bar[]> } = {}
+  opts: { fetcher?: (code: string, n: number) => Promise<QuoteRow[] | Bar[]>; freshThrough?: string } = {}
 ): Promise<Bar[]> {
   const local = getRecentIndexBars(code, n);
-  if (local.length >= n) return local;
+  // Have enough rows AND they're fresh enough (latest >= freshThrough) → use cache.
+  // 关键修复：原来只看行数(local.length>=n)，导致即便本地是旧日期(如缺了最近交易日)也不再联网，
+  // 大盘点位永远停在旧数据。现在还要求最新一根 >= 预期的最近交易日，否则触发取数。
+  const fresh = !opts.freshThrough || (local.length > 0 && local[local.length - 1].date >= opts.freshThrough);
+  if (local.length >= n && fresh) return local;
   try {
     if (opts.fetcher) {
       const rows = await opts.fetcher(code, n);
