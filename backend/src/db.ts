@@ -436,6 +436,16 @@ function migrate(): void {
     calls INTEGER DEFAULT 0, total_tokens INTEGER DEFAULT 0, window_start INTEGER DEFAULT 0,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (config_id, user_id)
   )`);
+  // 定时任务运行追踪（nightly/早晚会原本无任何记录）
+  db.exec(`CREATE TABLE IF NOT EXISTS cron_status (
+    key TEXT PRIMARY KEY,
+    last_run_at DATETIME,
+    last_status TEXT,
+    last_duration_ms INTEGER,
+    last_error TEXT,
+    run_count INTEGER DEFAULT 0,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
 }
 
 // Seed a default admin account on first init so an invite-only system is reachable.
