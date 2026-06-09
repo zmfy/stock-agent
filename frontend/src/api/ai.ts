@@ -18,6 +18,32 @@ export interface AiConfig {
   enabled: number;
   apiKeySet: boolean;
   apiKeyMasked: string;
+  shared?: number;
+  shareMaxTokens?: number;
+  sharePeriodSeconds?: number;
+}
+
+export interface Quota {
+  cap: number;
+  used: number;
+  remaining: number | null;
+  periodSeconds: number;
+  over: boolean;
+}
+
+export interface SharedModel {
+  configId: string;
+  provider: string;
+  model: string;
+  label: string;
+  enabledForMe: boolean;
+  quota: Quota;
+}
+
+export interface SharedUsage {
+  total: number;
+  periodSeconds: number;
+  rows: Array<{ userId: string; username: string; calls: number; total_tokens: number }>;
 }
 
 export interface RoleAssignment {
@@ -43,6 +69,12 @@ export const aiApi = {
     api.post<{ data: { ok: boolean; reply?: string; error?: string } }>(`/ai/configs/${provider}/test`, body),
   getRoles: () => api.get<{ data: RoleAssignment[] }>('/ai/roles'),
   autoAssignRoles: () => api.post<{ data: RoleAssignment[] }>('/ai/roles/auto-assign'),
-  setRole: (role: string, body: { mode: 'manual' | 'auto'; provider?: string | null; model?: string | null }) =>
+  setRole: (role: string, body: { mode: 'manual' | 'auto'; provider?: string | null; model?: string | null; sharedConfigId?: string | null }) =>
     api.put(`/ai/roles/${role}`, body),
+  setShared: (provider: string, body: { shared: boolean; maxTokens?: number; periodSeconds?: number }) =>
+    api.post(`/ai/configs/${provider}/share`, body),
+  getShared: () => api.get<{ data: SharedModel[] }>('/ai/shared'),
+  setSharedEnabled: (configId: string, enabled: boolean) => api.post(`/ai/shared/${configId}/enable`, { enabled }),
+  getSharedUsage: (configId: string) => api.get<{ data: SharedUsage }>(`/ai/shared/${configId}/usage`),
+  resetSharedUsage: (configId: string) => api.post(`/ai/shared/${configId}/reset-usage`),
 };
