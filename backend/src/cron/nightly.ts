@@ -1,4 +1,3 @@
-import cron from 'node-cron';
 import { getDb } from '../db';
 import * as data from '../data/service';
 import { purgeOldLogs } from '../data/news-log';
@@ -13,7 +12,7 @@ function pickRefreshUserId(): string | null {
   return row?.id ?? null;
 }
 
-async function runNightly(): Promise<void> {
+export async function runNightly(): Promise<void> {
   // 新闻双日志清理（标题>1年 / 内容采用>3月·未采用>1周）——全局，无需用户
   try { purgeOldLogs(); } catch { /* ignore */ }
   const userId = pickRefreshUserId();
@@ -33,12 +32,3 @@ async function runNightly(): Promise<void> {
     console.error('[cron] nightly refresh failed', e);
   }
 }
-
-// Start the post-close (23:00 Asia/Shanghai) refresh. Disabled when ENABLE_CRON=false.
-export function startNightlyCron(): void {
-  if (process.env.ENABLE_CRON === 'false') return;
-  cron.schedule('0 23 * * *', runNightly, { timezone: 'Asia/Shanghai' });
-  console.log('[cron] nightly data refresh scheduled for 23:00 Asia/Shanghai');
-}
-
-export { runNightly };

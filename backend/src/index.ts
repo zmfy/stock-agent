@@ -94,14 +94,10 @@ export function createApp(): express.Express {
 if (require.main === module) {
   const PORT = process.env.PORT || 3000;
   // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const { startNightlyCron } = require('./cron/nightly');
-  const { startMeetingsCron } = require('./cron/meetings');
-  const { startSharedDataCron } = require('./cron/shared-data');
+  const { startCrons } = require('./cron/registry');
   createApp().listen(PORT, () => {
     console.log(`[stock-agent] backend listening on :${PORT}`);
-    startNightlyCron();
-    startMeetingsCron();
-    startSharedDataCron();
+    startCrons();
     // 启动后同步一次交易日历（失败则 isTradingDay 走周末兜底）。
     const { syncTradeCalendar } = require('./data/trade-calendar');
     const { getDb } = require('./db');

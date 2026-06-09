@@ -1,4 +1,3 @@
-import cron from 'node-cron';
 import { getDb } from '../db';
 import { syncStockUniverse, ingestEod, getSyncStatus } from '../data/service';
 import { ensureSeedGlobal } from '../data/sources-service';
@@ -13,21 +12,15 @@ export function eodDaysForRun(): number {
   return Math.min(365, Math.max(2, days));
 }
 
-async function runStockUniverse(): Promise<void> {
+export async function runStockUniverse(): Promise<void> {
   ensureSeedGlobal();
   if (getSyncStatus('stock_universe')?.state === 'running') return;
   await syncStockUniverse('', 'cron');
 }
 
-async function runEod(): Promise<void> {
+export async function runEod(): Promise<void> {
   ensureSeedGlobal();
   if (getSyncStatus('eod')?.state === 'running') return;
   await ingestEod('', { days: eodDaysForRun(), startedBy: 'cron' });
 }
 
-export function startSharedDataCron(): void {
-  if (process.env.ENABLE_CRON === 'false') return;
-  cron.schedule('25 9 * * *', () => { runStockUniverse().catch(() => {}); }, { timezone: 'Asia/Shanghai' });
-  cron.schedule('0 1 * * *', () => { runEod().catch(() => {}); }, { timezone: 'Asia/Shanghai' });
-  console.log('[cron] shared-data: 股票库 09:25 / 行情 EOD 01:00 (Asia/Shanghai) scheduled');
-}

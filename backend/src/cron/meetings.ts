@@ -1,9 +1,8 @@
-import cron from 'node-cron';
 import * as data from '../data/service';
 import * as meetings from '../meetings/service';
 import { isTradingDay } from '../data/trade-calendar';
 
-async function runMeetings(kind: 'morning' | 'evening'): Promise<void> {
+export async function runMeetings(kind: 'morning' | 'evening'): Promise<void> {
   // 休市日不自动开会（手动「生成」仍可）。
   if (!isTradingDay(meetings.today())) {
     console.log(`[cron] ${kind} 跳过：今日休市`);
@@ -23,13 +22,3 @@ async function runMeetings(kind: 'morning' | 'evening'): Promise<void> {
   }
   console.log(`[cron] ${kind} meeting done for ${users.length} user(s)`);
 }
-
-// 早会 08:00、晚会 16:45（北京时间）。ENABLE_CRON=false 关闭。
-export function startMeetingsCron(): void {
-  if (process.env.ENABLE_CRON === 'false') return;
-  cron.schedule('0 8 * * *', () => runMeetings('morning'), { timezone: 'Asia/Shanghai' });
-  cron.schedule('45 16 * * *', () => runMeetings('evening'), { timezone: 'Asia/Shanghai' });
-  console.log('[cron] meetings scheduled: morning 08:00, evening 16:45 Asia/Shanghai');
-}
-
-export { runMeetings };
