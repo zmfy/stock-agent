@@ -416,6 +416,26 @@ function migrate(): void {
     CREATE INDEX IF NOT EXISTS idx_news_title_collected ON news_title_log (collected_at);
     CREATE INDEX IF NOT EXISTS idx_news_content_adopted ON news_content_log (adopted, collected_at);
   `);
+  // --- admin 共享 AI 模型 + 配额 ---
+  const aiCols = db.prepare('PRAGMA table_info(ai_configs)').all() as { name: string }[];
+  if (!aiCols.some((c) => c.name === 'shared')) db.exec('ALTER TABLE ai_configs ADD COLUMN shared INTEGER DEFAULT 0');
+  if (!aiCols.some((c) => c.name === 'share_max_tokens')) db.exec('ALTER TABLE ai_configs ADD COLUMN share_max_tokens INTEGER DEFAULT 0');
+  if (!aiCols.some((c) => c.name === 'share_period_seconds')) db.exec('ALTER TABLE ai_configs ADD COLUMN share_period_seconds INTEGER DEFAULT 0');
+
+  const raCols = db.prepare('PRAGMA table_info(ai_role_assignments)').all() as { name: string }[];
+  if (raCols.length && !raCols.some((c) => c.name === 'shared_config_id')) {
+    db.exec('ALTER TABLE ai_role_assignments ADD COLUMN shared_config_id TEXT');
+  }
+
+  db.exec(`CREATE TABLE IF NOT EXISTS shared_ai_optout (
+    id TEXT PRIMARY KEY, user_id TEXT NOT NULL, config_id TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP, UNIQUE(user_id, config_id)
+  )`);
+  db.exec(`CREATE TABLE IF NOT EXISTS shared_ai_usage (
+    config_id TEXT NOT NULL, user_id TEXT NOT NULL,
+    calls INTEGER DEFAULT 0, total_tokens INTEGER DEFAULT 0, window_start INTEGER DEFAULT 0,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (config_id, user_id)
+  )`);
 }
 
 // Seed a default admin account on first init so an invite-only system is reachable.
