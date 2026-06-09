@@ -26,16 +26,44 @@ def _reset():
     _client = None
 
 
+_recover_after = 0.0  # epoch 秒；早于此时间不重新全量扫描服务器（冷却）
+
+
+def _recover_server():
+    """钉的服务器连不上 → 重测服务器列表挑一个真实可用的并切过去（带 5 分钟冷却）。换成功返回 True。
+    用于「钉死的公共服务器突然宕机」自愈：bestip 在某些网络连不通，故这里用真实查询校验过的列表挑选。"""
+    global _server, _recover_after
+    now = time.time()
+    if now < _recover_after:
+        return False
+    _recover_after = now + 300
+    try:
+        results = test_servers()
+    except Exception:
+        return False
+    best = next((r for r in results if r.get("ok")), None)
+    if not best:
+        return False
+    _server = (best["addr"], int(best["port"]))
+    _reset()
+    return True
+
+
 def _call(fn):
-    """串行化(连接非线程安全) + 一次重连重试；异常返回 None。"""
+    """串行化(连接非线程安全) + 一次重连重试；钉的服务器挂了自动重选；异常返回 None。"""
     with _lock:
         for attempt in (1, 2):
             try:
                 return fn(_get_client())
             except Exception:
                 _reset()
-                if attempt == 2:
-                    return None
+        # 两次都失败：钉的服务器(或当前选择)连不上 → 自动重选可用服务器(带冷却)，成功再试一次。
+        if _recover_server():
+            try:
+                return fn(_get_client())
+            except Exception:
+                _reset()
+        return None
 
 
 def _f(x):

@@ -378,8 +378,12 @@ async function showNewsContent(id: string) { openNews.value = await dataApi.news
 async function refreshMarket() {
   busy.value = true; collectMsg.value = '';
   try {
-    await dataApi.refresh();
-    collectOk.value = true; collectMsg.value = '大盘/情绪数据已刷新';
+    const res = await dataApi.refresh();
+    const ok = res.data?.data?.marketRefreshed;
+    collectOk.value = !!ok;
+    collectMsg.value = ok
+      ? '大盘/情绪数据已刷新'
+      : '未取到大盘数据：数据源暂不可达。请到「数据源」标签测速选用通达信服务器后重试（涨停/跌停依赖东方财富，该源不通时取不到）。';
     await loadSource();
   } catch (e: any) {
     collectOk.value = false; collectMsg.value = e.response?.data?.message || '刷新失败';
