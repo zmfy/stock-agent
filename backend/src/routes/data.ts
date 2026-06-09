@@ -6,7 +6,7 @@ import { successResponse, errorResponse } from '../utils/response';
 import { QuoteRow } from '../types';
 import * as svc from '../data/service';
 import * as sources from '../data/sources-service';
-import { resolveSidecarBase, pingHealth, probe, probeList, probeOne, tdxTestServers, tdxSetServer } from '../data/sidecar';
+import { resolveSidecarBase, pingHealth, probe, probeList, probeOne, tdxTestServers, tdxSetServer, proxyGet, proxySet, proxyTest } from '../data/sidecar';
 import { listTitleLog, getContent } from '../data/news-log';
 import { monthCalendar } from '../data/trade-calendar';
 
@@ -183,6 +183,43 @@ router.post('/tdx/server', adminMiddleware, async (req: Request, res: Response) 
   const val = addr ? `${addr}:${port}` : '';
   svc.setTdxServerSetting(val);
   successResponse(res, { server: val });
+});
+
+// ---- 出站代理（仅 admin）：配置存 settings，推送 sidecar 生效 ----
+const proxySchema = z.object({
+  enabled: z.boolean(),
+  scheme: z.enum(['http', 'socks5']),
+  host: z.string(),
+  port: z.number().int().min(0).max(65535),
+  username: z.string().default(''),
+  password: z.string().default(''),
+});
+
+router.get('/proxy', adminMiddleware, async (req: Request, res: Response) => {
+  const config = svc.getProxyConfig();
+  const base = resolveSidecarBase(req.user!.userId);
+  const live = base ? await proxyGet(base) : null;
+  successResponse(res, { config, live });
+});
+
+router.post('/proxy', adminMiddleware, async (req: Request, res: Response) => {
+  const parsed = proxySchema.safeParse(req.body);
+  if (!parsed.success) return errorResponse(res, 422, 'VALIDATION_ERROR', '代理参数不合法');
+  const cfg = parsed.data;
+  if (cfg.enabled && !cfg.host.trim()) return errorResponse(res, 422, 'VALIDATION_ERROR', '启用代理时必须填写地址');
+  svc.setProxyConfig(cfg);
+  const base = resolveSidecarBase(req.user!.userId);
+  const live = base ? await proxySet(base, cfg) : null;
+  successResponse(res, { config: cfg, live }, live ? '代理已保存并生效' : '代理已保存（sidecar 未即时生效，重启后自动重推）');
+});
+
+router.post('/proxy/test', adminMiddleware, async (req: Request, res: Response) => {
+  const base = resolveSidecarBase(req.user!.userId);
+  if (!base) return errorResponse(res, 503, 'UPSTREAM_ERROR', 'sidecar 不可达');
+  const cfg = req.body && Object.keys(req.body).length ? req.body : undefined;
+  const result = await proxyTest(base, cfg);
+  if (!result) return errorResponse(res, 502, 'UPSTREAM_ERROR', '测试请求失败');
+  successResponse(res, result);
 });
 
 // ---- unified job routes: /api/data/<job>/run|status|cancel|log ----

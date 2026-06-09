@@ -200,4 +200,23 @@ describe('data routes', () => {
     const list2 = await request(app).get('/api/data/sources').set(h());
     expect(list2.body.data.some((s: { id: string }) => s.id === addedId)).toBe(false);
   });
+
+  it('GET /proxy requires admin', async () => {
+    expect((await request(app).get('/api/data/proxy').set(uh())).status).toBe(403);
+  });
+
+  it('admin saves + reads proxy config (plaintext password)', async () => {
+    jest.spyOn(require('../data/sidecar'), 'proxySet').mockResolvedValue({ enabled: true, scheme: 'socks5' });
+    const save = await request(app).post('/api/data/proxy').set(h()).send({
+      enabled: true, scheme: 'socks5', host: '1.2.3.4', port: 1080, username: 'u', password: 'p',
+    });
+    expect(save.status).toBe(200);
+    const get = await request(app).get('/api/data/proxy').set(h());
+    expect(get.body.data.config).toMatchObject({ enabled: true, scheme: 'socks5', host: '1.2.3.4', port: 1080, password: 'p' });
+  });
+
+  it('rejects bad scheme', async () => {
+    const r = await request(app).post('/api/data/proxy').set(h()).send({ enabled: true, scheme: 'ftp', host: 'x', port: 1 });
+    expect(r.status).toBe(422);
+  });
 });
