@@ -143,13 +143,24 @@ def bars_qfq(code, days=120):
     return _call(fn)
 
 
-def _latest_raw_close(code):
+def _latest_close_vol(code):
+    """最近一日 (收盘, 成交量手)。一次 bars 调用同时取价与量(算换手率用)。"""
     def fn(c):
         raw = c.bars(symbol=code, frequency=9, offset=2)
         if raw is None or len(raw) == 0:
-            return None
-        return _f(raw.iloc[-1]["close"])
-    return _call(fn)
+            return (None, None)
+        last = raw.iloc[-1]
+        vol = last.get("vol") if "vol" in last.index else last.get("volume")
+        return (_f(last["close"]), _f(vol))
+    r = _call(fn)
+    return r if r is not None else (None, None)
+
+
+def turnover_pct(vol_lots, float_shares):
+    """换手率% = 成交量(股) / 流通股本(股) × 100。TDX bars 的 vol 单位是「手」(×100=股)。"""
+    if not vol_lots or not float_shares or float_shares <= 0:
+        return None
+    return round(vol_lots * 100 / float_shares * 100, 2)
 
 
 def _num_cn(s):
@@ -206,20 +217,23 @@ def _f10_text(code):
     return _call(lambda c: c.F10(symbol=code, name="财务分析"))
 
 
-def _shares(code):
+def _share_counts(code):
+    """(总股本, 流通股本) 均为股。一次 finance 调用取两者(PS 用总股本，换手率用流通股本)。"""
     def fn(c):
         fin = c.finance(symbol=code)
         if fin is None or len(fin) == 0:
-            return None
-        return _f(fin.iloc[0].get("zongguben"))
-    return _call(fn)
+            return (None, None)
+        r = fin.iloc[0]
+        return (_f(r.get("zongguben")), _f(r.get("liutongguben")))
+    r = _call(fn)
+    return r if r is not None else (None, None)
 
 
 def finance_fundamentals(code):
-    """F10 财务分析(干净) + 当前价 + 总股本 → roe_ttm/pe/pb/ps/net_profit。
-    PE/PS/ROE/净利润用最近年报(静态)，PB 用最新每股净资产(MRQ)。"""
-    price = _latest_raw_close(code)   # 独立 _call
-    shares = _shares(code)            # 独立 _call
+    """F10 财务分析(干净) + 当前价/量 + 总/流通股本 → roe_ttm/pe/pb/ps/net_profit/turnover_rate。
+    PE/PS/ROE/净利润用最近年报(静态)，PB 用最新每股净资产(MRQ)，换手率用最近一日量/流通股本。"""
+    price, vol = _latest_close_vol(code)        # 独立 _call（价+量）
+    total_shares, float_shares = _share_counts(code)  # 独立 _call（总+流通股本）
     ind = parse_f10_indicators(_f10_text(code))  # 独立 _call + 纯解析
     if not ind:
         return None
@@ -230,10 +244,13 @@ def finance_fundamentals(code):
         out["pe"] = round(price / ind["eps"], 2)
     if price and ind["bvps"]:
         out["pb"] = round(price / ind["bvps"], 2)
-    if price and shares and ind["revenue"]:
-        out["ps"] = round(price * shares / ind["revenue"], 2)
+    if price and total_shares and ind["revenue"]:
+        out["ps"] = round(price * total_shares / ind["revenue"], 2)
     if ind["net_profit"] is not None:
         out["net_profit"] = ind["net_profit"]
+    tr = turnover_pct(vol, float_shares)
+    if tr is not None:
+        out["turnover_rate"] = tr
     return out
 
 

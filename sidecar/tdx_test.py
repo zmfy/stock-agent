@@ -73,8 +73,17 @@ def test_list_servers():
     assert len(s) > 100
     assert all('addr' in x and 'port' in x and 'site' in x for x in s[:3])
 
+def test_turnover_pct():
+    from tdx import turnover_pct
+    # 茅台 2026-06-09：成交 27860 手、流通股本 1,250,081,562 股 → 换手率约 0.22%(2位小数)
+    assert turnover_pct(27860, 1250081562) == 0.22
+    assert turnover_pct(0, 1250081562) is None        # 无成交
+    assert turnover_pct(27860, 0) is None             # 无流通股本
+    assert turnover_pct(None, 1250081562) is None
+    assert turnover_pct(27860, None) is None
+
 if __name__ == "__main__":
     test_cash_dividend(); test_split(); test_no_events()
     test_parse_f10(); test_parse_f10_empty()
-    test_set_get_server(); test_list_servers();
+    test_set_get_server(); test_list_servers(); test_turnover_pct();
     print("ALL PASS")
