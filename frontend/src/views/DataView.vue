@@ -54,6 +54,30 @@
         </table>
         <p v-if="tdxServers.length" class="hint">仅显示前 30（已按可用+延迟排序）。</p>
       </section>
+
+      <section v-if="isAdmin" class="card">
+        <h2>出站代理</h2>
+        <p class="hint"><b>SOCKS5</b>＝全部源（含通达信）走代理；<b>HTTP</b>＝仅 HTTP 源走代理，通达信直连。仅管理员可见可改。</p>
+        <div class="row"><label><input type="checkbox" v-model="proxy.enabled" /> 启用代理</label></div>
+        <div class="row">
+          类型
+          <select v-model="proxy.scheme"><option value="http">HTTP</option><option value="socks5">SOCKS5</option></select>
+          IP <input v-model="proxy.host" placeholder="代理服务器地址" />
+          端口 <input v-model.number="proxy.port" type="number" style="width:90px" />
+        </div>
+        <div class="row">
+          用户名 <input v-model="proxy.username" placeholder="可空" />
+          口令 <input v-model="proxy.password" placeholder="可空" />
+        </div>
+        <div class="row">
+          <button @click="saveProxy" :disabled="proxySaving">{{ proxySaving ? '保存中…' : '保存' }}</button>
+          <button @click="testProxy" :disabled="proxyTesting">{{ proxyTesting ? '测试中…(约 10-40s)' : '测试代理' }}</button>
+          <span v-if="proxyMsg" class="muted">{{ proxyMsg }}</span>
+          <span v-if="proxyTestResult" :class="proxyTestResult.ok ? 'okmsg' : 'err'">
+            {{ proxyTestResult.ok ? `✅ 通（${proxyTestResult.source} ${proxyTestResult.latency_ms}ms）` : `❌ ${proxyTestResult.error || '失败'}` }}
+          </span>
+        </div>
+      </section>
     <section class="card">
       <h2>数据源管理</h2>
       <p class="hint">以下为<b>交叉验证与备选</b>数据源（仅在主力源缺失时补充/校验）；主力行情请用上方的通达信。</p>
@@ -255,7 +279,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue';
-import { dataApi, type StockSnapshot, type DataSource } from '../api/data';
+import { dataApi, type StockSnapshot, type DataSource, type ProxyConfig } from '../api/data';
 import StockPicker from '../components/StockPicker.vue';
 import { useAuthStore } from '../stores/auth';
 import { fmtCN, fmtCNDate } from '../utils/time';
@@ -438,6 +462,29 @@ const tdxTesting = ref(false);
 async function loadTdxCurrent() {
   try { tdxCurrent.value = await dataApi.tdxGetServer(); } catch { /* ignore */ }
 }
+
+// ---- 出站代理（仅 admin）----
+const proxy = reactive<ProxyConfig>({ enabled: false, scheme: 'http', host: '', port: 0, username: '', password: '' });
+const proxySaving = ref(false);
+const proxyTesting = ref(false);
+const proxyMsg = ref('');
+const proxyTestResult = ref<{ ok: boolean; latency_ms: number; source: string | null; error: string | null } | null>(null);
+async function loadProxy() {
+  if (!isAdmin.value) return;
+  try { Object.assign(proxy, (await dataApi.getProxy()).config); } catch { /* ignore */ }
+}
+async function saveProxy() {
+  proxySaving.value = true; proxyMsg.value = '';
+  try { const r = await dataApi.setProxy({ ...proxy }); proxyMsg.value = r.live ? '已保存并生效' : '已保存（重启后生效）'; }
+  catch (e: any) { proxyMsg.value = e.response?.data?.message || '保存失败'; }
+  finally { proxySaving.value = false; }
+}
+async function testProxy() {
+  proxyTesting.value = true; proxyTestResult.value = null;
+  try { proxyTestResult.value = await dataApi.testProxy({ ...proxy }); }
+  catch (e: any) { proxyTestResult.value = { ok: false, latency_ms: 0, source: null, error: e.response?.data?.message || '测试失败' }; }
+  finally { proxyTesting.value = false; }
+}
 async function testTdx() {
   tdxTesting.value = true;
   try { tdxServers.value = await dataApi.tdxTestServers(); } catch { /* ignore */ } finally { tdxTesting.value = false; }
@@ -546,6 +593,7 @@ onMounted(async () => {
   await loadSource();
   await loadSources();
   loadTdxCurrent();
+  loadProxy();
   await refreshJob('stock_universe');
   await refreshJob('eod');
   runProbe();
@@ -559,6 +607,7 @@ onMounted(async () => {
 
 <style scoped>
 .data { max-width: 960px; margin: 0; padding: 0 16px; }
+.okmsg { color: var(--accent, #2a8a2a); }
 .bar { display: flex; justify-content: space-between; align-items: baseline; }
 .overview { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; padding: 10px 14px; background: #f7faff; border: 1px solid #d6e4ff; border-radius: 8px; margin-top: 12px; font-size: 13px; }
 .ov-item { color: #334; }
