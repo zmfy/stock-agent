@@ -67,7 +67,8 @@ async function defaultAiCall(userId: string, prompt: string): Promise<string> {
   const cfg = getModelForRole(userId, 'core');
   if (!cfg) throw new Error('NO_MODEL');
   const style = getProvider(cfg.provider)?.apiStyle || 'openai';
-  return chat(style, { baseUrl: cfg.baseUrl, model: cfg.model, apiKey: cfg.apiKey }, prompt, 1200);
+  const acct = cfg.scope === 'shared' && cfg.ownerConfigId ? { userId, configId: cfg.ownerConfigId } : undefined;
+  return chat(style, { baseUrl: cfg.baseUrl, model: cfg.model, apiKey: cfg.apiKey }, prompt, 1200, acct);
 }
 
 // Main agent drafts the 4 sub-agent personas from its own persona + role purposes.

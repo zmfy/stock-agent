@@ -14,7 +14,8 @@ export async function reasonAiCall(userId: string, prompt: string): Promise<stri
   const cfg = getModelForRole(userId, 'review') || getModelForRole(userId, 'core');
   if (!cfg) throw new Error('NO_MODEL');
   const style = getProvider(cfg.provider)?.apiStyle || 'openai';
-  return chat(style, { baseUrl: cfg.baseUrl, model: cfg.model, apiKey: cfg.apiKey }, prompt, 4000);
+  const acct = cfg.scope === 'shared' && cfg.ownerConfigId ? { userId, configId: cfg.ownerConfigId } : undefined;
+  return chat(style, { baseUrl: cfg.baseUrl, model: cfg.model, apiKey: cfg.apiKey }, prompt, 4000, acct);
 }
 
 export async function summarizeChangeReason(input: ReasonInput): Promise<string> {

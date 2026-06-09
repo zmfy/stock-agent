@@ -15,7 +15,8 @@ async function screenAiCall(userId: string, prompt: string, role: string): Promi
   const cfg = getModelForRole(userId, role) || getModelForRole(userId, 'core');
   if (!cfg) throw new Error('NO_MODEL');
   const style = getProvider(cfg.provider)?.apiStyle || 'openai';
-  return chat(style, { baseUrl: cfg.baseUrl, model: cfg.model, apiKey: cfg.apiKey }, prompt, 1200);
+  const acct = cfg.scope === 'shared' && cfg.ownerConfigId ? { userId, configId: cfg.ownerConfigId } : undefined;
+  return chat(style, { baseUrl: cfg.baseUrl, model: cfg.model, apiKey: cfg.apiKey }, prompt, 1200, acct);
 }
 function personaOf(userId: string, role: string): string {
   return listProfiles(userId).find((p) => p.role === role)?.persona || '';
