@@ -31,7 +31,7 @@
         <button class="hamburger" title="菜单" @click="railOpen = !railOpen">☰</button>
         <div class="tnav-scroll">
           <button class="tnav" :class="{ active: !settingsKey }" @click="goChat">💬 聊天</button>
-          <button v-for="s in SETTINGS" :key="s.key" class="tnav" :class="{ active: settingsKey === s.key }" @click="settingsKey = s.key">
+          <button v-for="s in settingsMenu" :key="s.key" class="tnav" :class="{ active: settingsKey === s.key }" @click="settingsKey = s.key">
             <span class="ticon">{{ s.icon }}</span>{{ s.label }}
           </button>
         </div>
@@ -291,6 +291,7 @@ import PluginsView from './PluginsView.vue';
 import DataView from './DataView.vue';
 import SettingsView from './SettingsView.vue';
 import MeetingsHistoryView from './MeetingsHistoryView.vue';
+import CronsView from './CronsView.vue';
 import StockPicker from '../components/StockPicker.vue';
 import ClampText from '../components/ClampText.vue';
 import MarkdownModal from '../components/MarkdownModal.vue';
@@ -306,9 +307,11 @@ const SETTINGS = [
   { key: 'data', label: '数据', icon: '📈', comp: DataView },
   { key: 'ai', label: 'AI 模型', icon: '🤖', comp: AiSettingsView },
   { key: 'plugins', label: '能力插件', icon: '🧩', comp: PluginsView },
+  { key: 'crons', label: '定时任务', icon: '⏰', comp: CronsView, adminOnly: true },
   { key: 'account', label: '账号设置', icon: '👤', comp: SettingsView },
 ];
 const settingsKey = ref(''); // '' = 聊天；否则为某个功能面板
+const settingsMenu = computed(() => SETTINGS.filter((s: any) => !s.adminOnly || auth.isAdmin));
 const currentSettingsComp = computed(() => SETTINGS.find((s) => s.key === settingsKey.value)?.comp);
 function goChat() {
   settingsKey.value = '';
