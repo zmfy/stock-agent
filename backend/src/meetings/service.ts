@@ -20,11 +20,14 @@ export function today(): string {
 
 function marketText(): { text: string; data: any } {
   const m = getLatestMarket();
-  if (!m) return { text: '（暂无大盘数据，建议先在「数据」刷新或上传）', data: null };
+  if (!m) return { text: '（暂无大盘数据，数据源不可达；请在「数据」页测速选用通达信服务器后重试，勿臆造点位）', data: null };
   const slope = m.sse_ma20_slope;
   const trend = slope === null ? '未知' : slope > 0 ? '向上' : slope < 0 ? '向下' : '走平';
+  // 新鲜度：早于「应有的最近交易日」则明确告知陈旧，避免把旧数据当今日。
+  const expected = lastTradingDayBefore(today());
+  const stale = m.date < expected ? `\n⚠️ 这是截至 ${m.date} 的数据，未取到最新交易日(${expected})；数据源暂不可达，请按此说明，勿当作今日最新。` : '';
   return {
-    text: `大盘情绪（${m.date}）：涨停 ${m.limit_up_count ?? '?'} 家、跌停 ${m.limit_down_count ?? '?'} 家、上证20日线斜率 ${slope ?? '?'}（趋势${trend}）。`,
+    text: `大盘情绪（${m.date}）：涨停 ${m.limit_up_count ?? '?'} 家、跌停 ${m.limit_down_count ?? '?'} 家、上证20日线斜率 ${slope ?? '?'}（趋势${trend}）。${stale}`,
     data: m,
   };
 }

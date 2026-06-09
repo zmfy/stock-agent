@@ -3,6 +3,7 @@ import { QuoteRow, StockSnapshot } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import { resolveSidecarBase, fetchFundamentals, fetchQuotes, fetchMarket, fetchName, fetchNews, fetchAllStocks, orderedProviders, fetchRealtime, fetchIndexBars } from './sidecar';
 import { recordCollected } from './news-log';
+import { lastTradingDayBefore } from './trade-calendar';
 
 // ---- hot news ----
 export function listNews(limit = 30): Array<{ title: string; summary: string; published_at: string; fetched_at: string }> {
@@ -508,13 +509,45 @@ export async function refreshStock(userId: string, code: string, order?: string[
   if (q && q.rows.length) cacheQuotes(q.rows, q.source ?? 'akshare');
 }
 
+// 上证20日线斜率 = MA20(今) - MA20(昨)。bars 升序，需 ≥21 根收盘。取不到返回 null。
+export function ma20Slope(bars: Bar[]): number | null {
+  const closes = bars.map((b) => b.close).filter((c): c is number => c !== null && c !== undefined);
+  if (closes.length < 21) return null;
+  const maToday = mean(closes.slice(-20));
+  const maPrev = mean(closes.slice(-21, -1));
+  if (maToday === null || maPrev === null) return null;
+  return Math.round((maToday - maPrev) * 10000) / 10000;
+}
+
 export async function refreshMarket(userId: string, order?: string[]): Promise<boolean> {
   const base = resolveSidecarBase(userId);
   if (!base) return false;
   const ord = order ?? (await safeOrder(base, 'sentiment'));
-  const m = await fetchMarket(base, ord);
-  if (!m) return false;
-  cacheMarket(today(), m.data, m.source ?? 'akshare');
+  const m = await fetchMarket(base, ord); // 涨停/跌停/斜率（仅东方财富源，常因网络取空 → null）
+  // 斜率兜底：东方财富取不到时，用本地通达信指数自算上证20日线斜率（不依赖东方财富）。
+  // 先确保本地上证指数刷新到最近交易日，再自算。
+  let slope = m?.data.sse_ma20_slope ?? null;
+  let source = m?.source ?? null;
+  if (slope === null) {
+    try {
+      const bars = await ensureIndexBars(userId, '000001', 25, { freshThrough: lastTradingDayBefore(todayCN()) });
+      const local = ma20Slope(bars);
+      if (local !== null) {
+        slope = local;
+        source = source ?? 'tdx-local';
+      }
+    } catch {
+      /* 安静降级 */
+    }
+  }
+  const data = {
+    limit_up_count: m?.data.limit_up_count ?? null,
+    limit_down_count: m?.data.limit_down_count ?? null,
+    sse_ma20_slope: slope,
+  };
+  // 三项全空才算彻底失败（不写库）；任一有值就写当天行（部分数据也比无强）。
+  if (data.limit_up_count === null && data.limit_down_count === null && data.sse_ma20_slope === null) return false;
+  cacheMarket(today(), data, source ?? 'mixed');
   return true;
 }
 

@@ -282,3 +282,12 @@ describe('ensureIndexBars freshness (refetch when stale, not just when count low
     expect(bars.length).toBe(2);
   });
 });
+
+describe('ma20Slope (local SSE slope fallback)', () => {
+  it('returns MA20(today)-MA20(prev); null when <21 closes', () => {
+    const bars = Array.from({ length: 25 }, (_, i) => ({ date: '2026-06-' + String(i + 1).padStart(2, '0'), open: 0, high: 0, low: 0, close: 100 + i, volume: 0 }));
+    const s = svc.ma20Slope(bars);
+    expect(s).toBeCloseTo(1, 5); // closes rise by 1/day → ma20 rises by 1/day
+    expect(svc.ma20Slope(bars.slice(0, 10))).toBeNull();
+  });
+});
