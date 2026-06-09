@@ -292,3 +292,22 @@ describe('ma20Slope (local SSE slope fallback)', () => {
     expect(svc.ma20Slope(bars.slice(0, 10))).toBeNull();
   });
 });
+
+describe('cron config + status', () => {
+  it('getCronConfig default empty; set/get round-trips', () => {
+    expect(svc.getCronConfig()).toEqual({});
+    svc.setCronConfig({ nightly: { expr: '5 23 * * *', enabled: false } });
+    expect(svc.getCronConfig()).toEqual({ nightly: { expr: '5 23 * * *', enabled: false } });
+  });
+  it('records cron start/finish with duration + run_count', () => {
+    svc.recordCronStart('nightly');
+    let s = svc.getCronStatus('nightly');
+    expect(s.last_status).toBe('running');
+    svc.recordCronFinish('nightly', 'ok', 1234, null);
+    s = svc.getCronStatus('nightly');
+    expect(s).toMatchObject({ last_status: 'ok', last_duration_ms: 1234, run_count: 1 });
+    svc.recordCronStart('nightly'); svc.recordCronFinish('nightly', 'error', 50, 'boom');
+    s = svc.getCronStatus('nightly');
+    expect(s).toMatchObject({ last_status: 'error', last_error: 'boom', run_count: 2 });
+  });
+});

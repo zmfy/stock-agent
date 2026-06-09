@@ -652,6 +652,39 @@ export function setProxyConfig(cfg: ProxyConfig): void {
     .run(JSON.stringify(cfg));
 }
 
+// ---- 定时任务配置覆盖 + 运行状态 ----
+export interface CronOverride { expr?: string; enabled?: boolean }
+export type CronConfig = Record<string, CronOverride>;
+
+export function getCronConfig(): CronConfig {
+  const r = getDb().prepare("SELECT value FROM settings WHERE key='cron_config'").get() as { value: string } | undefined;
+  if (!r?.value) return {};
+  try { return JSON.parse(r.value) as CronConfig; } catch { return {}; }
+}
+export function setCronConfig(cfg: CronConfig): void {
+  getDb()
+    .prepare("INSERT INTO settings (key, value) VALUES ('cron_config', ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value")
+    .run(JSON.stringify(cfg));
+}
+
+export interface CronStatusRow { key: string; last_run_at: string | null; last_status: string | null; last_duration_ms: number | null; last_error: string | null; run_count: number }
+
+export function recordCronStart(key: string): void {
+  getDb()
+    .prepare(`INSERT INTO cron_status (key, last_run_at, last_status, run_count, updated_at)
+              VALUES (?, CURRENT_TIMESTAMP, 'running', 0, CURRENT_TIMESTAMP)
+              ON CONFLICT(key) DO UPDATE SET last_run_at=CURRENT_TIMESTAMP, last_status='running', last_error=NULL, updated_at=CURRENT_TIMESTAMP`)
+    .run(key);
+}
+export function recordCronFinish(key: string, status: 'ok' | 'error', durationMs: number, error: string | null): void {
+  getDb()
+    .prepare(`UPDATE cron_status SET last_status=?, last_duration_ms=?, last_error=?, run_count=run_count+1, updated_at=CURRENT_TIMESTAMP WHERE key=?`)
+    .run(status, durationMs, error, key);
+}
+export function getCronStatus(key: string): CronStatusRow | null {
+  return (getDb().prepare('SELECT key,last_run_at,last_status,last_duration_ms,last_error,run_count FROM cron_status WHERE key=?').get(key) as CronStatusRow) ?? null;
+}
+
 function numOrNull(v: unknown): number | null {
   const n = typeof v === 'string' ? parseFloat(v) : (v as number);
   return typeof n === 'number' && isFinite(n) ? n : null;
