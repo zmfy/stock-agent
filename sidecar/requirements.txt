@@ -5,3 +5,4 @@ pypinyin==0.51.0
 baostock==0.8.9
 easyquotation==0.7.7
 mootdx>=0.11.0
+PySocks==1.7.1
