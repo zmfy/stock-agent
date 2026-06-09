@@ -150,6 +150,9 @@ export function countStocks(): number {
 export async function syncStockUniverse(userId: string, startedBy = 'system'): Promise<void> {
   const cur = getSyncStatus();
   if (cur?.state === 'running') return; // already in progress
+  // 同步标记 running（在任何 await 之前），堵住快速二次触发的竞态——否则第二次 POST 在
+  // fetchAllStocks 期间会看到非 running 而被放行、双跑。其余分支会以真实 total 重新 beginJob。
+  beginJob('stock_universe', startedBy, 0);
   try {
     const base = resolveSidecarBase(userId);
     if (!base) {
