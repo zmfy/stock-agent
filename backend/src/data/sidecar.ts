@@ -26,6 +26,21 @@ async function postJson(url: string, timeoutMs = 30000): Promise<any | null> {
   }
 }
 
+async function postJsonBody(url: string, body: unknown, timeoutMs = 15000): Promise<any | null> {
+  try {
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body ?? {}),
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    if (!resp.ok) return null;
+    return await resp.json();
+  } catch {
+    return null;
+  }
+}
+
 async function getJson(url: string, timeoutMs = 30000): Promise<any | null> {
   try {
     // bound it so a blocked/slow data source never hangs the app
@@ -179,4 +194,18 @@ export async function tdxGetServerLive(base: string): Promise<{ addr: string; po
 function num(v: unknown): number | null {
   const n = typeof v === 'string' ? parseFloat(v) : (v as number);
   return typeof n === 'number' && isFinite(n) ? n : null;
+}
+
+// 出站代理：推送配置 / 读取生效状态 / 测试。任何错误优雅返回 null。
+export async function proxyGet(base: string): Promise<any | null> {
+  return getJson(`${base}/proxy`, 8000);
+}
+
+export async function proxySet(base: string, cfg: unknown): Promise<any | null> {
+  return postJsonBody(`${base}/proxy`, cfg, 10000);
+}
+
+export async function proxyTest(base: string, cfg?: unknown): Promise<any | null> {
+  // cfg 省略 → 测当前；传 cfg → sidecar 临时应用后测，测完恢复。真实取数可能慢，给 40s。
+  return postJsonBody(`${base}/proxy/test`, cfg ?? {}, 40000);
 }
