@@ -109,15 +109,10 @@ export function getSyncStatus(job = 'stock_universe'): JobStatus | null {
   return { ...row, cancel_requested: row.cancel_requested ?? 0, source_breakdown };
 }
 
+// 仅「正在运行」时禁止再次启动。今日已成功也允许再次手动更新——首次全量、之后增量
+// （股票库=拉一次名单+diff；行情=近10天×全量股票），负担可控，admin 可随时重取。
 export function canStartJob(job: string): boolean {
-  const st = getSyncStatus(job);
-  if (!st) return true;
-  if (st.state === 'running') return false;
-  if (st.last_success_at) {
-    const d = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai' }).format(new Date(st.last_success_at.replace(' ', 'T') + 'Z'));
-    if (d === todayCN()) return false;
-  }
-  return true;
+  return getSyncStatus(job)?.state !== 'running';
 }
 
 // ---- EOD batch ingestion: pull daily quotes for the whole local universe into the cache ----

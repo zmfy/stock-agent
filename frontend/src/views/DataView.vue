@@ -540,36 +540,40 @@ const anySyncing = computed(
 const jobLogLines = reactive<Record<string, Array<{ ts: string; level: string; message: string }>>>({ stock_universe: [], eod: [] });
 let jobTimer: ReturnType<typeof setInterval> | null = null;
 
+// 点击「立即更新」后记录启动时刻；宽限期内若服务端还没标 running，不把乐观的「启动中」降级（防进度条闪一下消失）。
+const pendingStart = reactive<Record<string, number>>({});
 async function refreshJob(job: 'stock_universe' | 'eod') {
-  try { jobs[job] = await dataApi.jobStatus(job); } catch { /* ignore */ }
+  try {
+    const st = await dataApi.jobStatus(job);
+    const since = pendingStart[job];
+    if (since) {
+      if (st?.state === 'running') { delete pendingStart[job]; }            // 服务端确认在跑
+      else if (Date.now() - since < 8000 && jobs[job]?.state === 'running') return; // 宽限期：保持乐观进度条
+      else delete pendingStart[job];                                         // 宽限期过：采用真实状态
+    }
+    jobs[job] = st;
+  } catch { /* ignore */ }
 }
 
 function pct(b: Record<string, number> | null) {
   return b ? Object.entries(b).map(([k, v]) => `${k} ${v}%`).join('、') : '';
 }
 
+// 只有「正在运行」才禁止再次更新；今日已成功也可再点（增量取数，负担小）。
 function canRun(job: 'stock_universe' | 'eod') {
-  const s = jobs[job]; if (!s) return true;
-  if (s.state === 'running') return false;
-  if (s.last_success_at) {
-    const fmt = (d: Date) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai' }).format(d);
-    if (fmt(new Date(String(s.last_success_at).replace(' ', 'T') + 'Z')) === fmt(new Date())) return false;
-  }
-  return true;
+  return jobs[job]?.state !== 'running';
 }
 
 function runDisabledTitle(job: 'stock_universe' | 'eod') {
-  const s = jobs[job]; if (!s) return '';
-  if (s.state === 'running') return '任务正在运行中';
-  if (!canRun(job)) return '今日已成功更新';
-  return '';
+  return jobs[job]?.state === 'running' ? '任务正在运行中' : '';
 }
 
 async function doRun(job: 'stock_universe' | 'eod') {
-  // 乐观:点击立刻显示进度条/「启动中…」,不等后台 + 轮询追上(否则会"点了没反应,等一会才变")。
+  // 乐观:点击立刻显示进度条/「启动中…」,不被随后的早轮询降级(宽限期由 refreshJob 守护)。
+  pendingStart[job] = Date.now();
   jobs[job] = { ...(jobs[job] || {}), state: 'running', done: 0, total: jobs[job]?.total || 0, message: '启动中…' } as any;
   try { await dataApi.runJob(job); } catch { /* 409 locked — ignore */ }
-  await refreshJob(job);
+  refreshJob(job); // 不 await；被宽限期守护，不会把乐观进度条降级
 }
 
 async function doCancel(job: 'stock_universe' | 'eod') {

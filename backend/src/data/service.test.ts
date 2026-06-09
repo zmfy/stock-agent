@@ -74,7 +74,8 @@ describe('data/service', () => {
     expect(st.state).toBe('done'); expect(st.last_success_at).toBeTruthy();
     expect(st.source_breakdown).toEqual({ tx: 90, sina: 10 });
     expect(st.cancel_requested).toBe(0);
-    expect(svc.canStartJob('eod')).toBe(false);
+    // 今日已成功后仍可再次手动更新（增量取数，负担小）；只有「正在运行」才禁止。
+    expect(svc.canStartJob('eod')).toBe(true);
   });
 
   it('canStartJob: error 状态可重试', () => {

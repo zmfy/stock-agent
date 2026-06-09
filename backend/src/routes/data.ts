@@ -228,7 +228,7 @@ function jobName(req: any): string | null { const j = String(req.params.job); re
 
 router.post('/:job/run', async (req, res) => {
   const job = jobName(req); if (!job) return errorResponse(res, 400, 'BAD_JOB', '未知任务');
-  if (!svc.canStartJob(job)) return errorResponse(res, 409, 'JOB_LOCKED', '已有用户在更新或今日已更新');
+  if (!svc.canStartJob(job)) return errorResponse(res, 409, 'JOB_LOCKED', '已有更新任务正在运行');
   const u = (req as any).user;
   const startedBy = u.username ?? u.userId;
   if (job === 'stock_universe') svc.syncStockUniverse(u.userId, startedBy);
