@@ -13,6 +13,7 @@ const PER_USER_TABLES = [
   'meetings',
   'screenings',
   'data_sources',
+  'shared_ai_optout',
 ];
 
 // Child tables keyed by a parent that belongs to the user.
