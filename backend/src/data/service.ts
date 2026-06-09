@@ -589,6 +589,34 @@ export function setTdxServerSetting(val: string): void {
     .run(val);
 }
 
+// 出站代理配置（持久化于 settings 单行 JSON；仅 admin 可设/可见，口令明文存）
+export interface ProxyConfig {
+  enabled: boolean;
+  scheme: 'http' | 'socks5';
+  host: string;
+  port: number;
+  username: string;
+  password: string;
+}
+
+const DEFAULT_PROXY: ProxyConfig = { enabled: false, scheme: 'http', host: '', port: 0, username: '', password: '' };
+
+export function getProxyConfig(): ProxyConfig {
+  const r = getDb().prepare("SELECT value FROM settings WHERE key='proxy_config'").get() as { value: string } | undefined;
+  if (!r?.value) return { ...DEFAULT_PROXY };
+  try {
+    return { ...DEFAULT_PROXY, ...JSON.parse(r.value) };
+  } catch {
+    return { ...DEFAULT_PROXY };
+  }
+}
+
+export function setProxyConfig(cfg: ProxyConfig): void {
+  getDb()
+    .prepare("INSERT INTO settings (key, value) VALUES ('proxy_config', ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value")
+    .run(JSON.stringify(cfg));
+}
+
 function numOrNull(v: unknown): number | null {
   const n = typeof v === 'string' ? parseFloat(v) : (v as number);
   return typeof n === 'number' && isFinite(n) ? n : null;

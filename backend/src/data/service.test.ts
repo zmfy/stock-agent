@@ -243,3 +243,14 @@ describe('fundamentalsIncomplete', () => {
     expect(svc.fundamentalsIncomplete(code)).toBe(false);
   });
 });
+
+describe('proxy config', () => {
+  it('returns disabled default when unset', () => {
+    const c = svc.getProxyConfig();
+    expect(c).toEqual({ enabled: false, scheme: 'http', host: '', port: 0, username: '', password: '' });
+  });
+  it('round-trips set/get incl password', () => {
+    svc.setProxyConfig({ enabled: true, scheme: 'socks5', host: '1.2.3.4', port: 1080, username: 'u', password: 'p' });
+    expect(svc.getProxyConfig()).toEqual({ enabled: true, scheme: 'socks5', host: '1.2.3.4', port: 1080, username: 'u', password: 'p' });
+  });
+});
