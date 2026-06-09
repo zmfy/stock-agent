@@ -50,6 +50,13 @@ def _install_http_hardening():
             for k, v in common.items():
                 headers.setdefault(k, v)
             kwargs["headers"] = headers
+            # 出站代理（仅 http 模式经此注入；socks5 走全局 socket 补丁，current_proxies() 为 None）
+            try:
+                import proxy as _proxy
+                if _proxy.current_proxies() and "proxies" not in kwargs:
+                    kwargs["proxies"] = _proxy.current_proxies()
+            except Exception:
+                pass
             # 给该 session 挂上带 Retry 的 adapter(只挂一次)
             if not getattr(self, "_hardened", False):
                 try:
@@ -67,9 +74,10 @@ def _install_http_hardening():
 
 _install_http_hardening()
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Body
 import akshare as ak
 import tdx
+import proxy
 
 app = FastAPI(title="stock-agent akshare sidecar")
 
@@ -658,3 +666,46 @@ def tdx_server_get():
 def tdx_server_set(addr: str = "", port: int = 0):
     tdx.set_server(addr, port)
     return {"server": tdx.get_server()}
+
+
+def _socket_socks_active():
+    import socket as _s
+    return _s.socket is not proxy._ORIG_SOCKET
+
+
+@app.get("/proxy")
+def proxy_get():
+    return {"enabled": bool(proxy.current_proxies()) or _socket_socks_active(),
+            "http_proxies": proxy.current_proxies()}
+
+
+@app.post("/proxy")
+def proxy_set(cfg: dict = Body(default={})):
+    return proxy.apply_proxy(cfg)
+
+
+@app.post("/proxy/test")
+def proxy_test(cfg: dict = Body(default=None)):
+    import time
+    temp = cfg is not None and len(cfg) > 0
+    if temp:
+        proxy.apply_proxy(cfg, remember=False)
+    t0 = time.time()
+    ok, source, err = False, None, None
+    try:
+        r = tdx.realtime("600519")           # 轻量：拉一只实时行情
+        if r and r.get("price"):
+            ok, source = True, "tdx"
+    except Exception as e:
+        err = f"tdx: {e}"
+    if not ok:
+        try:
+            q = ak.stock_zh_a_daily(symbol="sh600519", adjust="qfq")
+            if q is not None and len(q) > 0:
+                ok, source = True, "sina"
+        except Exception as e:
+            err = (err + " | " if err else "") + f"sina: {e}"
+    latency_ms = int((time.time() - t0) * 1000)
+    if temp:
+        proxy.restore_last()
+    return {"ok": ok, "latency_ms": latency_ms, "source": source, "error": err}
