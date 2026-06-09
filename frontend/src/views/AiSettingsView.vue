@@ -69,6 +69,54 @@
       </table>
       <p class="muted">勾选「启用」的模型才会进入分工池。停用不删除配置。</p>
     </section>
+
+    <!-- admin：共享给所有用户 + 配额 + 用量 -->
+    <section class="card" v-if="isAdmin && configs.length">
+      <h2>共享给所有用户</h2>
+      <p class="muted">勾选后，所有用户都能用你这个模型（走你的 Key，他们看不到 Key）。可设每窗口 token 上限与重置周期，超限对所有人暂停到下个周期。</p>
+      <div v-for="c in configs" :key="c.provider" class="share-row">
+        <label><input type="checkbox" :checked="(c.shared || 0) === 1" @change="toggleShare(c, ($event.target as HTMLInputElement).checked)" /> {{ providerLabel(c.provider) }} · {{ c.model }}</label>
+        <template v-if="(c.shared || 0) === 1 && shareForm[c.provider]">
+          <span>上限 <input type="number" v-model.number="shareForm[c.provider].maxTokens" style="width:90px" /> tokens</span>
+          <span>重置 <input type="number" v-model.number="shareForm[c.provider].periodValue" style="width:60px" />
+            <select v-model="shareForm[c.provider].periodUnit">
+              <option value="none">不重置</option><option value="hour">小时</option><option value="day">天</option><option value="week">周</option>
+            </select>
+          </span>
+          <button @click="saveShareQuota(c)">保存配额</button>
+          <button @click="openUsage(c)">查看使用情况</button>
+        </template>
+      </div>
+      <div v-if="usageOpen" class="usage">
+        <p>本窗口合计：<b>{{ usageTotal }}</b> tokens <button @click="resetUsage">清零用量</button></p>
+        <table v-if="usageRows.length"><thead><tr><th>用户</th><th>调用</th><th>tokens</th></tr></thead>
+          <tbody><tr v-for="r in usageRows" :key="r.username"><td>{{ r.username }}</td><td>{{ r.calls }}</td><td>{{ r.total_tokens }}</td></tr></tbody>
+        </table>
+        <p v-else class="muted">本窗口暂无用量。</p>
+      </div>
+    </section>
+
+    <!-- 所有用户：管理员共享的模型 -->
+    <section class="card" v-if="shared.length">
+      <h2>管理员共享的模型</h2>
+      <p class="muted">这些是管理员共享的模型，你可直接用（看不到也改不了 Key），也可与自己的模型一起用。</p>
+      <table>
+        <thead><tr><th>启用</th><th>模型</th><th>本周期额度</th></tr></thead>
+        <tbody>
+          <tr v-for="m in shared" :key="m.configId">
+            <td><input type="checkbox" :checked="m.enabledForMe" @change="toggleSharedEnabled(m)" /></td>
+            <td><span class="badge">共享</span> {{ providerLabel(m.provider) }} · {{ m.model }}</td>
+            <td>
+              <span v-if="m.quota.cap > 0" :class="{ err: m.quota.over }">
+                {{ m.quota.used }} / {{ m.quota.cap }}（剩 {{ m.quota.remaining }}）
+                <em v-if="m.quota.over"> · 本周期已用完，已暂停，下个周期恢复</em>
+              </span>
+              <span v-else class="muted">不限</span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
     </div>
 
     <div v-show="tab === 'tasks'">
@@ -109,8 +157,11 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue';
-import { aiApi, type ProviderDef, type AiConfig, type RoleAssignment } from '../api/ai';
+import { aiApi, type ProviderDef, type AiConfig, type RoleAssignment, type SharedModel } from '../api/ai';
+import { useAuthStore } from '../stores/auth';
 
+const auth = useAuthStore();
+const isAdmin = computed(() => auth.isAdmin);
 const providers = ref<ProviderDef[]>([]);
 const configs = ref<AiConfig[]>([]);
 const roles = ref<RoleAssignment[]>([]);
@@ -118,6 +169,24 @@ const busy = ref(false);
 const msg = ref(''); const msgOk = ref(false);
 const testMsg = ref(''); const testOk = ref(false);
 const roleMsg = ref(''); const roleOk = ref(false);
+
+// 共享模型
+const shared = ref<SharedModel[]>([]);
+const shareForm = reactive<Record<string, { maxTokens: number; periodValue: number; periodUnit: 'none' | 'hour' | 'day' | 'week' }>>({});
+const usageOpen = ref<string | null>(null);
+const usageRows = ref<Array<{ username: string; calls: number; total_tokens: number }>>([]);
+const usageTotal = ref(0);
+function periodToSeconds(v: number, unit: string): number {
+  if (unit === 'none' || !v) return 0;
+  const mult: Record<string, number> = { hour: 3600, day: 86400, week: 604800 };
+  return Math.floor(v * (mult[unit] || 0));
+}
+function secondsToForm(sec: number): { periodValue: number; periodUnit: 'none' | 'hour' | 'day' | 'week' } {
+  if (!sec) return { periodValue: 0, periodUnit: 'none' };
+  if (sec % 604800 === 0) return { periodValue: sec / 604800, periodUnit: 'week' };
+  if (sec % 86400 === 0) return { periodValue: sec / 86400, periodUnit: 'day' };
+  return { periodValue: Math.round(sec / 3600), periodUnit: 'hour' };
+}
 
 const form = reactive({ provider: '', apiKey: '', baseUrl: '', model: '', customModel: '' });
 
@@ -158,6 +227,43 @@ function edit(c: AiConfig) {
 async function reload() {
   configs.value = (await aiApi.getConfigs()).data.data;
   roles.value = (await aiApi.getRoles()).data.data;
+  shared.value = (await aiApi.getShared()).data.data;
+  for (const c of configs.value) {
+    if (!shareForm[c.provider]) {
+      const p = secondsToForm(c.sharePeriodSeconds || 0);
+      shareForm[c.provider] = { maxTokens: c.shareMaxTokens || 0, periodValue: p.periodValue, periodUnit: p.periodUnit };
+    }
+  }
+}
+
+async function toggleShare(c: AiConfig, on: boolean) {
+  const f = shareForm[c.provider] || { maxTokens: 0, periodValue: 0, periodUnit: 'none' as const };
+  await aiApi.setShared(c.provider, { shared: on, maxTokens: f.maxTokens, periodSeconds: periodToSeconds(f.periodValue, f.periodUnit) });
+  await reload();
+}
+async function saveShareQuota(c: AiConfig) {
+  const f = shareForm[c.provider];
+  await aiApi.setShared(c.provider, { shared: true, maxTokens: f.maxTokens, periodSeconds: periodToSeconds(f.periodValue, f.periodUnit) });
+  await reload();
+}
+async function openUsage(c: AiConfig) {
+  const cfgId = shared.value.find((s) => s.provider === c.provider)?.configId;
+  if (!cfgId) return;
+  usageOpen.value = cfgId;
+  await loadUsage(cfgId);
+}
+async function loadUsage(cfgId: string) {
+  const d = (await aiApi.getSharedUsage(cfgId)).data.data;
+  usageRows.value = d.rows; usageTotal.value = d.total;
+}
+async function resetUsage() {
+  if (!usageOpen.value) return;
+  await aiApi.resetSharedUsage(usageOpen.value);
+  await loadUsage(usageOpen.value);
+}
+async function toggleSharedEnabled(m: SharedModel) {
+  await aiApi.setSharedEnabled(m.configId, !m.enabledForMe);
+  await reload();
 }
 
 async function doTest() {
@@ -226,6 +332,9 @@ const modelOptions = computed(() => {
     const models = Array.from(new Set([c.model, ...(def?.models || [])])).filter(Boolean);
     for (const m of models) out.push({ key: `${c.provider}|${m}`, provider: c.provider, model: m, label: `${providerLabel(c.provider)} · ${m}` });
   }
+  for (const m of shared.value.filter((s) => s.enabledForMe)) {
+    out.push({ key: `shared:${m.configId}`, provider: m.provider, model: m.model, label: m.label });
+  }
   return out;
 });
 function roleValue(r: RoleAssignment) {
@@ -239,6 +348,8 @@ async function onRoleChange(r: RoleAssignment, ev: Event) {
   try {
     if (val === '__auto__') {
       await aiApi.setRole(r.role, { mode: 'auto' });
+    } else if (val.startsWith('shared:')) {
+      await aiApi.setRole(r.role, { mode: 'manual', sharedConfigId: val.slice(7) });
     } else {
       const [provider, model] = val.split('|');
       await aiApi.setRole(r.role, { mode: 'manual', provider, model });
@@ -261,6 +372,9 @@ onMounted(async () => {
 
 <style scoped>
 .ai { max-width: 960px; margin: 0; padding: 0 16px; }
+.badge { background: var(--accent, #e5484d); color: #fff; border-radius: 4px; padding: 0 6px; font-size: 12px; }
+.share-row { padding: 6px 0; border-bottom: 1px solid #eee; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.usage { margin-top: 12px; }
 .bar { display: flex; justify-content: space-between; align-items: baseline; }
 .hint { color: #777; font-size: 13px; }
 .card { border: 1px solid #e5e5e5; border-radius: 8px; padding: 16px; margin-top: 16px; }
