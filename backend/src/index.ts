@@ -110,6 +110,26 @@ if (require.main === module) {
     // 重新应用持久化的通达信服务器选择（扛 sidecar 重启）
     const sidecarMod = require('./data/sidecar');
     const { getTdxServerSetting } = require('./data/service');
+    // 先重推出站代理（保证 tdx 在代理生效后再连）
+    if (admin) {
+      const adminId = admin.id;
+      const { getProxyConfig } = require('./data/service');
+      const pc = getProxyConfig();
+      (async () => {
+        for (let i = 0; i < 24; i++) {
+          const base = sidecarMod.resolveSidecarBase(adminId);
+          if (base && (await sidecarMod.pingHealth(base).catch(() => false))) {
+            const r = await sidecarMod.proxySet(base, pc).catch(() => null);
+            if (r) {
+              console.log(`[startup] 出站代理已应用到 sidecar：enabled=${pc.enabled} scheme=${pc.scheme}`);
+              return;
+            }
+          }
+          await new Promise((r) => setTimeout(r, 5000));
+        }
+        console.warn('[startup] 未能把出站代理应用到 sidecar（已重试 ~2 分钟）');
+      })();
+    }
     if (admin) {
       const sv = getTdxServerSetting();
       if (sv) {
