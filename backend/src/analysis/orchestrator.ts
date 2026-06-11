@@ -118,12 +118,12 @@ export interface RunOptions {
   aiCall?: (prompt: string) => Promise<{ raw: string; provider: string; model: string }>;
 }
 
-// 无核心原则时的通用分析 prompt：基本面 + 当前走势 + 可能走势，明确声明不构成买卖结论。
+// 无当前策略时的通用分析 prompt：基本面 + 当前走势 + 可能走势，明确声明不构成买卖结论。
 export function buildGeneralAnalysisPrompt(persona: string, snapshot: StockSnapshot, directives?: string): string {
   const v = (x: number | null | undefined, suffix = '') => (x === null || x === undefined ? '—' : `${x}${suffix}`);
   return `${persona || '你是一位资深 A 股操盘手。'}
 ${directives ? `\n${directives}\n` : ''}
-用户【尚未设定核心原则】。请基于下面这只股票的基本面与当前走势做一份通用分析，并在结论开头明确声明「未设核心原则，以下为通用分析，不构成买卖结论」。
+用户【尚未设定当前策略】。请基于下面这只股票的基本面与当前走势做一份通用分析，并在结论开头明确声明「未设当前策略，以下为通用分析，不构成买卖结论」。
 
 股票 ${snapshot.code}${snapshot.name ? '（' + snapshot.name + '）' : ''} 当前数据（系统已精确算出，请勿质疑或重算）：
 PE(TTM): ${v(snapshot.pe)}　PB: ${v(snapshot.pb)}　PS: ${v(snapshot.ps)}　ROE(TTM): ${v(snapshot.roe_ttm, '%')}　归母净利: ${v(snapshot.net_profit)}
@@ -132,11 +132,11 @@ PE(TTM): ${v(snapshot.pe)}　PB: ${v(snapshot.pb)}　PS: ${v(snapshot.ps)}　ROE
 请分析：① 基本面好坏（盈利能力/估值）；② 当前走势（相对均线与年内高点的位置、强弱）；③ 基于一般股市常识，后续可能的走势与需要注意的风险。
 只输出如下 JSON，不要任何额外文字：
 {
-  "one_liner":"一句话通用结论（以「未设核心原则，仅供参考」开头）",
+  "one_liner":"一句话通用结论（以「未设当前策略，仅供参考」开头）",
   "a_conclusion":"基本面与当前/可能走势的综合分析",
   "b_conclusion":"",
   "exception_channel":null,
-  "position_suggestion":"通用提示：未设核心原则，建议先和来财聊出一套原则再做买卖决策",
+  "position_suggestion":"通用提示：未设当前策略，建议先和来财聊出一套原则再做买卖决策",
   "teach_notes":[]
 }`;
 }
@@ -156,7 +156,7 @@ export async function runAnalysis(userId: string, code: string, opts: RunOptions
 
   const aiCall = opts.aiCall || ((p: string) => defaultAiCall(userId, p));
 
-  // 无核心原则：走通用分析（不评门槛、不给买卖结论、rulebook_version_id=null）
+  // 无当前策略：走通用分析（不评门槛、不给买卖结论、rulebook_version_id=null）
   if (!rb) {
     const persona = getCorePersona(userId) || '';
     const prompt = buildGeneralAnalysisPrompt(persona, snapshot, skillDirectives(userId));

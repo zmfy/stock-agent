@@ -77,7 +77,7 @@ describe('runAnalysis degraded (no rulebook)', () => {
     const report = await orch.runAnalysis(U, CODE, {
       aiCall: async () => ({
         raw: JSON.stringify({
-          one_liner: '未设核心原则，仅供参考：基本面尚可',
+          one_liner: '未设当前策略，仅供参考：基本面尚可',
           a_conclusion: '基本面尚可，趋势中性',
           b_conclusion: '',
           exception_channel: null,
@@ -93,6 +93,6 @@ describe('runAnalysis degraded (no rulebook)', () => {
     expect(report.rulebook_version_id ?? null).toBeNull();
     const gates = typeof report.gate_results === 'string' ? JSON.parse(report.gate_results) : report.gate_results;
     expect(gates).toEqual([]);
-    expect(report.one_liner).toContain('未设核心原则');
+    expect(report.one_liner).toContain('未设当前策略');
   });
 });

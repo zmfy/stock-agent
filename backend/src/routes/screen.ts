@@ -15,7 +15,7 @@ router.post('/run', async (req: Request, res: Response) => {
     const out = await svc.runScreen(req.user!.userId, parsed.data);
     successResponse(res, out, '选股完成', 201);
   } catch (e: any) {
-    if (e.message === 'NO_RULEBOOK') return errorResponse(res, 400, 'BUSINESS_CONFLICT', '请先在「核心规则」导入或设定规则版本');
+    if (e.message === 'NO_RULEBOOK') return errorResponse(res, 400, 'BUSINESS_CONFLICT', '请先在「当前策略」导入或设定规则版本');
     return errorResponse(res, 502, 'UPSTREAM_ERROR', `选股失败：${e.message || '未知错误'}`);
   }
 });

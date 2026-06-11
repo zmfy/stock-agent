@@ -17,10 +17,10 @@ function num(v: any): number | null {
 }
 
 export function buildSynthesizePrompt(conversation: string): string {
-  return `你是核心原则合成助手。下面是你（来财）和用户关于他平时怎么选股、怎么买卖的访谈对话：
+  return `你是当前策略合成助手。下面是你（来财）和用户关于他平时怎么选股、怎么买卖的访谈对话：
 ${conversation}
 
-请据用户的【真实表述】，从零合成一整套可执行的核心原则。没聊到的维度可留空或给保守默认，【不要】编造用户没说过的偏好。
+请据用户的【真实表述】，从零合成一整套可执行的当前策略。没聊到的维度可留空或给保守默认，【不要】编造用户没说过的偏好。
 
 硬门槛的 field 只能用下面这些真实存在的数据字段（用别的字段会被丢弃）：
 roe_ttm(ROE%), pe(市盈率), pb(市净率), ps(市销率), net_profit(归母净利,元), turnover_rate(换手率%), ma5/ma10/ma20/ma60(均线), close(现价), year_high(年内最高), limit_up_count(涨停家数), limit_down_count(跌停家数), sse_ma20_slope(上证20日线斜率)
@@ -80,9 +80,9 @@ export function validateSynth(obj: any): { versionLabel: string; proposal: Propo
 
   const persona = obj?.persona
     ? String(obj.persona)
-    : '你是一位有纪律的 A 股操盘手，严格执行自己的核心原则，不情绪化、不预测涨跌。';
+    : '你是一位有纪律的 A 股操盘手，严格执行自己的当前策略，不情绪化、不预测涨跌。';
 
-  return { versionLabel, proposal: { persona, note: '从访谈合成核心原则', gates, softRules, positionRules } };
+  return { versionLabel, proposal: { persona, note: '从访谈合成当前策略', gates, softRules, positionRules } };
 }
 
 export async function synthesizeRulebook(

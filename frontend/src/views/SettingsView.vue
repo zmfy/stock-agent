@@ -41,7 +41,7 @@
         <button @click="doBackup" :disabled="acctBusy">立即备份当前数据</button>
         <button class="danger" @click="doReset" :disabled="acctBusy">重新运行设置向导（清空所有数据）</button>
       </div>
-      <p class="warnline">⚠️ “重新运行设置向导”会<b>清空你当前的全部数据</b>：核心规则、AI 配置、能力插件、主/子 agent 及其记忆、所有对话与分析报告、早晚会、数据源等。系统会在清空前<b>自动备份一次</b>，可随时恢复。</p>
+      <p class="warnline">⚠️ “重新运行设置向导”会<b>清空你当前的全部数据</b>：当前策略、AI 配置、能力插件、主/子 agent 及其记忆、所有对话与分析报告、早晚会、数据源等。系统会在清空前<b>自动备份一次</b>，可随时恢复。</p>
       <p v-if="acctMsg" :class="acctOk ? 'ok-msg' : 'err'">{{ acctMsg }}</p>
 
       <table v-if="backups.length" class="bk">
@@ -167,7 +167,7 @@ async function doBackup() {
 }
 async function doReset() {
   if (!confirm('确定要重新运行设置向导吗？这会清空你当前的全部数据（已自动备份，可恢复）。')) return;
-  if (!confirm('再次确认：所有核心规则、AI 配置、agent 及记忆、对话、报告都会被清空。继续？')) return;
+  if (!confirm('再次确认：所有当前策略、AI 配置、agent 及记忆、对话、报告都会被清空。继续？')) return;
   acctBusy.value = true; acctMsg.value = '';
   try {
     await accountApi.reset();

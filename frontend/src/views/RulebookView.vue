@@ -1,13 +1,13 @@
 <template>
   <div class="rulebook">
     <header class="bar">
-      <h1>核心规则</h1>
+      <h1>当前策略</h1>
       <router-link to="/">返回</router-link>
     </header>
 
     <!-- 尚未导入 -->
     <section v-if="!loading && !active" class="card empty">
-      <p>你还没有核心规则。导入 V3.0 双系统基线作为起点，之后可以不断优化、形成版本。</p>
+      <p>你还没有当前策略。导入 V3.0 双系统基线作为起点，之后可以不断优化、形成版本。</p>
       <button @click="doInit" :disabled="busy">导入 V3.0 基线</button>
       <p v-if="error" class="err">{{ error }}</p>
     </section>

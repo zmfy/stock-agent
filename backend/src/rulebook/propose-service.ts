@@ -29,7 +29,7 @@ export function buildProposePrompt(active: FullRulebook, instruction: string, co
     gates: active.gates.map((g) => ({ gate_key: g.gate_key, system: g.system, label: g.label, field: g.field, op: g.op, threshold: g.threshold, threshold2: g.threshold2, veto: g.veto })),
     softRules: active.softRules.map((r) => ({ system: r.system, text: r.text })),
   };
-  return `你是核心原则维护助手。当前生效规则（仅供参考）：
+  return `你是当前策略维护助手。当前生效规则（仅供参考）：
 ${JSON.stringify(cur)}
 
 用户的修改诉求与讨论：
@@ -220,7 +220,7 @@ export async function applyProposal(
   const active = getActive(userId);
   let note = proposal.note || '规则调整';
   // 首个版本（无 active，如访谈合成）不去 AI 提炼改动理由——既无「改动」可比，也避免多一次可能失败的调用；
-  // proposal.note 已是有意义的说明（如「从访谈合成核心原则」）。
+  // proposal.note 已是有意义的说明（如「从访谈合成当前策略」）。
   if (sessionId && active) {
     const discussion = getMessages(userId, sessionId)
       .map((m: any) => `${m.role === 'user' ? '用户' : '助手'}：${m.content}`)

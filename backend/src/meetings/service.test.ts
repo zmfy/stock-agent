@@ -131,7 +131,7 @@ describe('meetings service', () => {
 
 describe('meeting prompts honor hasRulebook', () => {
   it('morning analysis: no rulebook => no A/B gate language, forbids picking stocks', () => {
-    const p = svc.buildMorningAnalysisPrompt('persona', '大盘数据', '（用户尚未设定核心原则）', '数据整理', false);
+    const p = svc.buildMorningAnalysisPrompt('persona', '大盘数据', '（用户尚未设定当前策略）', '数据整理', false);
     expect(p).toContain('只研判大盘');
     expect(p).toContain('不要推荐或点名任何个股');
     expect(p).not.toContain('A / B 系统今日是否开闸');
@@ -143,7 +143,7 @@ describe('meeting prompts honor hasRulebook', () => {
   });
 
   it('morning synth: no rulebook => forbids individual stocks', () => {
-    const p = svc.buildMorningSynthPrompt('persona', '大盘', '（用户尚未设定核心原则）', 'd', 'a', 'q', false);
+    const p = svc.buildMorningSynthPrompt('persona', '大盘', '（用户尚未设定当前策略）', 'd', 'a', 'q', false);
     expect(p).toContain('不要推荐或点名任何个股');
   });
 
@@ -153,7 +153,7 @@ describe('meeting prompts honor hasRulebook', () => {
   });
 
   it('evening review: no rulebook => no rule-tuning-by-gate language', () => {
-    const p = svc.buildEveningReviewPrompt('persona', '（用户尚未设定核心原则）', 'analysis', [], false);
+    const p = svc.buildEveningReviewPrompt('persona', '（用户尚未设定当前策略）', 'analysis', [], false);
     expect(p).toContain('只复盘大盘与板块');
   });
 });

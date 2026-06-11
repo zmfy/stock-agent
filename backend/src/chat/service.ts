@@ -26,17 +26,17 @@ export interface ChatMessage {
 const KIND_FRAMING: Record<ChatKind, string> = {
   general: '与用户自由交流操盘相关话题。',
   core_principle: '与用户探讨核心选股/操作原则的修改；给出建议但不替用户做决定。',
-  stock: '针对某只股票，结合核心原则与已算出的门槛结果与用户讨论。',
+  stock: '针对某只股票，结合当前策略与已算出的门槛结果与用户讨论。',
   morning: '盘前早会：基于大盘与板块信息给出今日操作方向。',
   evening: '盘后晚会：复盘今日操作，总结成败、找原因。',
-  screen: '按核心原则的选股讨论：解释本次选股结果与依据，回答关于入选/未入选个股的追问；不替用户做买卖决定。',
+  screen: '按当前策略的选股讨论：解释本次选股结果与依据，回答关于入选/未入选个股的追问；不替用户做买卖决定。',
 };
 
 const CORE_PRINCIPLE_INTERVIEW_FRAMING =
-  '用户还没有核心原则。你要用【引导式半结构化】提问，一次只问 1–2 个问题，循序渐进地了解：' +
+  '用户还没有当前策略。你要用【引导式半结构化】提问，一次只问 1–2 个问题，循序渐进地了解：' +
   '① 看基本面还是技术面（或都看）；② 偏好什么股（蓝筹/成长/题材/低估…）；③ 持股周期；' +
   '④ 买入信号；⑤ 卖出/止损习惯；⑥ 单票仓位、能接受的回撤。' +
-  '聊到信息足够时，提示用户点下方「生成核心原则」按钮。不要替用户编造他没说过的偏好。';
+  '聊到信息足够时，提示用户点下方「生成当前策略」按钮。不要替用户编造他没说过的偏好。';
 
 export function createSession(userId: string, kind: ChatKind, refId?: string | null, title?: string): string {
   const id = uuidv4();
@@ -149,7 +149,7 @@ function reportContext(report: any): string {
     .map((g: any) => `${g.label}(实测 ${g.actual})`)
     .join('、');
   return [
-    `已对 ${report.stock_code}${report.stock_name ? '（' + report.stock_name + '）' : ''} 按当前核心原则做过判定：`,
+    `已对 ${report.stock_code}${report.stock_name ? '（' + report.stock_name + '）' : ''} 按当前策略做过判定：`,
     `一句话：${report.one_liner}`,
     `A系统：${report.a_conclusion}`,
     `B系统：${report.b_conclusion}`,
@@ -210,7 +210,7 @@ export async function postMessage(userId: string, sessionId: string, content: st
       const hist = listVersionHistory(userId, 5)
         .map((v) => `· ${v.version_label}（${(v.created_at || '').slice(0, 10)}）：${v.note || '（无说明）'}`)
         .join('\n');
-      extra = `当前核心原则【${rb.version.version_label}】人设：${rb.version.persona}\n硬门槛：${g}\n\n原则演进记忆（最近变更，知道为什么是现在这样）：\n${hist}`;
+      extra = `当前策略【${rb.version.version_label}】人设：${rb.version.persona}\n硬门槛：${g}\n\n原则演进记忆（最近变更，知道为什么是现在这样）：\n${hist}`;
     }
   }
   // 行情数据注入（个股/大盘，动态窗口）。仅当调用方未显式传 extraContext 时。

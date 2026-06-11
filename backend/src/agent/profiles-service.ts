@@ -9,12 +9,12 @@ export const PROFILE_ROLES = ['core', 'data', 'analysis', 'qualitative', 'review
 export type ProfileRole = (typeof PROFILE_ROLES)[number];
 
 const DEFAULT_MAIN_PERSONA =
-  '你是用户的主操盘 agent：经验丰富、纪律严明，严格按用户设定的核心原则判断「今天有没有资格、用哪套规则做」，不预测涨跌、不情绪化。';
+  '你是用户的主操盘 agent：经验丰富、纪律严明，严格按用户设定的当前策略判断「今天有没有资格、用哪套规则做」，不预测涨跌、不情绪化。';
 
 function defaultPersona(role: string): string {
   if (role === 'core') return DEFAULT_MAIN_PERSONA;
   const r = getRole(role);
-  return `你是主 agent 的「${r?.label ?? role}」子助手：${r?.hint ?? ''}。严格服务于主 agent 的核心原则。`;
+  return `你是主 agent 的「${r?.label ?? role}」子助手：${r?.hint ?? ''}。严格服务于主 agent 的当前策略。`;
 }
 
 interface ProfileRow {

@@ -55,13 +55,13 @@
               <h2>你好，我是来财。🤝</h2>
 
               <div v-if="needsInit" class="cp-cta">
-                <div class="cp-cta-title">🎯 你还没有核心原则</div>
-                <p class="cp-cta-desc">核心原则是我帮你选股、判断买卖的依据。现在还不能「按原则选股」，早晚会也只看大盘与板块。</p>
-                <button class="cp-cta-btn" @click="startInterview">🗣 和来财聊出我的核心原则</button>
+                <div class="cp-cta-title">🎯 你还没有当前策略</div>
+                <p class="cp-cta-desc">当前策略是我帮你选股、判断买卖的依据。现在还不能「按原则选股」，早晚会也只看大盘与板块。</p>
+                <button class="cp-cta-btn" @click="startInterview">🗣 和来财聊出我的当前策略</button>
                 <div class="cp-cta-alt"><router-link to="/onboarding">📋 或：选个模板快速开始 →</router-link></div>
               </div>
 
-              <p class="muted">输入股票代码 / 名称 / 拼音，开一个该股的分析讨论；或在右侧操作框点「核心原则讨论 / 更换模板」。本系统是操盘专用工具，只做个股与核心原则的讨论。</p>
+              <p class="muted">输入股票代码 / 名称 / 拼音，开一个该股的分析讨论；或在右侧操作框点「当前策略讨论 / 更换模板」。本系统是操盘专用工具，只做个股与当前策略的讨论。</p>
               <div class="qbox">
                 <StockPicker placeholder="输入股票代码 / 名称 / 拼音，开个股讨论" @pick="onDefaultPick" />
               </div>
@@ -71,12 +71,12 @@
               <div class="title">
                 {{ active.title || sessionLabel(active) }}
                 <span v-if="active.kind === 'stock'" class="stock-head">
-                  <button class="mini" :disabled="analyzing" @click="doAnalyze(active)">{{ analyzing ? '按原则分析中…' : '🔄 重新按核心原则分析' }}</button>
+                  <button class="mini" :disabled="analyzing" @click="doAnalyze(active)">{{ analyzing ? '按原则分析中…' : '🔄 重新按当前策略分析' }}</button>
                   <button class="mini" @click="openReport(active.ref_id!)">完整报告</button>
                 </span>
                 <button class="mini clear-cur" @click="clearCurrent" title="清空当前会话的消息">🧹 清理</button>
               </div>
-              <div v-if="analyzing" class="analyzing">正在按你的核心原则分析 {{ active.ref_id }} …</div>
+              <div v-if="analyzing" class="analyzing">正在按你的当前策略分析 {{ active.ref_id }} …</div>
               <div v-if="active && generating.has(active.kind)" class="gen-banner">
                 ⏳ 正在生成，可能需要一会儿。你可以先去别处，稍后回到本会话查看结果。
               </div>
@@ -145,7 +145,7 @@
         </div>
         <div v-if="proposal && synthFromScratch" class="msg assistant">
           <div class="bubble proposal-card">
-            <h4>📋 来财据我们的聊天生成的核心原则：<b>{{ proposal.suggestedLabel }}</b></h4>
+            <h4>📋 来财据我们的聊天生成的当前策略：<b>{{ proposal.suggestedLabel }}</b></h4>
             <p class="synth-persona"><b>人设：</b>{{ (proposal as any).proposal.persona }}</p>
             <div v-for="sys in synthSystems" :key="sys" class="synth-sys">
               <b>{{ sys }} 系统硬门槛：</b>
@@ -189,10 +189,10 @@
             <button v-else class="ops-btn dashed" @click="genMeeting('evening')">🌙 生成今日晚会</button>
 
             <!-- 选股 -->
-            <button class="ops-btn" @click="runScreen">🔍 按核心原则选股</button>
+            <button class="ops-btn" @click="runScreen">🔍 按当前策略选股</button>
 
-            <!-- 核心原则讨论 / 更换模板（合并入口） -->
-            <button class="ops-btn" :class="{ active: active?.kind === 'core_principle' }" @click="openPrincipleAndTemplates">📜 核心原则讨论 / 更换模板</button>
+            <!-- 当前策略讨论 / 更换模板（合并入口） -->
+            <button class="ops-btn" :class="{ active: active?.kind === 'core_principle' }" @click="openPrincipleAndTemplates">📜 当前策略讨论 / 更换模板</button>
 
             <div v-if="tplOpen" class="tplswitch">
               <div class="tpl-head">
@@ -221,16 +221,16 @@
                     </span>
                   </div>
                 </template>
-                <button @click="applyCompose">换入为当前核心原则</button>
+                <button @click="applyCompose">换入为当前策略</button>
               </div>
               <span v-if="tplMsg" class="ok-msg">{{ tplMsg }}</span>
             </div>
 
-            <!-- 让 agent 提议修改（进入核心原则讨论后显示，在换模板按钮下边） -->
+            <!-- 让 agent 提议修改（进入当前策略讨论后显示，在换模板按钮下边） -->
             <template v-if="active?.kind === 'core_principle'">
               <div class="propose-bar">
                 <button v-if="needsInit" class="propose-btn" :disabled="synthesizing" @click="synthesizePrinciple">
-                  <span v-if="synthesizing" class="spinner"></span>{{ synthesizing ? '来财生成中…' : '🛠 根据我们的聊天，帮我生成核心原则' }}
+                  <span v-if="synthesizing" class="spinner"></span>{{ synthesizing ? '来财生成中…' : '🛠 根据我们的聊天，帮我生成当前策略' }}
                 </button>
                 <button v-else class="propose-btn" :disabled="proposing" @click="propose">
                   <span v-if="proposing" class="spinner"></span>{{ proposing ? 'agent 拟定中…' : '🛠 根据本次讨论，让 agent 提议修改规则' }}
@@ -302,7 +302,7 @@ const auth = useAuthStore();
 
 // 系统设置：右侧内嵌这些页面，左栏不变
 const SETTINGS = [
-  { key: 'rulebook', label: '核心规则', icon: '📜', comp: RulebookView },
+  { key: 'rulebook', label: '当前策略', icon: '📜', comp: RulebookView },
   { key: 'meetings', label: '早晚会历史', icon: '🗓', comp: MeetingsHistoryView },
   { key: 'analysis', label: '分析历史', icon: '📊', comp: AnalysisView },
   { key: 'data', label: '数据', icon: '📈', comp: DataView },
@@ -398,7 +398,7 @@ const tplMsg = ref('');
 function labelOfKey(k: string) {
   return templates.value.find((t) => t.key === k)?.label || k;
 }
-// 合并入口：进入核心原则讨论 + 展开模板区
+// 合并入口：进入当前策略讨论 + 展开模板区
 async function openPrincipleAndTemplates() {
   tplOpen.value = true;
   await openCorePrinciple();
@@ -408,7 +408,7 @@ async function previewCompose() {
   try {
     composeRes.value = (await rulebookApi.composePreview(tplSelected.value)).data.data;
     orderedKeys.value = [...tplSelected.value];
-    // 预览组合后直接进入核心原则讨论（随后右侧会显示「让 agent 提议修改规则」）
+    // 预览组合后直接进入当前策略讨论（随后右侧会显示「让 agent 提议修改规则」）
     await openCorePrinciple();
   } catch (e: any) {
     chatErr.value = e.response?.data?.message || '预览失败';
@@ -422,11 +422,11 @@ function moveKey(i: number, dir: number) {
 }
 async function applyCompose() {
   if (!orderedKeys.value.length) return;
-  if (!confirm('换入为当前核心原则？会新建一个版本并设为当前使用（旧版本保留可回滚）。')) return;
+  if (!confirm('换入为当前策略？会新建一个版本并设为当前使用（旧版本保留可回滚）。')) return;
   try {
     await rulebookApi.applyCompose(orderedKeys.value, active.value?.id);
     activeRulebook.value = (await rulebookApi.getActive()).data.data;
-    tplMsg.value = '已换入组合模板。下次进入核心原则讨论将重新开始';
+    tplMsg.value = '已换入组合模板。下次进入当前策略讨论将重新开始';
     composeRes.value = null;
     tplSelected.value = [];
   } catch (e: any) {
@@ -441,10 +441,10 @@ function gateCond(g: Gate) {
 function buildCpBriefing(rb: FullRulebook | null): string {
   if (!rb)
     return (
-      '你好，我是来财。你还没有核心原则，我们用聊天的方式一起把它定出来。\n' +
+      '你好，我是来财。你还没有当前策略，我们用聊天的方式一起把它定出来。\n' +
       '我会问你几个问题，了解你平时怎么选股、怎么买卖；你照实说就行，没想清楚的也没关系。\n\n' +
       '先聊第一个：你平时主要看公司基本面（业绩、估值），还是看走势（均线、突破），还是两者都看？\n\n' +
-      '（聊得差不多了，点下方「🛠 根据我们的聊天，帮我生成核心原则」，我就帮你总结成一套规则。）'
+      '（聊得差不多了，点下方「🛠 根据我们的聊天，帮我生成当前策略」，我就帮你总结成一套规则。）'
     );
   const systems = [...new Set(rb.gates.map((g) => g.system))].sort();
   const blocks = systems
@@ -457,7 +457,7 @@ function buildCpBriefing(rb: FullRulebook | null): string {
   const prioLine = Array.isArray(prio) && prio.length > 1 ? `\n系统优先级：${prio.join(' > ')}\n` : '';
   const changed = rb.version.created_at ? `（最后更换：${fmtCNDate(rb.version.created_at)}）` : '';
   return (
-    `【当前使用的核心原则 ${rb.version.version_label}${changed}】\n` +
+    `【当前策略 ${rb.version.version_label}${changed}】\n` +
     `人设：${rb.version.persona}\n${prioLine}\n` +
     `${blocks}\n\n` +
     `———\n你想优化哪一方面？例如：放宽/收紧某条门槛、增删条件、调整仓位或止损、修改人设。\n` +
@@ -468,7 +468,7 @@ const briefing = computed(() => {
   if (active.value?.kind === 'morning') return meetings.value.morning?.content || '';
   if (active.value?.kind === 'evening') return meetings.value.evening?.content || '';
   if (active.value?.kind === 'core_principle') return buildCpBriefing(activeRulebook.value);
-  if (active.value?.kind === 'screen') return screen.value ? (screen.value.note + (screen.value.discussion ? '\n\n' + screen.value.discussion : '')) : '点右侧「按核心原则选股」开始';
+  if (active.value?.kind === 'screen') return screen.value ? (screen.value.note + (screen.value.discussion ? '\n\n' + screen.value.discussion : '')) : '点右侧「按当前策略选股」开始';
   return '';
 });
 
@@ -480,7 +480,7 @@ const briefingTime = computed<string | null>(() => {
   return null;
 });
 
-// 核心原则修改提议
+// 当前策略修改提议
 const proposal = ref<ProposeResult | null>(null);
 const proposedAt = ref<string>('');
 const proposing = ref(false);
@@ -533,7 +533,7 @@ async function synthesizePrinciple() {
   } catch (e: any) {
     const msg = e.response?.data?.message || '生成失败';
     chatErr.value = msg;
-    await noteErrorToSession(active.value?.id, `生成核心原则失败：${msg}`);
+    await noteErrorToSession(active.value?.id, `生成当前策略失败：${msg}`);
   } finally {
     synthesizing.value = false;
   }
@@ -574,7 +574,7 @@ function kindIcon(k: ChatKind) {
   return icons[k] || '💬';
 }
 function sessionLabel(s: ChatSession) {
-  if (s.kind === 'core_principle') return '核心原则探讨';
+  if (s.kind === 'core_principle') return '当前策略探讨';
   if (s.kind === 'stock') return `个股 ${s.ref_id || ''}`;
   if (s.kind === 'screen') return '选股讨论';
   return '新对话';
@@ -711,16 +711,16 @@ async function noteErrorToSession(sessionId: string | undefined | null, msg: str
 async function openCorePrinciple() {
   let s = sessions.value.find((x) => x.kind === 'core_principle');
   if (!s) {
-    const id = (await chatApi.createSession('core_principle', null, '核心原则探讨')).data.data.id;
+    const id = (await chatApi.createSession('core_principle', null, '当前策略探讨')).data.data.id;
     await loadSessions();
     s = sessions.value.find((x) => x.id === id);
   }
   if (s) {
     if (needsInit.value) {
-      // 访谈模式（无核心原则）：保留已有对话，重开不清空，否则会丢失正在进行的访谈记录
+      // 访谈模式（无当前策略）：保留已有对话，重开不清空，否则会丢失正在进行的访谈记录
       await open(s);
     } else {
-      // 修改讨论模式（已有核心原则）：每次重开都重置，基于当前规则重新讨论
+      // 修改讨论模式（已有当前策略）：每次重开都重置，基于当前规则重新讨论
       await chatApi.clearMessages(s.id);
       await open(s);
       messages.value = [];
@@ -782,12 +782,12 @@ async function openMeeting(kind: 'morning' | 'evening') {
 
 const AGENT_NAME = '来财'; // 主 agent 的名字
 
-// 默认页查询框：输入「来财」与主 agent 讨论核心原则，否则按股票开个股讨论
+// 默认页查询框：输入「来财」与主 agent 讨论当前策略，否则按股票开个股讨论
 function onDefaultPick(val: string) {
   if (val.trim() === AGENT_NAME) return summonMainAgent();
   return openStockCode(val);
 }
-// 呼叫主 agent 来财 = 进入核心原则讨论（本系统是操盘工具，不做无目的闲聊）
+// 呼叫主 agent 来财 = 进入当前策略讨论（本系统是操盘工具，不做无目的闲聊）
 async function summonMainAgent() {
   await openCorePrinciple();
 }
@@ -822,7 +822,7 @@ async function openScreen() {
 }
 async function runScreen() {
   if (needsInit.value) {
-    chatErr.value = '你还没有核心原则，无法按原则选股。先点上方/中间的「🗣 和来财聊出我的核心原则」定一套吧。';
+    chatErr.value = '你还没有当前策略，无法按原则选股。先点上方/中间的「🗣 和来财聊出我的当前策略」定一套吧。';
     return;
   }
   // 已在后台选股中：只切回选股会话，不重复触发
@@ -917,7 +917,7 @@ onMounted(async () => {
   } catch {
     /* ignore */
   }
-  // 向导选了「帮我聊出来」→ 落地自动进入核心原则访谈
+  // 向导选了「帮我聊出来」→ 落地自动进入当前策略访谈
   if (route.query.interview === '1' && needsInit.value) {
     await startInterview();
   }
@@ -992,7 +992,7 @@ onMounted(async () => {
 .ticon { font-size: 14px; }
 .panelbox { flex: 1; overflow-y: auto; margin: 14px; padding: 16px 20px; background: var(--surface); border-radius: 14px; box-shadow: var(--shadow); min-height: 0; }
 .chat { flex: 1; display: flex; flex-direction: column; padding: 16px 20px; margin: 14px; background: var(--surface); border-radius: 14px; box-shadow: var(--shadow); min-width: 0; min-height: 0; }
-/* 对话区：默认单栏；核心原则时右侧加规则操作面板 */
+/* 对话区：默认单栏；当前策略时右侧加规则操作面板 */
 /* 聊天区：左对话主体 + 右操作框 */
 .chat-row { flex: 1; display: flex; min-height: 0; gap: 16px; }
 .chat-main { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; }

@@ -66,7 +66,7 @@ router.post('/sessions/:id/analyze', async (req: Request, res: Response) => {
   } catch (e: any) {
     if (e.message === 'NOT_FOUND') return errorResponse(res, 404, 'RESOURCE_NOT_FOUND', '会话不存在');
     if (e.message === 'NOT_STOCK') return errorResponse(res, 400, 'BUSINESS_CONFLICT', '该会话不是个股会话');
-    if (e.message === 'NO_RULEBOOK') return errorResponse(res, 400, 'BUSINESS_CONFLICT', '请先在「核心规则」导入或设定规则版本');
+    if (e.message === 'NO_RULEBOOK') return errorResponse(res, 400, 'BUSINESS_CONFLICT', '请先在「当前策略」导入或设定规则版本');
     if (e.message === 'NO_MODEL') return errorResponse(res, 400, 'BUSINESS_CONFLICT', '请先在「AI 模型」配置并启用一个可用模型');
     if (e.message === 'DATA_UNTRUSTED') {
       const v = (e as any).validation;

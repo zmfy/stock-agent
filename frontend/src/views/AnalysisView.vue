@@ -36,7 +36,7 @@
         <p v-if="sys === 'B' && report.b_conclusion" class="concl"><b>B 结论：</b>{{ report.b_conclusion }}</p>
       </template>
 
-      <!-- 无核心原则的通用分析：没有门槛系统，直接展示综合研判 -->
+      <!-- 无当前策略的通用分析：没有门槛系统，直接展示综合研判 -->
       <p v-if="!systemsOf.length && report.a_conclusion" class="concl">{{ report.a_conclusion }}</p>
 
       <p v-if="report.exception_channel" class="concl"><b>例外通道：</b>{{ report.exception_channel }}</p>

@@ -11,7 +11,7 @@ export interface RoleDef {
 export const ROLES: RoleDef[] = [
   { key: 'core', label: '核心助手（主脑/结论/教学）', prefer: 'strong', hint: 'agent 的主脑，下最终结论、做教学' },
   { key: 'data', label: '后台数据取得/解析', prefer: 'fast', hint: '量大不烧脑，用快/便宜的模型' },
-  { key: 'analysis', label: '数据分析（跑规则+下判断）', prefer: 'strong', hint: '按核心原则分析、出结论，用强模型' },
+  { key: 'analysis', label: '数据分析（跑规则+下判断）', prefer: 'strong', hint: '按当前策略分析、出结论，用强模型' },
   { key: 'qualitative', label: '软料归纳（研报/新闻提炼）', prefer: 'balanced', hint: '把抓回的研报/新闻提炼成要点' },
   { key: 'review', label: '复盘总结', prefer: 'strong', hint: '根据战绩复盘、提议规则优化' },
   { key: 'validation', label: '数据校验', prefer: 'fast', hint: '核验每天取得的数据：上传优先、交叉验证、合理性检查' },

@@ -109,7 +109,7 @@ export interface ProposeResult {
   suggestedLabel: string;
 }
 
-// 从访谈对话从零合成的整套核心原则（无 delta，走完整预览）
+// 从访谈对话从零合成的整套当前策略（无 delta，走完整预览）
 export interface SynthesizeResult {
   proposal: ProposeResult['proposal'];
   suggestedLabel: string;

@@ -11,7 +11,7 @@ const chat = require('../chat/service');
 const USER = 'u-synth';
 
 function makeSession(): string {
-  const sid = chat.createSession(USER, 'core_principle', null, '核心原则探讨');
+  const sid = chat.createSession(USER, 'core_principle', null, '当前策略探讨');
   return sid;
 }
 
@@ -86,7 +86,7 @@ describe('synthesizeRulebook', () => {
     });
     expect(out.suggestedLabel).toBe('价值 v1');
     expect(out.proposal.gates).toHaveLength(1);
-    expect(out.proposal.note).toBe('从访谈合成核心原则');
+    expect(out.proposal.note).toBe('从访谈合成当前策略');
   });
 
   it('throws PARSE_FAILED on non-JSON AI output', async () => {

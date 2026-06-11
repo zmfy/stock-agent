@@ -106,7 +106,7 @@ describe('applyProposal', () => {
     );
     const proposal = {
       persona: '价值党',
-      note: '从访谈合成核心原则',
+      note: '从访谈合成当前策略',
       gates: [{ system: 'A', gate_key: 'roe_ttm', label: 'ROE', field: 'roe_ttm', op: '>=', threshold: 15, threshold2: null, ref_field: null, unit: '%', veto: 1, teach: 't' }],
       softRules: [],
       positionRules: {},
@@ -116,7 +116,7 @@ describe('applyProposal', () => {
       throw new Error('AI_SHOULD_NOT_BE_CALLED');
     });
     expect(out.version.version_label).toBe('我的原则 v1');
-    expect(out.version.note).toBe('从访谈合成核心原则');
+    expect(out.version.note).toBe('从访谈合成当前策略');
     const activeNow = rb.getActive(NEWUSER);
     expect(activeNow.version.version_label).toBe('我的原则 v1');
     expect(activeNow.gates).toHaveLength(1);

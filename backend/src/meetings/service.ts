@@ -78,9 +78,9 @@ function parseAdopt(coreOut: string): { tags: string[]; clean: string } {
 
 function rulebookText(userId: string): string {
   const rb = getActive(userId);
-  if (!rb) return '（用户尚未设定核心原则）';
+  if (!rb) return '（用户尚未设定当前策略）';
   const gates = rb.gates.map((g) => `${g.system}:${g.label}`).join('、');
-  return `当前核心原则【${rb.version.version_label}】硬门槛：${gates}。`;
+  return `当前策略【${rb.version.version_label}】硬门槛：${gates}。`;
 }
 
 function todaysReports(userId: string): Array<{ stock_code: string; one_liner: string }> {
@@ -111,12 +111,12 @@ ${news}
 请用 3-5 条要点，客观整理今日盘面事实（涨跌停对比、上证趋势、情绪冷热、近期强势板块、值得注意的新闻），只陈述事实、不下交易结论。中文、简短。`;
 }
 
-// 分析师：按核心原则把数据读成交易研判
+// 分析师：按当前策略把数据读成交易研判
 export function buildMorningAnalysisPrompt(persona: string, market: string, rulebook: string, dataOut: string, hasRulebook: boolean): string {
   const task = hasRulebook
     ? '请据此判断：今日能否开新仓？A / B 系统今日是否开闸？给出理由（对照硬门槛/情绪闸门）。中文、分点、简短。'
-    : '用户尚未设定核心原则。本次【只研判大盘形势与热门/强势板块】，不要判断 A/B 系统开闸、不要推荐或点名任何个股。中文、分点、简短。';
-  return `${persona || '你是分析师，严格按核心原则把数据转成可执行研判。'}
+    : '用户尚未设定当前策略。本次【只研判大盘形势与热门/强势板块】，不要判断 A/B 系统开闸、不要推荐或点名任何个股。中文、分点、简短。';
+  return `${persona || '你是分析师，严格按当前策略把数据转成可执行研判。'}
 
 你是早会上的【分析师】。数据员刚才的整理：
 ${dataOut}
@@ -156,7 +156,7 @@ export function buildMorningSynthPrompt(
 2）今日操作思路（偏防守还是进攻、重点关注什么）
 3）**今日可能走强的板块**：即使今天不操作，也要明确列出 2-4 个你判断今日可能走强的板块（板块名 + 一句理由），作为复盘对照。最后用一行「今日可能走强板块：A、B、C」收尾。
 并务必说明：你主要采纳了哪位子助手的哪条结论作为依据（点名「数据员/分析师/情绪面」）。`
-    : `用户【尚未设定核心原则】。请你综合三位的汇报，本次【只研判大盘与板块，不要判断 A/B 系统开闸、不要推荐或点名任何个股】：
+    : `用户【尚未设定当前策略】。请你综合三位的汇报，本次【只研判大盘与板块，不要判断 A/B 系统开闸、不要推荐或点名任何个股】：
 1）大盘研判（情绪冷热、整体环境）
 2）今日大盘操作环境（偏防守还是进攻）
 3）**今日可能走强的板块**：明确列出 2-4 个你判断今日可能走强的板块（板块名 + 一句理由）。最后用一行「今日可能走强板块：A、B、C」收尾。
@@ -207,8 +207,8 @@ export function buildEveningReviewPrompt(
 ): string {
   const opsText = ops.length ? ops.map((o) => `- ${o.stock_code}：${o.one_liner}`).join('\n') : '（今日无分析/操作记录）';
   const task = hasRulebook
-    ? '请总结今日经验教训，并判断是否建议调整核心原则；如建议，明确指出改哪条、怎么改（用户将另行确认）。中文、分点、简短。'
-    : '用户尚未设定核心原则。请【只复盘大盘与板块】（早盘对板块的预测是否兑现、情绪冷热变化），不要复盘或点名个股操作、不给基于门槛的规则建议。中文、分点、简短。';
+    ? '请总结今日经验教训，并判断是否建议调整当前策略；如建议，明确指出改哪条、怎么改（用户将另行确认）。中文、分点、简短。'
+    : '用户尚未设定当前策略。请【只复盘大盘与板块】（早盘对板块的预测是否兑现、情绪冷热变化），不要复盘或点名个股操作、不给基于门槛的规则建议。中文、分点、简短。';
   return `${persona || '你负责复盘总结与规则优化建议。'}
 
 你是晚会上的【复盘员】。分析师的对错判断：
@@ -234,9 +234,9 @@ export function buildEveningSynthPrompt(
     ? `请综合给出今日复盘结论：
 1）今日早会研判是否成立（成功/失败，结合收盘）；
 2）**早会预测的板块走强，哪些命中、哪些落空**——逐个点评对错；
-3）今日经验总结，以及是否建议调整核心原则。
+3）今日经验总结，以及是否建议调整当前策略。
 并说明你主要采纳了哪位子助手的哪条结论。中文、分点输出。`
-    : `用户【尚未设定核心原则】。请【只复盘大盘与板块】（板块预测兑现情况、情绪变化、明日大盘关注方向），不要推荐或点名任何个股、不给基于门槛的规则建议。
+    : `用户【尚未设定当前策略】。请【只复盘大盘与板块】（板块预测兑现情况、情绪变化、明日大盘关注方向），不要推荐或点名任何个股、不给基于门槛的规则建议。
 并说明你主要采纳了哪位子助手的哪条结论。中文、分点输出。`;
   return `${persona}
 ${directives ? `\n${directives}\n` : ''}
@@ -310,7 +310,7 @@ export async function generateMorning(userId: string, opts: GenOpts = {}): Promi
     '【数据员】整理今日盘面：',
     dataOut,
     '',
-    '【分析师】按核心原则研判：',
+    '【分析师】按当前策略研判：',
     analysisOut,
     '',
     '【情绪面】题材/情绪观察：',

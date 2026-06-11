@@ -136,7 +136,7 @@ router.post('/apply-compose', async (req: Request, res: Response) => {
   if (!parsed.success) return errorResponse(res, 422, 'VALIDATION_ERROR', '请选择至少一个模板');
   try {
     const rb = await svc.applyComposedTemplates(req.user!.userId, parsed.data.keys, parsed.data.sessionId);
-    successResponse(res, rb, '已换入组合模板为当前核心原则', 201);
+    successResponse(res, rb, '已换入组合模板为当前策略', 201);
   } catch (e: any) {
     return errorResponse(res, 400, 'BUSINESS_CONFLICT', e.message || '换入失败');
   }
@@ -148,7 +148,7 @@ router.post('/apply-template', async (req: Request, res: Response) => {
   if (!parsed.success) return errorResponse(res, 422, 'VALIDATION_ERROR', '请选择模板');
   try {
     const rb = await svc.applyTemplateAsVersion(req.user!.userId, parsed.data.template, parsed.data.sessionId);
-    successResponse(res, rb, '已换入模板为当前核心原则', 201);
+    successResponse(res, rb, '已换入模板为当前策略', 201);
   } catch (e: any) {
     if (e.message === 'UNKNOWN_TEMPLATE') return errorResponse(res, 422, 'VALIDATION_ERROR', '未知模板');
     return errorResponse(res, 400, 'BUSINESS_CONFLICT', e.message || '换入失败');
@@ -179,7 +179,7 @@ router.post('/propose', async (req: Request, res: Response) => {
   }
 });
 
-// POST /api/rulebook/synthesize { sessionId } — 从访谈对话从零合成整套核心原则(NOT saved)
+// POST /api/rulebook/synthesize { sessionId } — 从访谈对话从零合成整套当前策略(NOT saved)
 router.post('/synthesize', async (req: Request, res: Response) => {
   const parsed = z.object({ sessionId: z.string().min(1) }).safeParse(req.body);
   if (!parsed.success) return errorResponse(res, 422, 'VALIDATION_ERROR', '缺少会话');

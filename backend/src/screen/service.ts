@@ -32,7 +32,7 @@ async function discussScreen(
 ): Promise<string> {
   const rb = getActive(userId);
   const persona = getCorePersona(userId);
-  const rbText = rb ? `核心原则【${rb.version.version_label}】硬门槛：${rb.gates.map((g) => `${g.system}:${g.label}`).join('、')}。` : '';
+  const rbText = rb ? `当前策略【${rb.version.version_label}】硬门槛：${rb.gates.map((g) => `${g.system}:${g.label}`).join('、')}。` : '';
   const top = results.slice(0, 12);
   const listText = top.length
     ? top.map((r) => `- ${r.name || r.code}(${r.code})：${r.aPass ? 'A通过' : r.bPass ? 'B通过' : '未过'}，门槛 ${r.passed}/${r.total}`).join('\n')
@@ -43,7 +43,7 @@ async function discussScreen(
     'data'
   )).trim();
   const analysisOut = (await aiCall(
-    `${personaOf(userId, 'analysis') || '你是分析师，严格按原则点评。'}\n你是选股会上的【分析师】。${rbText}\n候选：\n${listText}\n数据员说明：${dataOut}\n请按核心原则点评通过门槛的标的，挑出最值得关注的并排序、给理由（数据缺失/未过门槛的不要推荐）。中文、分点、简短。`,
+    `${personaOf(userId, 'analysis') || '你是分析师，严格按原则点评。'}\n你是选股会上的【分析师】。${rbText}\n候选：\n${listText}\n数据员说明：${dataOut}\n请按当前策略点评通过门槛的标的，挑出最值得关注的并排序、给理由（数据缺失/未过门槛的不要推荐）。中文、分点、简短。`,
     'analysis'
   )).trim();
   const coreOut = (await aiCall(

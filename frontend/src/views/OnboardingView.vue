@@ -2,18 +2,18 @@
   <div class="onb">
     <h1>初始化设定</h1>
     <div class="steps">
-      <span :class="{ on: step >= 1 }">① 选核心原则</span>
+      <span :class="{ on: step >= 1 }">① 选当前策略</span>
       <span :class="{ on: step >= 2 }">② 配 AI + 主 agent</span>
       <span :class="{ on: step >= 3 }">③ 生成子 agent</span>
     </div>
 
     <!-- Step 1: template -->
     <section v-if="step === 1" class="card">
-      <h2>选一个核心原则模板</h2>
-      <p class="hint">不确定就先选「A/B 双系统」，之后可在「核心规则」里随时优化。</p>
+      <h2>选一个当前策略模板</h2>
+      <p class="hint">不确定就先选「A/B 双系统」，之后可在「当前策略」里随时优化。</p>
       <div class="tpl interview" :class="{ sel: chosen === '__interview__' }" @click="chosen = '__interview__'">
-        <b>🗣 我还没有核心原则，帮我聊出来</b>
-        <div class="muted">先不选模板，进入后来财会通过聊天了解你平时怎么选股、怎么买卖，帮你总结出一套核心原则。</div>
+        <b>🗣 我还没有当前策略，帮我聊出来</b>
+        <div class="muted">先不选模板，进入后来财会通过聊天了解你平时怎么选股、怎么买卖，帮你总结出一套当前策略。</div>
       </div>
       <div class="tpl" v-for="t in templates" :key="t.key" :class="{ sel: chosen === t.key }" @click="chosen = t.key">
         <b>{{ t.label }}</b> <span class="muted">（{{ t.gateCount }} 条硬门槛）</span>
@@ -86,7 +86,7 @@ const providers = ref<ProviderDef[]>([]);
 const prov = reactive({ name: '', apiKey: '', model: '' });
 const provDef = computed(() => providers.value.find((p) => p.name === prov.name));
 const mainPersona = ref(
-  '你是一位经验丰富的 A 股操盘手，严格执行用户设定的核心原则，只判断今天有没有资格、用哪套规则做，不预测涨跌、不情绪化。'
+  '你是一位经验丰富的 A 股操盘手，严格执行用户设定的当前策略，只判断今天有没有资格、用哪套规则做，不预测涨跌、不情绪化。'
 );
 
 const subs = ref<Array<{ role: string; persona: string }>>([]);

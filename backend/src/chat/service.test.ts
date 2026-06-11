@@ -77,7 +77,7 @@ describe('core_principle framing branches on rulebook presence', () => {
 
   it('no rulebook => interview framing in prompt', async () => {
     const U = 'u-cp-interview';
-    const sid = chat.createSession(U, 'core_principle', null, '核心原则探讨');
+    const sid = chat.createSession(U, 'core_principle', null, '当前策略探讨');
     let captured = '';
     await chat.postMessage(U, sid, '我想定个原则', {
       aiCall: async (p: string) => {
@@ -93,7 +93,7 @@ describe('core_principle framing branches on rulebook presence', () => {
   it('has rulebook => modify framing in prompt', async () => {
     const U = 'u-cp-modify';
     rb.instantiateBaseline(U);
-    const sid = chat.createSession(U, 'core_principle', null, '核心原则探讨');
+    const sid = chat.createSession(U, 'core_principle', null, '当前策略探讨');
     let captured = '';
     await chat.postMessage(U, sid, '把 ROE 放宽', {
       aiCall: async (p: string) => {
