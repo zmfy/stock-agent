@@ -3,7 +3,8 @@
     <!-- 左：品牌 / 广告语 / 插画 -->
     <section class="hero">
       <div class="hero-in">
-        <div class="logo">📈 股票小作手</div>
+        <div class="logo">📈 小作手</div>
+        <div class="tagline">您的决策小助手 · v{{ APP_VERSION }}</div>
         <h2 class="slogan">{{ slogan }}</h2>
         <p class="sub">代码算硬门槛，AI 写软判断 —— 有纪律、可审计、会复盘的操盘助手。</p>
 
@@ -49,7 +50,7 @@
     <section class="panel">
       <form class="card" @submit.prevent="submit">
         <h1>欢迎回来</h1>
-        <p class="hint">登录后继续和你的股票小作手探讨规则、分析个股。</p>
+        <p class="hint">登录后继续和你的小作手探讨策略、分析个股。</p>
         <label>用户名
           <input v-model="username" placeholder="用户名" autocomplete="username" />
         </label>
@@ -77,6 +78,7 @@ const router = useRouter();
 const username = ref('');
 const password = ref('');
 const error = ref('');
+import { APP_VERSION } from '../version';
 const loading = ref(false);
 
 const SLOGANS = [
@@ -108,6 +110,7 @@ async function submit() {
 .hero { flex: 1.1; background: linear-gradient(150deg, #fdf5ea 0%, #f5e6cf 55%, #efd8ba 100%); color: #4a3b2a; display: flex; align-items: center; justify-content: center; padding: 40px; }
 .hero-in { max-width: 500px; }
 .logo { font-size: 22px; font-weight: 800; letter-spacing: 0.4px; }
+.tagline { color: var(--muted); font-size: 13px; margin-top: 6px; letter-spacing: 0.3px; }
 .slogan { font-size: 28px; line-height: 1.25; margin: 22px 0 12px; font-weight: 800; white-space: nowrap; }
 .sub { font-size: 14px; opacity: 0.9; line-height: 1.7; margin: 0 0 24px; }
 .art { width: 100%; max-width: 360px; display: block; margin: 8px 0; }
