@@ -440,6 +440,16 @@ function migrate(): void {
     id TEXT PRIMARY KEY, user_id TEXT NOT NULL, config_id TEXT NOT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP, UNIQUE(user_id, config_id)
   )`);
+  const plCols = db.prepare("PRAGMA table_info('plugins')").all() as { name: string }[];
+  if (plCols.length && !plCols.some((c) => c.name === 'shared')) {
+    db.exec('ALTER TABLE plugins ADD COLUMN shared INTEGER DEFAULT 0');
+  }
+  db.exec(`CREATE TABLE IF NOT EXISTS shared_plugin_optout (
+    user_id TEXT NOT NULL,
+    plugin_key TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(user_id, plugin_key)
+  )`);
   db.exec(`CREATE TABLE IF NOT EXISTS shared_ai_usage (
     config_id TEXT NOT NULL, user_id TEXT NOT NULL,
     calls INTEGER DEFAULT 0, total_tokens INTEGER DEFAULT 0, window_start INTEGER DEFAULT 0,
