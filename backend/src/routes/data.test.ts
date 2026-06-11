@@ -146,6 +146,27 @@ describe('data routes', () => {
     expect(log.status).toBe(403);
   });
 
+  it('数据触发类接口仅 admin：非 admin 403', async () => {
+    const refresh = await request(app).post('/api/data/refresh').set(uh()).send({});
+    expect(refresh.status).toBe(403);
+    const news = await request(app).post('/api/data/news/refresh').set(uh());
+    expect(news.status).toBe(403);
+    const run = await request(app).post('/api/data/eod/run').set(uh());
+    expect(run.status).toBe(403);
+    const csv = await request(app)
+      .post('/api/data/quotes/csv')
+      .set(uh())
+      .attach('file', Buffer.from('code,date,close\n600000,2026-05-28,10'), 'q.csv');
+    expect(csv.status).toBe(403);
+  });
+
+  it('数据读类接口普通用户仍可用', async () => {
+    expect((await request(app).get('/api/data/snapshot/600000').set(uh())).status).toBe(200);
+    expect((await request(app).get('/api/data/news').set(uh())).status).toBe(200);
+    expect((await request(app).get('/api/data/stocks/search?q=600').set(uh())).status).toBe(200);
+    expect((await request(app).get('/api/data/trade-calendar').set(uh())).status).toBe(200);
+  });
+
   it('GET /api/data/news/log 返回采集日志；/news/content/:id 返回内容', async () => {
     const nl = require('../data/news-log');
     const [{ content_id }] = nl.recordCollected([{ title: '日志测试', content: '内容Z', source: 'em', published_at: 'p' }]);

@@ -63,7 +63,7 @@ export function parseQuotesCsv(text: string, fallbackCode?: string): QuoteRow[] 
 }
 
 // POST /api/data/quotes/csv — upload 通达信/行情 CSV
-router.post('/quotes/csv', upload.single('file'), (req: Request, res: Response) => {
+router.post('/quotes/csv', adminMiddleware, upload.single('file'), (req: Request, res: Response) => {
   const file = (req as Request & { file?: Express.Multer.File }).file;
   if (!file) return errorResponse(res, 422, 'VALIDATION_ERROR', '请上传 CSV 文件');
   const rows = parseQuotesCsv(file.buffer.toString('utf8'), (req.query.code as string) || undefined);
@@ -80,7 +80,7 @@ router.get('/snapshot/:code', async (req: Request, res: Response) => {
 });
 
 // POST /api/data/refresh  { code? }
-router.post('/refresh', async (req: Request, res: Response) => {
+router.post('/refresh', adminMiddleware, async (req: Request, res: Response) => {
   const userId = req.user!.userId;
   const marketOk = await svc.refreshMarket(userId);
   let snapshot = null;
@@ -97,7 +97,7 @@ router.get('/news', (_req: Request, res: Response) => {
 });
 
 // POST /api/data/news/refresh — collect hot news now
-router.post('/news/refresh', async (req: Request, res: Response) => {
+router.post('/news/refresh', adminMiddleware, async (req: Request, res: Response) => {
   const n = await svc.refreshNews(req.user!.userId);
   successResponse(res, { inserted: n, news: svc.listNews() }, n ? '已采集热点新闻' : '未取到新闻（数据源不可用或未启用 AkShare 插件）');
 });
@@ -226,7 +226,7 @@ router.post('/proxy/test', adminMiddleware, async (req: Request, res: Response) 
 const SHARED_JOBS = new Set(['stock_universe', 'eod']);
 function jobName(req: any): string | null { const j = String(req.params.job); return SHARED_JOBS.has(j) ? j : null; }
 
-router.post('/:job/run', async (req, res) => {
+router.post('/:job/run', adminMiddleware, async (req, res) => {
   const job = jobName(req); if (!job) return errorResponse(res, 400, 'BAD_JOB', '未知任务');
   if (!svc.canStartJob(job)) return errorResponse(res, 409, 'JOB_LOCKED', '已有更新任务正在运行');
   const u = (req as any).user;
