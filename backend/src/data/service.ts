@@ -484,6 +484,29 @@ export function listCachedCodes(): string[] {
   return (getDb().prepare('SELECT DISTINCT code FROM quote_daily').all() as { code: string }[]).map((r) => r.code);
 }
 
+// 实时行情(含盘口五档)列；fetched_at/source/code 单独处理
+const RT_COLS = [
+  'price', 'open', 'high', 'low', 'prev_close', 'volume',
+  'bid1', 'bid1_vol', 'bid2', 'bid2_vol', 'bid3', 'bid3_vol', 'bid4', 'bid4_vol', 'bid5', 'bid5_vol',
+  'ask1', 'ask1_vol', 'ask2', 'ask2_vol', 'ask3', 'ask3_vol', 'ask4', 'ask4_vol', 'ask5', 'ask5_vol',
+  'time',
+];
+
+export function cacheRealtime(code: string, d: Record<string, any>, source: string): void {
+  const vals = RT_COLS.map((c) => (d[c] === undefined || d[c] === null ? null : d[c]));
+  getDb()
+    .prepare(
+      `INSERT INTO realtime_quote (code, ${RT_COLS.join(',')}, source, fetched_at)
+       VALUES (?, ${RT_COLS.map(() => '?').join(',')}, ?, CURRENT_TIMESTAMP)
+       ON CONFLICT(code) DO UPDATE SET ${RT_COLS.map((c) => `${c}=excluded.${c}`).join(', ')}, source=excluded.source, fetched_at=CURRENT_TIMESTAMP`,
+    )
+    .run(code, ...vals, source);
+}
+
+export function getRealtime(code: string): Record<string, any> | null {
+  return (getDb().prepare('SELECT * FROM realtime_quote WHERE code=?').get(code) as Record<string, any>) ?? null;
+}
+
 // ---- refresh from sidecar (graceful) ----
 
 /** Probe-ordered list with a tight timeout so a slow probe never blocks a refresh. */

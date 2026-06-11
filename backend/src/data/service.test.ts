@@ -311,3 +311,20 @@ describe('cron config + status', () => {
     expect(s).toMatchObject({ last_status: 'error', last_error: 'boom', run_count: 2 });
   });
 });
+
+describe('realtime_quote', () => {
+  const svc = require('./service');
+  it('cacheRealtime/getRealtime 往返(含五档) + upsert 重置未给字段', () => {
+    svc.cacheRealtime('600519', { price: 1700, open: 1690, bid1: 1699, bid1_vol: 50, ask1: 1701, ask1_vol: 60, bid5: 1695, ask5: 1705, time: '15:00:00' }, 'tdx-rt');
+    const r = svc.getRealtime('600519');
+    expect(r).toMatchObject({ code: '600519', price: 1700, bid1: 1699, bid1_vol: 50, ask1: 1701, ask5: 1705, source: 'tdx-rt' });
+    svc.cacheRealtime('600519', { price: 1710 }, 'sina-rt');
+    const r2 = svc.getRealtime('600519');
+    expect(r2.price).toBe(1710);
+    expect(r2.source).toBe('sina-rt');
+    expect(r2.bid1).toBeNull();
+  });
+  it('getRealtime 未知 code → null', () => {
+    expect(svc.getRealtime('000001')).toBeNull();
+  });
+});
