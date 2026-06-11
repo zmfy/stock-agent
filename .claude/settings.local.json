@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cat setup.sh)",
+      "Bash(cat update.sh)",
+      "Bash(cat .gitignore)",
+      "Bash(ls -la ssl/)",
+      "Bash(ls docs/)",
+      "Bash(openssl x509 *)",
+      "Bash(chmod 755 deploy.sh start.sh)",
+      "Bash(STOCK_AGENT_JWT_SECRET=test STOCK_AGENT_ADMIN_PASSWORD=test docker compose config)",
+      "Bash(docker network *)"
+    ]
+  }
+}
