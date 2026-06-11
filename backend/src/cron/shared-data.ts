@@ -1,5 +1,5 @@
 import { getDb } from '../db';
-import { syncStockUniverse, ingestEod, getSyncStatus } from '../data/service';
+import { syncStockUniverse, ingestEod, getSyncStatus, ingestRealtime } from '../data/service';
 import { ensureSeedGlobal } from '../data/sources-service';
 
 // 决定 EOD 本次拉取天数：无历史→365；有历史→从最新日期到今天的窗口(至少 2，封顶 365)
@@ -22,5 +22,17 @@ export async function runEod(): Promise<void> {
   ensureSeedGlobal();
   if (getSyncStatus('eod')?.state === 'running') return;
   await ingestEod('', { days: eodDaysForRun(), startedBy: 'cron' });
+}
+
+// 实时行情：用 admin(数据源用户)身份，仅交易时段拉已缓存股票盘口
+function pickRealtimeUserId(): string | null {
+  const row = getDb().prepare("SELECT id FROM users WHERE role = 'admin' ORDER BY created_at LIMIT 1").get() as { id: string } | undefined;
+  return row?.id ?? null;
+}
+
+export async function runRealtime(): Promise<void> {
+  const userId = pickRealtimeUserId();
+  if (!userId) return;
+  await ingestRealtime(userId);
 }
 

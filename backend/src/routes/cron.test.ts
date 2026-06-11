@@ -19,12 +19,20 @@ describe('cron routes', () => {
   it('GET /api/cron requires admin', async () => {
     expect((await request(app).get('/api/cron').set(h(uTok))).status).toBe(403);
   });
-  it('lists 5 jobs with cronEnabled flag', async () => {
+  it('lists 6 jobs with cronEnabled flag', async () => {
     const r = await request(app).get('/api/cron').set(h(aTok));
     expect(r.status).toBe(200);
     expect(r.body.data.cronEnabled).toBe(false);
-    expect(r.body.data.jobs.length).toBe(5);
+    expect(r.body.data.jobs.length).toBe(6);
     expect(r.body.data.jobs.find((j: any) => j.key === 'nightly').time).toBe('23:00');
+  });
+  it('定时任务列表含 realtime(自定义周期，非每日 time)', async () => {
+    const res = await request(app).get('/api/cron').set(h(aTok));
+    expect(res.status).toBe(200);
+    const rt = res.body.data.jobs.find((j: any) => j.key === 'realtime');
+    expect(rt).toBeTruthy();
+    expect(rt.time).toBeNull();
+    expect(rt.expr).toBe('*/5 * * * *');
   });
   it('PUT changes time + enabled', async () => {
     const r = await request(app).put('/api/cron/nightly').set(h(aTok)).send({ time: '23:30', enabled: false });

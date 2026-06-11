@@ -44,10 +44,10 @@ describe('tracked wrapper', () => {
 });
 
 describe('listCronJobs + applyCronChange', () => {
-  it('lists 5 jobs with defaults and cronEnabled flag', () => {
+  it('lists 6 jobs with defaults and cronEnabled flag', () => {
     const { cronEnabled, jobs } = reg.listCronJobs();
     expect(typeof cronEnabled).toBe('boolean');
-    expect(jobs.length).toBe(5);
+    expect(jobs.length).toBe(6);
     expect(jobs.find((j: any) => j.key === 'nightly').time).toBe('23:00');
   });
   it('applyCronChange persists time + enabled and reflects in list', () => {

@@ -1,7 +1,7 @@
 import cron from 'node-cron';
 import { runNightly } from './nightly';
 import { runMeetings } from './meetings';
-import { runStockUniverse, runEod } from './shared-data';
+import { runStockUniverse, runEod, runRealtime } from './shared-data';
 import * as svc from '../data/service';
 
 export interface CronJobDef {
@@ -20,6 +20,7 @@ export const CRON_JOBS: CronJobDef[] = [
   { key: 'meeting_evening', label: '晚会复盘', description: '刷新大盘 + 生成晚会(休市跳过)', defaultExpr: '45 16 * * *', run: () => runMeetings('evening') },
   { key: 'stock_universe', label: '股票库同步', description: '全量名单 diff 入库', defaultExpr: '25 9 * * *', run: () => runStockUniverse() },
   { key: 'eod', label: '行情 EOD 入库', description: '全量个股日线(首次365/之后增量)', defaultExpr: '0 1 * * *', run: () => runEod() },
+  { key: 'realtime', label: '实时行情(交易时段)', description: 'TDX 拉已缓存股票实时盘口五档，每5分钟、仅交易时段', defaultExpr: '*/5 * * * *', run: () => runRealtime() },
 ];
 
 // ---- 纯助手 ----
