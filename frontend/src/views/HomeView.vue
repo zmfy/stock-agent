@@ -301,18 +301,21 @@ import ReportModal from '../components/ReportModal.vue';
 const auth = useAuthStore();
 
 // 系统设置：右侧内嵌这些页面，左栏不变
+// roles: 'user' = 仅普通用户(交易功能)；'admin' = 仅 admin(运维)；'both' = 两者都有。
 const SETTINGS = [
-  { key: 'rulebook', label: '当前策略', icon: '📜', comp: RulebookView },
-  { key: 'meetings', label: '早晚会历史', icon: '🗓', comp: MeetingsHistoryView },
-  { key: 'analysis', label: '分析历史', icon: '📊', comp: AnalysisView },
-  { key: 'data', label: '数据', icon: '📈', comp: DataView },
-  { key: 'ai', label: 'AI 模型', icon: '🤖', comp: AiSettingsView },
-  { key: 'plugins', label: '能力插件', icon: '🧩', comp: PluginsView },
-  { key: 'crons', label: '定时任务', icon: '⏰', comp: CronsView, adminOnly: true },
-  { key: 'account', label: '账号设置', icon: '👤', comp: SettingsView },
+  { key: 'rulebook', label: '当前策略', icon: '📜', comp: RulebookView, roles: 'user' },
+  { key: 'meetings', label: '早晚会历史', icon: '🗓', comp: MeetingsHistoryView, roles: 'user' },
+  { key: 'analysis', label: '分析历史', icon: '📊', comp: AnalysisView, roles: 'user' },
+  { key: 'data', label: '数据管理', icon: '📈', comp: DataView, roles: 'admin' },
+  { key: 'ai', label: 'AI 模型', icon: '🤖', comp: AiSettingsView, roles: 'both' },
+  { key: 'plugins', label: '能力插件', icon: '🧩', comp: PluginsView, roles: 'both' },
+  { key: 'crons', label: '定时任务', icon: '⏰', comp: CronsView, roles: 'admin' },
+  { key: 'account', label: '账号设置', icon: '👤', comp: SettingsView, roles: 'both' },
 ];
 const settingsKey = ref(''); // '' = 聊天；否则为某个功能面板
-const settingsMenu = computed(() => SETTINGS.filter((s: any) => !s.adminOnly || auth.isAdmin));
+const settingsMenu = computed(() =>
+  SETTINGS.filter((s: any) => s.roles === 'both' || s.roles === (auth.isAdmin ? 'admin' : 'user')),
+);
 const currentSettingsComp = computed(() => SETTINGS.find((s) => s.key === settingsKey.value)?.comp);
 function goChat() {
   settingsKey.value = '';
