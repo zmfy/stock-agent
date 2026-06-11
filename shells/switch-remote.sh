@@ -3,7 +3,7 @@
 # 用法: bash shells/switch-remote.sh github
 #       bash shells/switch-remote.sh gitee
 
-GITHUB="https://github.com/zmfy/stock-agent.git"
+GITHUB="git@github.com/zmfy/stock-agent.git"
 GITEE="git@gitee.com:unknow3/stock-agent.git"
 
 case "${1:-}" in
