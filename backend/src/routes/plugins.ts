@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
-import { authMiddleware } from '../middleware/auth';
+import { authMiddleware, adminMiddleware } from '../middleware/auth';
 import { successResponse, errorResponse } from '../utils/response';
 import { CATALOG } from '../plugins/catalog';
 import * as svc from '../plugins/service';
@@ -13,9 +13,10 @@ router.get('/catalog', (_req: Request, res: Response) => {
   successResponse(res, CATALOG);
 });
 
-// GET /api/plugins — merged per-user view
+// GET /api/plugins — merged per-user view (own + shared)
 router.get('/', (req: Request, res: Response) => {
-  successResponse(res, svc.listForUser(req.user!.userId));
+  const uid = req.user!.userId;
+  successResponse(res, [...svc.listForUser(uid), ...svc.listSharedForUser(uid)]);
 });
 
 // GET /api/plugins/enabled — resolved capabilities for the agent (Plan 5/6)
@@ -36,6 +37,27 @@ router.post('/:key/enable', (req: Request, res: Response) => {
     if (e.message === 'UNKNOWN_PLUGIN') return errorResponse(res, 404, 'RESOURCE_NOT_FOUND', '未知插件');
     return errorResponse(res, 400, 'BUSINESS_CONFLICT', e.message || '操作失败');
   }
+});
+
+// POST /api/plugins/:key/share — admin only
+router.post('/:key/share', adminMiddleware, (req: Request, res: Response) => {
+  const parsed = z.object({ shared: z.boolean() }).safeParse(req.body);
+  if (!parsed.success) return errorResponse(res, 422, 'VALIDATION_ERROR', '参数校验失败');
+  try {
+    svc.setShared(req.user!.userId, req.params.key, parsed.data.shared);
+    successResponse(res, null, parsed.data.shared ? '已共享给所有用户' : '已取消共享');
+  } catch (e: any) {
+    if (e.message === 'UNKNOWN_PLUGIN') return errorResponse(res, 404, 'RESOURCE_NOT_FOUND', '未知插件');
+    return errorResponse(res, 400, 'BUSINESS_CONFLICT', e.message || '操作失败');
+  }
+});
+
+// POST /api/plugins/shared/:key/enable — user opt-out/opt-in of a shared plugin
+router.post('/shared/:key/enable', (req: Request, res: Response) => {
+  const parsed = z.object({ enabled: z.boolean() }).safeParse(req.body);
+  if (!parsed.success) return errorResponse(res, 422, 'VALIDATION_ERROR', '参数校验失败');
+  svc.setSharedEnabled(req.user!.userId, req.params.key, parsed.data.enabled);
+  successResponse(res, null, parsed.data.enabled ? '已启用' : '已停用');
 });
 
 const customSchema = z.object({

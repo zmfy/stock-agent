@@ -77,3 +77,27 @@ describe('plugins routes', () => {
     expect(list.body.data.find((p: any) => p.key === 'tushare')).toBeUndefined();
   });
 });
+
+describe('shared plugins routes', () => {
+  it('admin 才能共享：用户 403、admin 200', async () => {
+    await request(app).post('/api/plugins/custom').set(h(adminTok)).send({ key: 'shmcp', label: '共享MCP', kind: 'mcp', transport: 'http', config: { url: 'http://x' } });
+    const u = await request(app).post('/api/plugins/shmcp/share').set(h(userTok)).send({ shared: true });
+    expect(u.status).toBe(403);
+    const a = await request(app).post('/api/plugins/shmcp/share').set(h(adminTok)).send({ shared: true });
+    expect(a.status).toBe(200);
+  });
+
+  it('GET /plugins 给用户返回共享项且无 config', async () => {
+    const res = await request(app).get('/api/plugins').set(h(userTok));
+    const m = res.body.data.find((p: any) => p.key === 'shmcp');
+    expect(m).toMatchObject({ shared: true, owner: 'admin' });
+    expect(m.config).toEqual({});
+  });
+
+  it('用户可 opt-out 共享插件', async () => {
+    const off = await request(app).post('/api/plugins/shared/shmcp/enable').set(h(userTok)).send({ enabled: false });
+    expect(off.status).toBe(200);
+    const res = await request(app).get('/api/plugins').set(h(userTok));
+    expect(res.body.data.find((p: any) => p.key === 'shmcp').enabled).toBe(false);
+  });
+});
