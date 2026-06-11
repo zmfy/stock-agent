@@ -12,6 +12,7 @@ interface PluginRow {
   transport: Transport | null;
   config: string | null;
   enabled: number;
+  shared?: number;
   created_at: string;
 }
 
@@ -26,6 +27,10 @@ export interface PluginView {
   enabled: boolean;
   config: Record<string, unknown>;
   configHint?: string;
+  shared?: boolean;
+  owner?: 'me' | 'admin';
+  sharedByMe?: boolean;
+  configured?: boolean;
 }
 
 function parse(json: string | null): Record<string, unknown> {
@@ -63,6 +68,9 @@ export function listForUser(userId: string): PluginView[] {
       enabled: r ? !!r.enabled : true,
       config: r && r.config ? parse(r.config) : def.defaultConfig,
       configHint: def.configHint,
+      owner: 'me' as const,
+      shared: false,
+      sharedByMe: r ? !!r.shared : false,
     };
   });
 
@@ -78,6 +86,9 @@ export function listForUser(userId: string): PluginView[] {
       transport: r.transport,
       enabled: !!r.enabled,
       config: parse(r.config),
+      owner: 'me' as const,
+      shared: false,
+      sharedByMe: !!r.shared,
     }));
 
   return [...builtins, ...customs];
@@ -158,10 +169,16 @@ export interface EnabledCapabilities {
 // What Plan 5/6 read to actually connect MCP servers / apply skills.
 export function getEnabledCapabilities(userId: string): EnabledCapabilities {
   const enabled = listForUser(userId).filter((p) => p.enabled);
-  return {
-    mcp: enabled.filter((p) => p.kind === 'mcp').map((p) => ({ key: p.key, label: p.label, transport: p.transport, config: p.config })),
-    skills: enabled.filter((p) => p.kind === 'skill').map((p) => ({ key: p.key, label: p.label, config: p.config })),
-  };
+  const mcp = enabled.filter((p) => p.kind === 'mcp').map((p) => ({ key: p.key, label: p.label, transport: p.transport, config: p.config }));
+  const skills = enabled.filter((p) => p.kind === 'skill').map((p) => ({ key: p.key, label: p.label, config: p.config }));
+  const own = userOwnKeys(userId);
+  const optout = sharedOptoutSet(userId);
+  for (const sp of sharedPlugins()) {
+    if (own.has(sp.key) || optout.has(sp.key)) continue;
+    if (sp.kind === 'mcp') mcp.push({ key: sp.key, label: sp.label, transport: sp.transport, config: sp.config });
+    else skills.push({ key: sp.key, label: sp.label, config: sp.config });
+  }
+  return { mcp, skills };
 }
 
 // Turn enabled skills + their config into a system-prompt directive snippet,
@@ -196,4 +213,85 @@ export function skillDirectives(userId: string): string {
     }
   }
   return lines.length ? `已启用的能力（请遵循）：\n${lines.join('\n')}` : '';
+}
+
+// ---- 共享(admin → 用户) ----
+
+function userOwnKeys(userId: string): Set<string> {
+  const customs = getDb()
+    .prepare("SELECT plugin_key FROM plugins WHERE user_id = ? AND source = 'custom'")
+    .all(userId) as { plugin_key: string }[];
+  return new Set<string>([...CATALOG.map((d) => d.key), ...customs.map((r) => r.plugin_key)]);
+}
+
+function sharedOptoutSet(userId: string): Set<string> {
+  const rows = getDb().prepare('SELECT plugin_key FROM shared_plugin_optout WHERE user_id = ?').all(userId) as { plugin_key: string }[];
+  return new Set(rows.map((r) => r.plugin_key));
+}
+
+export interface SharedPlugin {
+  key: string;
+  kind: PluginKind;
+  label: string;
+  transport: Transport | null;
+  config: Record<string, unknown>;
+}
+
+export function sharedPlugins(): SharedPlugin[] {
+  const rows = getDb()
+    .prepare(`SELECT p.* FROM plugins p JOIN users u ON p.user_id = u.id
+              WHERE u.role = 'admin' AND p.shared = 1 AND p.enabled = 1`)
+    .all() as PluginRow[];
+  return rows.map((r) => ({
+    key: r.plugin_key,
+    kind: r.kind,
+    label: r.label || r.plugin_key,
+    transport: r.transport,
+    config: parse(r.config),
+  }));
+}
+
+export function setShared(adminUserId: string, key: string, shared: boolean): void {
+  const def = getCatalogPlugin(key);
+  const existing = rowFor(adminUserId, key);
+  const db = getDb();
+  if (existing) {
+    db.prepare('UPDATE plugins SET shared = ? WHERE id = ?').run(shared ? 1 : 0, existing.id);
+  } else if (def) {
+    db.prepare(
+      'INSERT INTO plugins (id, user_id, plugin_key, kind, label, source, transport, config, enabled, shared) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?)'
+    ).run(uuidv4(), adminUserId, key, def.kind, def.label, 'builtin', def.transport ?? null, JSON.stringify(def.defaultConfig), shared ? 1 : 0);
+  } else {
+    throw new Error('UNKNOWN_PLUGIN');
+  }
+}
+
+export function setSharedEnabled(userId: string, key: string, enabled: boolean): void {
+  const db = getDb();
+  if (enabled) {
+    db.prepare('DELETE FROM shared_plugin_optout WHERE user_id = ? AND plugin_key = ?').run(userId, key);
+  } else {
+    db.prepare('INSERT OR IGNORE INTO shared_plugin_optout (user_id, plugin_key) VALUES (?, ?)').run(userId, key);
+  }
+}
+
+export function listSharedForUser(userId: string): PluginView[] {
+  const own = userOwnKeys(userId);
+  const optout = sharedOptoutSet(userId);
+  return sharedPlugins()
+    .filter((sp) => !own.has(sp.key))
+    .map((sp) => ({
+      key: sp.key,
+      kind: sp.kind,
+      label: sp.label,
+      description: '管理员共享的插件',
+      recommended: false,
+      source: 'custom' as const,
+      transport: sp.transport,
+      enabled: !optout.has(sp.key),
+      config: {},
+      shared: true,
+      owner: 'admin' as const,
+      configured: Object.keys(sp.config || {}).length > 0,
+    }));
 }
