@@ -208,10 +208,4 @@ input, select, textarea { width: 100%; box-sizing: border-box; padding: 5px; }
 .danger { color: #c00; }
 button:disabled { opacity: 0.5; }
 :deep(.sharebox) { font-size: 12px; color: #446; display: inline-flex; align-items: center; gap: 2px; }
-.pcard { border-top: 1px solid #eee; padding: 10px 0; }
-.phead { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
-.pname { font-weight: 600; font-size: 14px; }
-.pdesc { color: #777; font-size: 12px; margin: 4px 0; }
-.tag { font-size: 11px; background: #eef; color: #446; border-radius: 8px; padding: 1px 6px; margin-left: 6px; }
-.tag.cust { background: #e9f7e9; color: #2a8a2a; }
 </style>
