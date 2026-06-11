@@ -6,22 +6,24 @@
     <aside class="rail" :class="{ open: railOpen }">
       <div class="brand">小作手 <span class="ver">v{{ APP_VERSION }}</span></div>
 
-      <!-- 会话列表 -->
-      <div class="sect-head">讨论记录</div>
-      <ul class="sessions">
-        <li v-for="s in sessions" :key="s.id" :class="{ active: active?.id === s.id, 'is-pinned': s.pinned === 1 }"
-            @click="open(s)" @mouseenter="startHover(s.id)" @mouseleave="endHover">
-          <span class="kind">{{ kindIcon(s.kind) }}</span>
-          <span class="stitle">{{ s.title || sessionLabel(s) }}</span>
-          <span v-if="generating.has(s.kind)" class="spinner sess-spin"></span>
-          <button class="pin" :class="{ on: s.pinned === 1 }" :title="s.pinned === 1 ? '取消置顶' : '置顶'" @click.stop="togglePin(s)">📌</button>
-          <button v-show="hoverDelId === s.id" class="del" title="删除会话（分析历史保留）" @click.stop="removeSession(s)">×</button>
-        </li>
-      </ul>
+      <!-- 会话列表（admin 纯运维账号不显示聊天） -->
+      <template v-if="!auth.isAdmin">
+        <div class="sect-head">讨论记录</div>
+        <ul class="sessions">
+          <li v-for="s in sessions" :key="s.id" :class="{ active: active?.id === s.id, 'is-pinned': s.pinned === 1 }"
+              @click="open(s)" @mouseenter="startHover(s.id)" @mouseleave="endHover">
+            <span class="kind">{{ kindIcon(s.kind) }}</span>
+            <span class="stitle">{{ s.title || sessionLabel(s) }}</span>
+            <span v-if="generating.has(s.kind)" class="spinner sess-spin"></span>
+            <button class="pin" :class="{ on: s.pinned === 1 }" :title="s.pinned === 1 ? '取消置顶' : '置顶'" @click.stop="togglePin(s)">📌</button>
+            <button v-show="hoverDelId === s.id" class="del" title="删除会话（分析历史保留）" @click.stop="removeSession(s)">×</button>
+          </li>
+        </ul>
 
-      <div class="menu">
-        <button v-if="sessions.length" class="settings-entry clearall" @click="clearAllChats">🧹 清空所有对话</button>
-      </div>
+        <div class="menu">
+          <button v-if="sessions.length" class="settings-entry clearall" @click="clearAllChats">🧹 清空所有对话</button>
+        </div>
+      </template>
       <p class="risk-note">⚠️ 仅研究辅助 · 不构成投资建议 · 盈亏自负</p>
     </aside>
 
@@ -30,7 +32,7 @@
       <nav class="topnav">
         <button class="hamburger" title="菜单" @click="railOpen = !railOpen">☰</button>
         <div class="tnav-scroll">
-          <button class="tnav" :class="{ active: !settingsKey }" @click="goChat">💬 聊天</button>
+          <button v-if="!auth.isAdmin" class="tnav" :class="{ active: !settingsKey }" @click="goChat">💬 聊天</button>
           <button v-for="s in settingsMenu" :key="s.key" class="tnav" :class="{ active: settingsKey === s.key }" @click="settingsKey = s.key">
             <span class="ticon">{{ s.icon }}</span>{{ s.label }}
           </button>
@@ -312,7 +314,8 @@ const SETTINGS = [
   { key: 'crons', label: '定时任务', icon: '⏰', comp: CronsView, roles: 'admin' },
   { key: 'account', label: '账号设置', icon: '👤', comp: SettingsView, roles: 'both' },
 ];
-const settingsKey = ref(''); // '' = 聊天；否则为某个功能面板
+// '' = 聊天；否则为某个功能面板。admin 无聊天 → 默认落「数据管理」(若 user 已同步加载)。
+const settingsKey = ref(auth.isAdmin ? 'data' : '');
 const settingsMenu = computed(() =>
   SETTINGS.filter((s: any) => s.roles === 'both' || s.roles === (auth.isAdmin ? 'admin' : 'user')),
 );
@@ -905,6 +908,11 @@ function logout() {
 
 onMounted(async () => {
   if (!auth.user) await auth.fetchMe().catch(() => {});
+  // admin 是纯运维账号：不加载聊天/早晚会/当前策略，默认停在运维面板。
+  if (auth.isAdmin) {
+    if (!settingsKey.value) settingsKey.value = 'data';
+    return;
+  }
   await loadSessions();
   await loadMeetings();
   try {
