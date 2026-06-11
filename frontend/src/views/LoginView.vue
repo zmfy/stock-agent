@@ -72,13 +72,13 @@
 import { ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
+import { APP_VERSION } from '../version';
 
 const auth = useAuthStore();
 const router = useRouter();
 const username = ref('');
 const password = ref('');
 const error = ref('');
-import { APP_VERSION } from '../version';
 const loading = ref(false);
 
 const SLOGANS = [
