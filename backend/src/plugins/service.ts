@@ -270,7 +270,8 @@ export function setSharedEnabled(userId: string, key: string, enabled: boolean):
   const db = getDb();
   if (enabled) {
     db.prepare('DELETE FROM shared_plugin_optout WHERE user_id = ? AND plugin_key = ?').run(userId, key);
-  } else {
+  } else if (sharedPlugins().some((sp) => sp.key === key)) {
+    // 只对「当前确实被共享」的插件记录停用，避免对任意 key 写入幽灵 opt-out 行
     db.prepare('INSERT OR IGNORE INTO shared_plugin_optout (user_id, plugin_key) VALUES (?, ?)').run(userId, key);
   }
 }

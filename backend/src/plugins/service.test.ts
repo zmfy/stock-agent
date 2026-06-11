@@ -90,7 +90,9 @@ describe('shared plugins', () => {
   }
 
   beforeEach(() => {
-    getDb().exec('DELETE FROM plugins WHERE user_id IN (?,?); DELETE FROM shared_plugin_optout;'.replace('?,?', `'${ADMIN}','${USER}'`));
+    const db = getDb();
+    db.prepare('DELETE FROM plugins WHERE user_id IN (?, ?)').run(ADMIN, USER);
+    db.prepare('DELETE FROM shared_plugin_optout WHERE user_id IN (?, ?)').run(ADMIN, USER);
   });
 
   it('sharedPlugins 返回 admin 已共享插件(带真实 config)', () => {
