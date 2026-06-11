@@ -3,7 +3,7 @@ import { QuoteRow, StockSnapshot } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import { resolveSidecarBase, fetchFundamentals, fetchQuotes, fetchMarket, fetchName, fetchNews, fetchAllStocks, orderedProviders, fetchRealtime, fetchIndexBars } from './sidecar';
 import { recordCollected } from './news-log';
-import { lastTradingDayBefore } from './trade-calendar';
+import { lastTradingDayBefore, isTradingDay } from './trade-calendar';
 
 // ---- hot news ----
 export function listNews(limit = 30): Array<{ title: string; summary: string; published_at: string; fetched_at: string }> {
@@ -505,6 +505,40 @@ export function cacheRealtime(code: string, d: Record<string, any>, source: stri
 
 export function getRealtime(code: string): Record<string, any> | null {
   return (getDb().prepare('SELECT * FROM realtime_quote WHERE code=?').get(code) as Record<string, any>) ?? null;
+}
+
+// 北京时间是否在交易时段(09:30–11:30 / 13:00–15:00)的交易日内
+export function inTradingSession(nowMs: number = Date.now()): boolean {
+  const bj = new Date(nowMs + 8 * 3600 * 1000);
+  const dateStr = bj.toISOString().slice(0, 10);
+  if (!isTradingDay(dateStr)) return false;
+  const mins = bj.getUTCHours() * 60 + bj.getUTCMinutes();
+  return (mins >= 9 * 60 + 30 && mins <= 11 * 60 + 30) || (mins >= 13 * 60 && mins <= 15 * 60);
+}
+
+export async function ingestRealtime(userId: string, opts: { now?: number } = {}): Promise<{ skipped: boolean; count: number }> {
+  const now = opts.now ?? Date.now();
+  if (!inTradingSession(now)) {
+    console.log('[realtime] 非交易时段，跳过');
+    return { skipped: true, count: 0 };
+  }
+  const base = resolveSidecarBase(userId);
+  if (!base) return { skipped: true, count: 0 };
+  const codes = listCachedCodes();
+  let count = 0;
+  for (const code of codes) {
+    try {
+      const rt = await fetchRealtime(base, code);
+      if (rt && rt.data && (rt.data as any).price != null) {
+        cacheRealtime(code, rt.data as Record<string, any>, rt.source ?? 'tdx-rt');
+        count++;
+      }
+    } catch {
+      /* 单只失败跳过，不中断整轮 */
+    }
+  }
+  console.log(`[realtime] 写入 ${count}/${codes.length} 只`);
+  return { skipped: false, count };
 }
 
 // ---- refresh from sidecar (graceful) ----

@@ -328,3 +328,28 @@ describe('realtime_quote', () => {
     expect(svc.getRealtime('000001')).toBeNull();
   });
 });
+
+describe('ingestRealtime', () => {
+  const svc = require('./service');
+  const sidecar = require('./sidecar');
+  afterEach(() => jest.restoreAllMocks());
+
+  it('非交易时段直接跳过、不写表', async () => {
+    const sun = Date.UTC(2026, 5, 7, 2, 0, 0); // 周日 北京 10:00
+    const r = await svc.ingestRealtime('uid', { now: sun });
+    expect(r.skipped).toBe(true);
+    expect(r.count).toBe(0);
+  });
+
+  it('交易时段遍历已缓存股票、写实时表', async () => {
+    const { getDb } = require('../db');
+    getDb().prepare("INSERT OR IGNORE INTO quote_daily (code, date, close) VALUES ('600000','2026-06-09',10)").run();
+    jest.spyOn(sidecar, 'resolveSidecarBase').mockReturnValue('http://x');
+    jest.spyOn(sidecar, 'fetchRealtime').mockResolvedValue({ source: 'tdx-rt', data: { price: 9.99, bid1: 9.98, bid1_vol: 10, time: '10:00:00' } });
+    const wed = Date.UTC(2026, 5, 10, 2, 0, 0); // 周三 北京 10:00
+    const r = await svc.ingestRealtime('uid', { now: wed });
+    expect(r.skipped).toBe(false);
+    expect(r.count).toBeGreaterThanOrEqual(1);
+    expect(svc.getRealtime('600000')).toMatchObject({ price: 9.99, bid1: 9.98 });
+  });
+});
