@@ -4,7 +4,7 @@
     <div v-if="railOpen" class="drawer-backdrop" @click="railOpen = false"></div>
     <!-- 左栏 -->
     <aside class="rail" :class="{ open: railOpen }">
-      <div class="brand">股票小作手</div>
+      <div class="brand">小作手 <span class="ver">v{{ APP_VERSION }}</span></div>
 
       <!-- 会话列表 -->
       <div class="sect-head">讨论记录</div>
@@ -52,7 +52,7 @@
           <!-- 左：对话主体 -->
           <div class="chat-main">
             <div v-if="!active" class="empty">
-              <h2>你好，我是股票小作手，来财。🤝</h2>
+              <h2>你好，我是来财。🤝</h2>
 
               <div v-if="needsInit" class="cp-cta">
                 <div class="cp-cta-title">🎯 你还没有核心原则</div>
@@ -277,6 +277,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, nextTick, onMounted } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
+import { APP_VERSION } from '../version';
 import { useAuthStore } from '../stores/auth';
 import { chatApi, type ChatSession, type ChatMessage, type ChatKind } from '../api/chat';
 import { rulebookApi, type ProposeResult, type FullRulebook, type Gate, type TemplateMeta } from '../api/rulebook';
@@ -927,6 +928,7 @@ onMounted(async () => {
 .shell { display: flex; height: 100vh; background: var(--bg); }
 .rail { width: 264px; flex: none; background: var(--rail-bg); color: var(--rail-fg); display: flex; flex-direction: column; padding: 14px 12px; overflow-y: auto; gap: 2px; }
 .brand { font-weight: 700; font-size: 17px; color: #fff; padding: 4px 6px 14px; letter-spacing: 0.3px; }
+.brand .ver { font-size: 11px; font-weight: 600; opacity: 0.6; }
 .pinned { display: flex; flex-direction: column; gap: 6px; }
 .pin-card { background: var(--rail-active); color: var(--rail-fg); border-radius: var(--radius-sm); padding: 8px 10px; font-size: 13px; }
 .pin-card.soon { color: var(--rail-fg-dim); }
