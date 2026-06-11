@@ -26,7 +26,10 @@ export interface StockSnapshot {
   limit_up_count: number | null;
   limit_down_count: number | null;
   sse_ma20_slope: number | null;
-  realtime?: { price: number; time: string; source: string | null } | null;
+  realtime?: ({
+    price: number; time: string; source: string | null;
+    open?: number; high?: number; low?: number; prev_close?: number; volume?: number;
+  } & Partial<Record<`bid${1 | 2 | 3 | 4 | 5}` | `bid${1 | 2 | 3 | 4 | 5}_vol` | `ask${1 | 2 | 3 | 4 | 5}` | `ask${1 | 2 | 3 | 4 | 5}_vol`, number>>) | null;
   _missing: string[];
   sources?: {
     quote: { source: string; date: string; fetched_at: string } | null;

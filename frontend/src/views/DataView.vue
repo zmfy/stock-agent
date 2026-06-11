@@ -253,7 +253,21 @@
       <div v-if="snap?.realtime" class="rt">
           实时现价：<b>{{ snap.realtime.price }}</b>
           <span class="muted" v-if="snap.realtime.time"> @ {{ snap.realtime.time }}（{{ snap.realtime.source }}）</span>
-        </div>
+          <table v-if="(snap.realtime as any).bid1 != null || (snap.realtime as any).ask1 != null" class="orderbook">
+            <tbody>
+              <tr v-for="i in 5" :key="'a' + i" class="ask">
+                <td>卖{{ 6 - i }}</td>
+                <td>{{ (snap.realtime as any)['ask' + (6 - i)] ?? '—' }}</td>
+                <td class="muted">{{ (snap.realtime as any)['ask' + (6 - i) + '_vol'] ?? '—' }}</td>
+              </tr>
+              <tr v-for="i in 5" :key="'b' + i" class="bid">
+                <td>买{{ i }}</td>
+                <td>{{ (snap.realtime as any)['bid' + i] ?? '—' }}</td>
+                <td class="muted">{{ (snap.realtime as any)['bid' + i + '_vol'] ?? '—' }}</td>
+              </tr>
+            </tbody>
+          </table>
+      </div>
       <table v-if="snap" class="snap">
         <tbody>
           <tr><th>代码 / 名称</th><td>{{ snap.code }} {{ snap.name || '' }}</td></tr>
@@ -675,4 +689,8 @@ button:disabled { opacity: 0.5; }
 .log-warn .loglvl { color: #c80; }
 .log-info .loglvl { color: #2a8a2a; }
 .danger { color: #cf1322; border-color: #ffccc7; }
+.orderbook { margin-top: 8px; border-collapse: collapse; font-size: 13px; }
+.orderbook td { padding: 2px 12px 2px 0; }
+.orderbook tr.ask td:nth-child(2) { color: #d33; }
+.orderbook tr.bid td:nth-child(2) { color: #2a8a2a; }
 </style>
