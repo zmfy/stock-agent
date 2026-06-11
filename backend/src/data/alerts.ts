@@ -39,10 +39,11 @@ export function getDataAlerts(sidecar: SidecarState, nowCN: string = beijingToda
     alerts.push({ level: 'warn', source: 'sidecar', message: '尚未配置数据 sidecar，无法取数', since: null });
   }
 
+  // 注：getSyncStatus 为 null(从未跑过)视为「无告警」——全新部署时由 sidecar/market 告警兜底，避免噪声。
   for (const { key, label } of SYNC_JOBS) {
     const st = getSyncStatus(key);
     if (st?.state === 'error') {
-      alerts.push({ level: 'error', source: key, message: `${label}上次同步失败：${st.error || st.message || '未知错误'}`, since: st.finished_at });
+      alerts.push({ level: 'error', source: key, message: `${label}上次同步失败：${st.error || '未知错误'}`, since: st.finished_at });
     } else if (st?.last_success_at) {
       const d = cnDate(st.last_success_at)!;
       if (d < prevTd) {

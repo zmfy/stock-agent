@@ -65,7 +65,7 @@ describe('getDataAlerts', () => {
 
   it('大盘数据陈旧 / 缺失 → warn 告警', () => {
     setMarket('2026-06-05');
-    expect(getDataAlerts('ok', NOW).find((x: any) => x.source === 'market')).toMatchObject({ level: 'warn' });
+    expect(getDataAlerts('ok', NOW).find((x: any) => x.source === 'market')).toMatchObject({ level: 'warn', since: '2026-06-05' });
     getDb().exec('DELETE FROM market_sentiment;');
     expect(getDataAlerts('ok', NOW).find((x: any) => x.source === 'market')).toMatchObject({ level: 'warn' });
   });
