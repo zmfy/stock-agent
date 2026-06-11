@@ -335,6 +335,15 @@ function initSchema(): void {
     CREATE TABLE IF NOT EXISTS trade_calendar (
       date TEXT PRIMARY KEY      -- 'YYYY-MM-DD'，仅存 A 股交易日（全局共享）
     );
+    CREATE TABLE IF NOT EXISTS realtime_quote (
+      code TEXT PRIMARY KEY,
+      price REAL, open REAL, high REAL, low REAL, prev_close REAL, volume REAL,
+      bid1 REAL, bid1_vol REAL, bid2 REAL, bid2_vol REAL, bid3 REAL, bid3_vol REAL,
+      bid4 REAL, bid4_vol REAL, bid5 REAL, bid5_vol REAL,
+      ask1 REAL, ask1_vol REAL, ask2 REAL, ask2_vol REAL, ask3 REAL, ask3_vol REAL,
+      ask4 REAL, ask4_vol REAL, ask5 REAL, ask5_vol REAL,
+      time TEXT, source TEXT, fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
   `);
 
   migrate();
