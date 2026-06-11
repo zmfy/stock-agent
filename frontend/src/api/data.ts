@@ -52,6 +52,13 @@ export interface NewsItem {
   fetched_at: string;
 }
 
+export interface DataAlert {
+  level: 'error' | 'warn';
+  source: string;
+  message: string;
+  since: string | null;
+}
+
 export const dataApi = {
   getNews: () => api.get<{ data: NewsItem[] }>('/data/news'),
   refreshNews: () => api.post<{ data: { inserted: number; news: NewsItem[] } }>('/data/news/refresh'),
@@ -68,6 +75,7 @@ export const dataApi = {
   tdxTestServers: () => api.get('/data/tdx/servers/test').then((r) => r.data.data.servers as Array<{ site: string; addr: string; port: number; ok: boolean; latency_ms: number | null }>),
   tdxGetServer: () => api.get('/data/tdx/server').then((r) => r.data.data.server as string),
   tdxSetServer: (addr: string, port: number) => api.post('/data/tdx/server', { addr, port }).then((r) => r.data.data.server as string),
+  getAlerts: () => api.get('/data/alerts').then((r) => r.data.data as { alerts: DataAlert[] }),
   getProxy: () => api.get('/data/proxy').then((r) => r.data.data as { config: ProxyConfig; live: any }),
   setProxy: (cfg: ProxyConfig) => api.post('/data/proxy', cfg).then((r) => r.data.data as { config: ProxyConfig; live: any }),
   testProxy: (cfg?: ProxyConfig) => api.post('/data/proxy/test', cfg || {}).then((r) => r.data.data as { ok: boolean; latency_ms: number; source: string | null; error: string | null }),
