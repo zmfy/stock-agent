@@ -56,7 +56,7 @@ export interface StockSnapshot {
     market: { source: string; date: string; fetched_at: string } | null;
     sidecarBase: string | null;
   };
-  realtime?: { price: number; time: string; source: string | null } | null;
+  realtime?: Record<string, any> | null;
 }
 
 export interface GateResult {

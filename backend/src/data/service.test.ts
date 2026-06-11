@@ -353,3 +353,17 @@ describe('ingestRealtime', () => {
     expect(svc.getRealtime('600000')).toMatchObject({ price: 9.99, bid1: 9.98 });
   });
 });
+
+describe('getStockSnapshot 优先实时表', () => {
+  const svc = require('./service');
+  const sidecar = require('./sidecar');
+  afterEach(() => jest.restoreAllMocks());
+
+  it('实时表新鲜(<2min)时用表数据(含五档)、不调 live', async () => {
+    svc.cacheRealtime('600000', { price: 12.3, bid1: 12.29, bid1_vol: 100, ask1: 12.31, time: '10:00:00' }, 'tdx-rt');
+    const spy = jest.spyOn(sidecar, 'fetchRealtime').mockResolvedValue(null);
+    const snap = await svc.getStockSnapshot('uid', '600000');
+    expect(snap.realtime).toMatchObject({ price: 12.3, bid1: 12.29, bid1_vol: 100, ask1: 12.31 });
+    expect(spy).not.toHaveBeenCalled();
+  });
+});

@@ -507,6 +507,20 @@ export function getRealtime(code: string): Record<string, any> | null {
   return (getDb().prepare('SELECT * FROM realtime_quote WHERE code=?').get(code) as Record<string, any>) ?? null;
 }
 
+// 把 sidecar live 返回的 data 规范化为 snapshot.realtime 视图(含五档)
+export function toRealtimeView(d: Record<string, any> | null | undefined, source: string | null): Record<string, any> | null {
+  if (!d || d.price == null) return null;
+  const v: Record<string, any> = { price: Number(d.price), time: String(d.time ?? ''), source };
+  for (const k of ['open', 'high', 'low', 'prev_close', 'volume']) if (d[k] != null) v[k] = Number(d[k]);
+  for (let i = 1; i <= 5; i++) {
+    for (const s of ['bid', 'ask']) {
+      if (d[`${s}${i}`] != null) v[`${s}${i}`] = Number(d[`${s}${i}`]);
+      if (d[`${s}${i}_vol`] != null) v[`${s}${i}_vol`] = Number(d[`${s}${i}_vol`]);
+    }
+  }
+  return v;
+}
+
 // 北京时间是否在交易时段(09:30–11:30 / 13:00–15:00)的交易日内
 export function inTradingSession(nowMs: number = Date.now()): boolean {
   const bj = new Date(nowMs + 8 * 3600 * 1000);
@@ -660,13 +674,20 @@ export async function getStockSnapshot(userId: string, code: string): Promise<St
   };
   snap.realtime = null;
   try {
-    const base = resolveSidecarBase(userId);
-    if (base) {
-      const rt = await fetchRealtime(base, code);
-      const price = rt?.data?.price;
-      if (rt && price != null) snap.realtime = { price: Number(price), time: String(rt.data.time ?? ''), source: rt.source };
+    const rtRow = getRealtime(code);
+    const fresh = rtRow?.fetched_at && Date.now() - Date.parse(String(rtRow.fetched_at).replace(' ', 'T') + 'Z') < 120000;
+    if (fresh) {
+      snap.realtime = rtRow;
+    } else {
+      const base = resolveSidecarBase(userId);
+      if (base) {
+        const rt = await fetchRealtime(base, code);
+        snap.realtime = toRealtimeView(rt?.data, rt?.source ?? null);
+      }
     }
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
   return snap;
 }
 
