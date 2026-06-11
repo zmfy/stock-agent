@@ -8,7 +8,7 @@
 
     <div v-if="!alerts.length" class="ok-box">✅ 一切正常，暂无数据告警。</div>
     <ul v-else class="alert-list">
-      <li v-for="(a, i) in alerts" :key="i" class="alert-item" :class="a.level">
+      <li v-for="a in alerts" :key="a.source" class="alert-item" :class="a.level">
         <span class="badge">{{ a.level === 'error' ? '错误' : '警告' }}</span>
         <span class="src">{{ a.source }}</span>
         <span class="msg">{{ a.message }}</span>
