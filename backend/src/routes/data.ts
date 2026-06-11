@@ -7,6 +7,7 @@ import { QuoteRow } from '../types';
 import * as svc from '../data/service';
 import * as sources from '../data/sources-service';
 import { resolveSidecarBase, pingHealth, probe, probeList, probeOne, tdxTestServers, tdxSetServer, proxyGet, proxySet, proxyTest } from '../data/sidecar';
+import { getDataAlerts, type SidecarState } from '../data/alerts';
 import { listTitleLog, getContent } from '../data/news-log';
 import { monthCalendar } from '../data/trade-calendar';
 
@@ -255,6 +256,15 @@ router.post('/:job/force-stop', adminMiddleware, (req, res) => {
 router.get('/:job/log', adminMiddleware, (req, res) => {
   const job = jobName(req); if (!job) return errorResponse(res, 400, 'BAD_JOB', '未知任务');
   successResponse(res, svc.getJobLog(job));
+});
+
+// GET /api/data/alerts — 数据异常告警(实时计算，仅 admin)
+router.get('/alerts', adminMiddleware, async (req: Request, res: Response) => {
+  const base = resolveSidecarBase(req.user!.userId);
+  let sidecar: SidecarState;
+  if (!base) sidecar = 'unconfigured';
+  else sidecar = (await pingHealth(base)) ? 'ok' : 'down';
+  successResponse(res, { alerts: getDataAlerts(sidecar) });
 });
 
 // GET /api/data/source — is the sidecar configured + healthy?

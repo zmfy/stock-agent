@@ -167,6 +167,13 @@ describe('data routes', () => {
     expect((await request(app).get('/api/data/trade-calendar').set(uh())).status).toBe(200);
   });
 
+  it('GET /api/data/alerts 仅 admin', async () => {
+    expect((await request(app).get('/api/data/alerts').set(uh())).status).toBe(403);
+    const ok = await request(app).get('/api/data/alerts').set(h());
+    expect(ok.status).toBe(200);
+    expect(Array.isArray(ok.body.data.alerts)).toBe(true);
+  });
+
   it('GET /api/data/news/log 返回采集日志；/news/content/:id 返回内容', async () => {
     const nl = require('../data/news-log');
     const [{ content_id }] = nl.recordCollected([{ title: '日志测试', content: '内容Z', source: 'em', published_at: 'p' }]);
