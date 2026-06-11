@@ -1,5 +1,5 @@
 import { getDb } from '../db';
-import { QuoteRow, StockSnapshot } from '../types';
+import { QuoteRow, StockSnapshot, RealtimeQuoteView } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import { resolveSidecarBase, fetchFundamentals, fetchQuotes, fetchMarket, fetchName, fetchNews, fetchAllStocks, orderedProviders, fetchRealtime, fetchIndexBars } from './sidecar';
 import { recordCollected } from './news-log';
@@ -508,14 +508,14 @@ export function getRealtime(code: string): Record<string, any> | null {
 }
 
 // 把 sidecar live 返回的 data 规范化为 snapshot.realtime 视图(含五档)
-export function toRealtimeView(d: Record<string, any> | null | undefined, source: string | null): Record<string, any> | null {
+export function toRealtimeView(d: Record<string, any> | null | undefined, source: string | null): RealtimeQuoteView | null {
   if (!d || d.price == null) return null;
-  const v: Record<string, any> = { price: Number(d.price), time: String(d.time ?? ''), source };
-  for (const k of ['open', 'high', 'low', 'prev_close', 'volume']) if (d[k] != null) v[k] = Number(d[k]);
+  const v: RealtimeQuoteView = { price: Number(d.price), time: String(d.time ?? ''), source };
+  for (const k of ['open', 'high', 'low', 'prev_close', 'volume']) if (d[k] != null) (v as any)[k] = Number(d[k]);
   for (let i = 1; i <= 5; i++) {
     for (const s of ['bid', 'ask']) {
-      if (d[`${s}${i}`] != null) v[`${s}${i}`] = Number(d[`${s}${i}`]);
-      if (d[`${s}${i}_vol`] != null) v[`${s}${i}_vol`] = Number(d[`${s}${i}_vol`]);
+      if (d[`${s}${i}`] != null) (v as any)[`${s}${i}`] = Number(d[`${s}${i}`]);
+      if (d[`${s}${i}_vol`] != null) (v as any)[`${s}${i}_vol`] = Number(d[`${s}${i}_vol`]);
     }
   }
   return v;
@@ -533,7 +533,6 @@ export function inTradingSession(nowMs: number = Date.now()): boolean {
 export async function ingestRealtime(userId: string, opts: { now?: number } = {}): Promise<{ skipped: boolean; count: number }> {
   const now = opts.now ?? Date.now();
   if (!inTradingSession(now)) {
-    console.log('[realtime] 非交易时段，跳过');
     return { skipped: true, count: 0 };
   }
   const base = resolveSidecarBase(userId);
@@ -677,7 +676,7 @@ export async function getStockSnapshot(userId: string, code: string): Promise<St
     const rtRow = getRealtime(code);
     const fresh = rtRow?.fetched_at && Date.now() - Date.parse(String(rtRow.fetched_at).replace(' ', 'T') + 'Z') < 120000;
     if (fresh) {
-      snap.realtime = rtRow;
+      snap.realtime = toRealtimeView(rtRow, rtRow.source ?? null);
     } else {
       const base = resolveSidecarBase(userId);
       if (base) {

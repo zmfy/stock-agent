@@ -29,6 +29,17 @@ export interface QuoteRow {
   volume: number | null;
 }
 
+export interface RealtimeQuoteView {
+  price: number;
+  time: string;
+  source: string | null;
+  open?: number; high?: number; low?: number; prev_close?: number; volume?: number;
+  bid1?: number; bid1_vol?: number; bid2?: number; bid2_vol?: number; bid3?: number; bid3_vol?: number;
+  bid4?: number; bid4_vol?: number; bid5?: number; bid5_vol?: number;
+  ask1?: number; ask1_vol?: number; ask2?: number; ask2_vol?: number; ask3?: number; ask3_vol?: number;
+  ask4?: number; ask4_vol?: number; ask5?: number; ask5_vol?: number;
+}
+
 // Per-stock data snapshot consumed by the rule-engine (field names align with gate.field).
 export interface StockSnapshot {
   code: string;
@@ -56,7 +67,7 @@ export interface StockSnapshot {
     market: { source: string; date: string; fetched_at: string } | null;
     sidecarBase: string | null;
   };
-  realtime?: Record<string, any> | null;
+  realtime?: RealtimeQuoteView | null;
 }
 
 export interface GateResult {

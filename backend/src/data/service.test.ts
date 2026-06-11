@@ -366,4 +366,15 @@ describe('getStockSnapshot 优先实时表', () => {
     expect(snap.realtime).toMatchObject({ price: 12.3, bid1: 12.29, bid1_vol: 100, ask1: 12.31 });
     expect(spy).not.toHaveBeenCalled();
   });
+
+  it('实时表陈旧(>2min)时回退 live fetchRealtime', async () => {
+    svc.cacheRealtime('600001', { price: 5.0, time: '09:40:00' }, 'tdx-rt');
+    // 把 fetched_at 改成 10 分钟前，制造陈旧
+    require('../db').getDb().prepare("UPDATE realtime_quote SET fetched_at = datetime('now','-10 minutes') WHERE code='600001'").run();
+    jest.spyOn(sidecar, 'resolveSidecarBase').mockReturnValue('http://x');
+    const spy = jest.spyOn(sidecar, 'fetchRealtime').mockResolvedValue({ source: 'tdx-rt', data: { price: 5.55, bid1: 5.54, time: '10:00:00' } });
+    const snap = await svc.getStockSnapshot('uid', '600001');
+    expect(spy).toHaveBeenCalled();
+    expect(snap.realtime).toMatchObject({ price: 5.55, bid1: 5.54, source: 'tdx-rt' });
+  });
 });
