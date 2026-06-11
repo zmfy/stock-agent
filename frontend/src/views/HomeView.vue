@@ -29,6 +29,14 @@
 
     <!-- 右侧：顶部功能栏（聊天框之外，常驻） + 聊天 或 功能面板 -->
     <main class="main">
+      <div
+        v-if="auth.isAdmin && dataAlerts.length"
+        class="alert-bar"
+        :class="alertErrorCount ? 'err' : 'warn'"
+        @click="settingsKey = 'alerts'"
+      >
+        {{ alertErrorCount ? '🔴' : '🟡' }} 数据告警 {{ dataAlerts.length }} 条（{{ alertErrorCount }} 错误 / {{ alertWarnCount }} 警告）— 点击查看
+      </div>
       <nav class="topnav">
         <button class="hamburger" title="菜单" @click="railOpen = !railOpen">☰</button>
         <div class="tnav-scroll">
@@ -277,7 +285,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, nextTick, onMounted } from 'vue';
+import { ref, reactive, computed, nextTick, onMounted, onUnmounted } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { APP_VERSION } from '../version';
 import { useAuthStore } from '../stores/auth';
@@ -285,13 +293,14 @@ import { chatApi, type ChatSession, type ChatMessage, type ChatKind } from '../a
 import { rulebookApi, type ProposeResult, type FullRulebook, type Gate, type TemplateMeta } from '../api/rulebook';
 import { meetingsApi, type Meeting } from '../api/meetings';
 import { screenApi, type ScreenRun } from '../api/screen';
-import { dataApi } from '../api/data';
+import { dataApi, type DataAlert } from '../api/data';
 import { fmtCN, fmtCNDate } from '../utils/time';
 import AnalysisView from './AnalysisView.vue';
 import RulebookView from './RulebookView.vue';
 import AiSettingsView from './AiSettingsView.vue';
 import PluginsView from './PluginsView.vue';
 import DataView from './DataView.vue';
+import DataAlertsView from './DataAlertsView.vue';
 import SettingsView from './SettingsView.vue';
 import MeetingsHistoryView from './MeetingsHistoryView.vue';
 import CronsView from './CronsView.vue';
@@ -309,6 +318,7 @@ const SETTINGS = [
   { key: 'meetings', label: '早晚会历史', icon: '🗓', comp: MeetingsHistoryView, roles: 'user' },
   { key: 'analysis', label: '分析历史', icon: '📊', comp: AnalysisView, roles: 'user' },
   { key: 'data', label: '数据管理', icon: '📈', comp: DataView, roles: 'admin' },
+  { key: 'alerts', label: '数据告警', icon: '🚨', comp: DataAlertsView, roles: 'admin' },
   { key: 'ai', label: 'AI 模型', icon: '🤖', comp: AiSettingsView, roles: 'both' },
   { key: 'plugins', label: '能力插件', icon: '🧩', comp: PluginsView, roles: 'both' },
   { key: 'crons', label: '定时任务', icon: '⏰', comp: CronsView, roles: 'admin' },
@@ -346,6 +356,18 @@ const screen = ref<ScreenRun | null>(null);
 const screenPicks = computed(() => (screen.value?.results || []).filter((r) => r.aPass || r.bPass));
 const screenHistory = ref<Array<{ created_at: string; note: string; picks: Array<{ code: string; name: string | null; reason: string }> }>>([]);
 const screenHistOpen = ref(false);
+
+const dataAlerts = ref<DataAlert[]>([]);
+const alertErrorCount = computed(() => dataAlerts.value.filter((a) => a.level === 'error').length);
+const alertWarnCount = computed(() => dataAlerts.value.filter((a) => a.level === 'warn').length);
+let alertsTimer: number | undefined;
+async function loadDataAlerts() {
+  try {
+    dataAlerts.value = (await dataApi.getAlerts()).alerts;
+  } catch {
+    /* ignore */
+  }
+}
 
 // A 股日历弹窗
 const calToday = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Shanghai' }); // YYYY-MM-DD（北京）
@@ -912,6 +934,8 @@ onMounted(async () => {
   // admin 是纯运维账号：不加载聊天/早晚会/当前策略，默认停在运维面板。
   if (auth.isAdmin) {
     if (!settingsKey.value) settingsKey.value = 'data';
+    await loadDataAlerts();
+    alertsTimer = window.setInterval(loadDataAlerts, 30000);
     return;
   }
   await loadSessions();
@@ -933,6 +957,9 @@ onMounted(async () => {
   if (route.query.interview === '1' && needsInit.value) {
     await startInterview();
   }
+});
+onUnmounted(() => {
+  if (alertsTimer) clearInterval(alertsTimer);
 });
 </script>
 
@@ -1132,4 +1159,7 @@ onMounted(async () => {
 .synth-sys li, .synth-soft li { font-size: 13px; }
 .tpl-interview-entry { margin: 6px 0; font-size: 12px; }
 .tpl-interview-entry a { color: var(--accent, #2a8a2a); }
+.alert-bar { cursor: pointer; padding: 8px 16px; font-size: 13px; font-weight: 600; color: #fff; }
+.alert-bar.err { background: #d33; }
+.alert-bar.warn { background: #d9a300; }
 </style>
