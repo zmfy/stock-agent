@@ -56,7 +56,7 @@
 
               <div v-if="needsInit" class="cp-cta">
                 <div class="cp-cta-title">🎯 你还没有当前策略</div>
-                <p class="cp-cta-desc">当前策略是我帮你选股、判断买卖的依据。现在还不能「按原则选股」，早晚会也只看大盘与板块。</p>
+                <p class="cp-cta-desc">当前策略是我帮你选股、判断买卖的依据。现在还不能「按当前策略选股」，早晚会也只看大盘与板块。</p>
                 <button class="cp-cta-btn" @click="startInterview">🗣 和来财聊出我的当前策略</button>
                 <div class="cp-cta-alt"><router-link to="/onboarding">📋 或：选个模板快速开始 →</router-link></div>
               </div>
@@ -71,7 +71,7 @@
               <div class="title">
                 {{ active.title || sessionLabel(active) }}
                 <span v-if="active.kind === 'stock'" class="stock-head">
-                  <button class="mini" :disabled="analyzing" @click="doAnalyze(active)">{{ analyzing ? '按原则分析中…' : '🔄 重新按当前策略分析' }}</button>
+                  <button class="mini" :disabled="analyzing" @click="doAnalyze(active)">{{ analyzing ? '按当前策略分析中…' : '🔄 重新按当前策略分析' }}</button>
                   <button class="mini" @click="openReport(active.ref_id!)">完整报告</button>
                 </span>
                 <button class="mini clear-cur" @click="clearCurrent" title="清空当前会话的消息">🧹 清理</button>
@@ -822,7 +822,7 @@ async function openScreen() {
 }
 async function runScreen() {
   if (needsInit.value) {
-    chatErr.value = '你还没有当前策略，无法按原则选股。先点上方/中间的「🗣 和来财聊出我的当前策略」定一套吧。';
+    chatErr.value = '你还没有当前策略，无法按当前策略选股。先点上方/中间的「🗣 和来财聊出我的当前策略」定一套吧。';
     return;
   }
   // 已在后台选股中：只切回选股会话，不重复触发
