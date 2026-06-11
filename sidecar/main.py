@@ -478,7 +478,7 @@ def realtime(code: str):
         row = d.get(code) or {}
         if not row:
             return None
-        return {
+        base = {
             "price": _f(row.get("now")), "open": _f(row.get("open")),
             "high": _f(row.get("high")), "low": _f(row.get("low")),
             "prev_close": _f(row.get("close")),
@@ -486,6 +486,12 @@ def realtime(code: str):
             "name": row.get("name"),
             "time": (str(row.get("date", "")) + " " + str(row.get("time", ""))).strip(),
         }
+        for i in range(1, 6):
+            base[f"bid{i}"] = _f(row.get(f"bid{i}"))
+            base[f"bid{i}_vol"] = _f(row.get(f"bid{i}_volume"))
+            base[f"ask{i}"] = _f(row.get(f"ask{i}"))
+            base[f"ask{i}_vol"] = _f(row.get(f"ask{i}_volume"))
+        return base
     data = _timed(_fn, 8)
     return {"source": "sina-rt" if data else None, "data": data or {}}
 

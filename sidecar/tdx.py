@@ -283,13 +283,19 @@ def realtime(code):
         if q is None or len(q) == 0:
             return None
         r = q.iloc[0]
-        return {
+        out = {
             "price": _f(r.get("price")), "open": _f(r.get("open")),
             "high": _f(r.get("high")), "low": _f(r.get("low")),
             "prev_close": _f(r.get("last_close")),
             "volume": _f(r.get("vol")), "name": None,
             "time": str(r.get("servertime") or ""),
         }
+        for i in range(1, 6):
+            out[f"bid{i}"] = _f(r.get(f"bid{i}"))
+            out[f"bid{i}_vol"] = _f(r.get(f"bid_vol{i}"))
+            out[f"ask{i}"] = _f(r.get(f"ask{i}"))
+            out[f"ask{i}_vol"] = _f(r.get(f"ask_vol{i}"))
+        return out
     return _call(fn)
 
 
