@@ -314,13 +314,14 @@ const SETTINGS = [
   { key: 'crons', label: '定时任务', icon: '⏰', comp: CronsView, roles: 'admin' },
   { key: 'account', label: '账号设置', icon: '👤', comp: SettingsView, roles: 'both' },
 ];
-// '' = 聊天；否则为某个功能面板。admin 无聊天 → 默认落「数据管理」(若 user 已同步加载)。
+// '' = 聊天；否则为某个功能面板。admin 无聊天:此处覆盖 user 已水合的热路径;冷启动(user 尚未 fetchMe)时由 onMounted 兜底设为 'data'。
 const settingsKey = ref(auth.isAdmin ? 'data' : '');
 const settingsMenu = computed(() =>
   SETTINGS.filter((s: any) => s.roles === 'both' || s.roles === (auth.isAdmin ? 'admin' : 'user')),
 );
 const currentSettingsComp = computed(() => SETTINGS.find((s) => s.key === settingsKey.value)?.comp);
 function goChat() {
+  if (auth.isAdmin) return; // admin 纯运维账号无聊天视图，防止被程序化调用落入聊天壳
   settingsKey.value = '';
 }
 const router = useRouter();
