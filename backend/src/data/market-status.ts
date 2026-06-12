@@ -37,8 +37,8 @@ export function getMarketStatus(nowMs: number, sidecar: SidecarState): MarketSta
       return { name: d.name, code: d.key, point: null, prevClose: null, changePct: null, basis: '收盘' as const };
     }
     if (r.fetched_at && (!updatedAt || r.fetched_at > updatedAt)) updatedAt = r.fetched_at;
-    // 盘中取数时 sidecar 会填 time 字段(如 '10:00')；有 time 说明是当日盘中数据。
-    const hasIntradayTime = r.time != null && String(r.time).trim() !== '';
+    // 「实时」仅在盘中 且 缓存行是今天(北京日期)取的；否则为昨日收盘或更旧数据。
+    const isToday = cnDate(r.fetched_at) === today;
     const prev = r.prev_close ?? null;
     const changePct = prev ? ((r.price - prev) / prev) * 100 : null;
     return {
@@ -47,7 +47,7 @@ export function getMarketStatus(nowMs: number, sidecar: SidecarState): MarketSta
       point: r.price,
       prevClose: prev,
       changePct,
-      basis: session && hasIntradayTime ? '实时' : '收盘',
+      basis: session && isToday ? '实时' : '收盘',
     };
   });
 

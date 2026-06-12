@@ -18,6 +18,7 @@ beforeEach(() => {
 describe('getMarketStatus', () => {
   it('盘中且当天有缓存 → basis=实时,带点数与涨跌幅', () => {
     svc.cacheRealtime('sh000001', { price: 4031.5, prev_close: 3987.0, time: '10:00' }, 'tdx-idx');
+    getDb().prepare("UPDATE realtime_quote SET fetched_at = '2026-06-10 02:00:00' WHERE code = 'sh000001'").run();
     const st = getMarketStatus(WED_SESSION, 'ok');
     const sh = st.indices.find((x: any) => x.code === 'sh000001');
     expect(sh).toMatchObject({ name: '上证综指', point: 4031.5, basis: '实时' });
