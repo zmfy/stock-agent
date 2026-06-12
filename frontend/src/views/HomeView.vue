@@ -1005,6 +1005,7 @@ onUnmounted(() => {
 .chat-row { flex: 1; display: flex; min-height: 0; gap: 16px; }
 .chat-main { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 .room-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 6px 0 10px; }
+.room-actions .ops-btn { width: auto; }
 .ops-btn { width: 100%; text-align: left; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 9px 11px; font-size: 13px; cursor: pointer; color: var(--text); transition: all 0.15s; }
 .ops-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent-600); }
 .ops-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
@@ -1074,7 +1075,6 @@ onUnmounted(() => {
 .composeprev .warn { color: #a76b00; }
 .sysrow { display: flex; justify-content: space-between; align-items: center; padding: 2px 0; }
 .sysrow .ord { display: flex; gap: 4px; }
-.propose-bar { margin: 6px 0; }
 .propose-btn { width: 100%; background: #fff7e6; border: 1px solid #ffe0a3; border-radius: 6px; padding: 8px; cursor: pointer; font-size: 13px; }
 .proposal { background: #f3faf3; border: 1px solid #cce8cc; border-radius: 8px; padding: 10px 12px; margin: 6px 0; font-size: 13px; }
 .proposal h4 { margin: 0 0 6px; }
