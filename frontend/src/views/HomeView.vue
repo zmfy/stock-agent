@@ -86,6 +86,61 @@
                 </span>
                 <button class="mini clear-cur" @click="clearCurrent" title="清空当前会话的消息">🧹 清理</button>
               </div>
+              <!-- 房间专属动作（取代原右侧操作面板） -->
+              <div v-if="active.kind === 'morning' && !meetings.morning" class="room-actions">
+                <button class="ops-btn dashed" @click="genMeeting('morning')">📈 生成今日早会</button>
+              </div>
+              <div v-else-if="active.kind === 'evening' && !meetings.evening" class="room-actions">
+                <button class="ops-btn dashed" @click="genMeeting('evening')">🌙 生成今日晚会</button>
+              </div>
+              <div v-else-if="active.kind === 'screen'" class="room-actions">
+                <template v-if="activeRulebook">
+                  <button class="ops-btn" @click="runScreen">🔍 按当前策略选股</button>
+                </template>
+                <template v-else>
+                  <span class="muted">还没有当前策略，无法选股。</span>
+                  <button class="ops-btn" @click="openCorePrinciple">去「当前策略」房间定一套 →</button>
+                </template>
+              </div>
+              <div v-else-if="active.kind === 'core_principle'" class="room-actions">
+                <button class="ops-btn" @click="tplOpen = !tplOpen">📜 更换 / 组合模板</button>
+                <button v-if="needsInit" class="propose-btn" :disabled="synthesizing" @click="synthesizePrinciple">
+                  <span v-if="synthesizing" class="spinner"></span>{{ synthesizing ? '来财生成中…' : '🛠 根据我们的聊天，帮我生成当前策略' }}
+                </button>
+                <button v-else class="propose-btn" :disabled="proposing" @click="propose">
+                  <span v-if="proposing" class="spinner"></span>{{ proposing ? 'agent 拟定中…' : '🛠 根据本次讨论，让 agent 提议修改规则' }}
+                </button>
+                <div v-if="tplOpen" class="tplswitch">
+                  <div class="tpl-head">
+                    <span>更换 / 组合模板（可多选）</span>
+                    <button class="mini" @click="tplOpen = false">收起</button>
+                  </div>
+                  <div class="tplgrid">
+                    <label v-for="t in templates" :key="t.key" class="tplcheck">
+                      <input type="checkbox" :value="t.key" v-model="tplSelected" /> {{ t.label }}
+                    </label>
+                  </div>
+                  <button :disabled="!tplSelected.length" @click="previewCompose">预览组合（{{ tplSelected.length }}）</button>
+                  <div class="tpl-interview-entry">
+                    <a href="#" @click.prevent="startInterview">或：我还没想好，帮我从聊天聊出一套 →</a>
+                  </div>
+                  <div v-if="composeRes" class="composeprev">
+                    <p v-if="!composeRes.conflict" class="ok-msg">✅ 无冲突，将合并为一套：{{ composeRes.versionLabel }}</p>
+                    <template v-else>
+                      <p class="warn">⚠️ 存在冲突（字段：{{ composeRes.conflictFields.join('、') }}），将拆为多套系统，请排优先级（上=优先）：</p>
+                      <div v-for="(k, i) in orderedKeys" :key="k" class="sysrow">
+                        <span><b>{{ String.fromCharCode(65 + i) }}</b>：{{ labelOfKey(k) }}</span>
+                        <span class="ord">
+                          <button class="mini" :disabled="i === 0" @click="moveKey(i, -1)">↑</button>
+                          <button class="mini" :disabled="i === orderedKeys.length - 1" @click="moveKey(i, 1)">↓</button>
+                        </span>
+                      </div>
+                    </template>
+                    <button @click="applyCompose">换入为当前策略</button>
+                  </div>
+                  <span v-if="tplMsg" class="ok-msg">{{ tplMsg }}</span>
+                </div>
+              </div>
               <div v-if="analyzing" class="analyzing">正在按你的当前策略分析 {{ active.ref_id }} …</div>
               <div v-if="active && generating.has(active.kind)" class="gen-banner">
                 ⏳ 正在生成，可能需要一会儿。你可以先去别处，稍后回到本会话查看结果。
@@ -186,97 +241,7 @@
             </template>
           </div>
 
-          <!-- 右：操作框（所有聊天通用，可隐藏） -->
-          <aside v-if="opsOpen" class="ops-side">
-            <div class="ops-head"><span>操作面板</span><button class="mini" @click="opsOpen = false">收起 ›</button></div>
-
-            <!-- 早会 -->
-            <button v-if="meetings.morning" class="ops-btn" :class="{ active: active?.kind === 'morning' }" @click="openMeeting('morning')">📈 今日操作方向（早会）</button>
-            <button v-else class="ops-btn dashed" @click="genMeeting('morning')">📈 生成今日早会</button>
-
-            <!-- 晚会 -->
-            <button v-if="meetings.evening" class="ops-btn" :class="{ active: active?.kind === 'evening' }" @click="openMeeting('evening')">🌙 今日操作复盘（晚会）</button>
-            <button v-else class="ops-btn dashed" @click="genMeeting('evening')">🌙 生成今日晚会</button>
-
-            <!-- 选股 -->
-            <button class="ops-btn" @click="runScreen">🔍 按当前策略选股</button>
-
-            <!-- 当前策略讨论 / 更换模板（合并入口） -->
-            <button class="ops-btn" :class="{ active: active?.kind === 'core_principle' }" @click="openPrincipleAndTemplates">📜 当前策略讨论 / 更换模板</button>
-
-            <div v-if="tplOpen" class="tplswitch">
-              <div class="tpl-head">
-                <span>更换 / 组合模板（可多选）</span>
-                <button class="mini" @click="tplOpen = false">收起</button>
-              </div>
-              <div class="tplgrid">
-                <label v-for="t in templates" :key="t.key" class="tplcheck">
-                  <input type="checkbox" :value="t.key" v-model="tplSelected" /> {{ t.label }}
-                </label>
-              </div>
-              <button :disabled="!tplSelected.length" @click="previewCompose">预览组合（{{ tplSelected.length }}）</button>
-              <div class="tpl-interview-entry">
-                <a href="#" @click.prevent="startInterview">或：我还没想好，帮我从聊天聊出一套 →</a>
-              </div>
-
-              <div v-if="composeRes" class="composeprev">
-                <p v-if="!composeRes.conflict" class="ok-msg">✅ 无冲突，将合并为一套：{{ composeRes.versionLabel }}</p>
-                <template v-else>
-                  <p class="warn">⚠️ 存在冲突（字段：{{ composeRes.conflictFields.join('、') }}），将拆为多套系统，请排优先级（上=优先）：</p>
-                  <div v-for="(k, i) in orderedKeys" :key="k" class="sysrow">
-                    <span><b>{{ String.fromCharCode(65 + i) }}</b>：{{ labelOfKey(k) }}</span>
-                    <span class="ord">
-                      <button class="mini" :disabled="i === 0" @click="moveKey(i, -1)">↑</button>
-                      <button class="mini" :disabled="i === orderedKeys.length - 1" @click="moveKey(i, 1)">↓</button>
-                    </span>
-                  </div>
-                </template>
-                <button @click="applyCompose">换入为当前策略</button>
-              </div>
-              <span v-if="tplMsg" class="ok-msg">{{ tplMsg }}</span>
-            </div>
-
-            <!-- 让 agent 提议修改（进入当前策略讨论后显示，在换模板按钮下边） -->
-            <template v-if="active?.kind === 'core_principle'">
-              <div class="propose-bar">
-                <button v-if="needsInit" class="propose-btn" :disabled="synthesizing" @click="synthesizePrinciple">
-                  <span v-if="synthesizing" class="spinner"></span>{{ synthesizing ? '来财生成中…' : '🛠 根据我们的聊天，帮我生成当前策略' }}
-                </button>
-                <button v-else class="propose-btn" :disabled="proposing" @click="propose">
-                  <span v-if="proposing" class="spinner"></span>{{ proposing ? 'agent 拟定中…' : '🛠 根据本次讨论，让 agent 提议修改规则' }}
-                </button>
-              </div>
-
-            </template>
-
-            <!-- A 股日历（面板最底部，点击在按钮上方弹出当月休市日） -->
-            <div class="cal-wrap">
-              <div v-if="calOpen" class="cal-pop">
-                <div class="cal-nav">
-                  <button class="mini" @click="prevMonth">‹</button>
-                  <span>{{ calYear }} 年 {{ calMonth }} 月</span>
-                  <button class="mini" @click="nextMonth" :disabled="atCalMax">›</button>
-                </div>
-                <div class="cal-grid cal-head">
-                  <span v-for="w in ['一','二','三','四','五','六','日']" :key="w">{{ w }}</span>
-                </div>
-                <div class="cal-grid">
-                  <span v-for="n in calLead" :key="'b'+n" class="cal-cell blank"></span>
-                  <span v-for="d in calDays" :key="d.date"
-                        class="cal-cell" :class="{ closed: !d.trading, today: d.date === calToday }">
-                    {{ Number(d.date.slice(8, 10)) }}
-                    <i v-if="!d.trading" class="cal-x">休</i>
-                  </span>
-                </div>
-                <div class="cal-foot muted">灰色=休市（周末/节假日），不开早晚会；今日高亮。</div>
-              </div>
-              <button class="ops-btn" @click="toggleCalendar">📅 A 股日历</button>
-            </div>
-          </aside>
         </div>
-
-        <!-- 操作框隐藏后，右下角悬浮重开按钮 -->
-        <button v-if="!opsOpen" class="ops-fab" @click="opsOpen = true" title="显示操作框">⚙ 操作</button>
       </section>
     </main>
     <MarkdownModal :open="detailOpen" :text="detailText" @close="detailOpen = false" />
@@ -425,8 +390,6 @@ function nextMonth() {
   if (calMonth.value === 12) { calMonth.value = 1; calYear.value++; } else calMonth.value++;
   loadCalendar();
 }
-const isMobile = typeof window !== 'undefined' && window.innerWidth <= 768;
-const opsOpen = ref(!isMobile); // 右侧操作框是否展开（手机默认收起，避免遮挡）
 const railOpen = ref(false); // 移动端左栏抽屉
 const activeRulebook = ref<FullRulebook | null>(null);
 const templates = ref<TemplateMeta[]>([]);
@@ -437,11 +400,6 @@ const composeRes = ref<{ conflict: boolean; conflictFields: string[]; systems: a
 const tplMsg = ref('');
 function labelOfKey(k: string) {
   return templates.value.find((t) => t.key === k)?.label || k;
-}
-// 合并入口：进入当前策略讨论 + 展开模板区
-async function openPrincipleAndTemplates() {
-  tplOpen.value = true;
-  await openCorePrinciple();
 }
 async function previewCompose() {
   tplMsg.value = '';
@@ -1043,12 +1001,10 @@ onUnmounted(() => {
 .ticon { font-size: 14px; }
 .panelbox { flex: 1; overflow-y: auto; margin: 14px; padding: 16px 20px; background: var(--surface); border-radius: 14px; box-shadow: var(--shadow); min-height: 0; }
 .chat { flex: 1; display: flex; flex-direction: column; padding: 16px 20px; margin: 14px; background: var(--surface); border-radius: 14px; box-shadow: var(--shadow); min-width: 0; min-height: 0; }
-/* 对话区：默认单栏；当前策略时右侧加规则操作面板 */
-/* 聊天区：左对话主体 + 右操作框 */
+/* 聊天区：对话主体（单栏，操作内联进各房间标题下方） */
 .chat-row { flex: 1; display: flex; min-height: 0; gap: 16px; }
 .chat-main { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
-.ops-side { width: 286px; flex: none; overflow-y: auto; border-left: 1px solid var(--border); padding-left: 14px; display: flex; flex-direction: column; gap: 8px; }
-.ops-head { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--muted); padding-bottom: 2px; }
+.room-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 6px 0 10px; }
 .ops-btn { width: 100%; text-align: left; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 9px 11px; font-size: 13px; cursor: pointer; color: var(--text); transition: all 0.15s; }
 .ops-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent-600); }
 .ops-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
@@ -1065,9 +1021,6 @@ onUnmounted(() => {
 .cal-cell.today { outline: 2px solid var(--accent); font-weight: 700; }
 .cal-x { position: absolute; top: 0; right: 2px; font-size: 8px; color: #c98; font-style: normal; }
 .cal-foot { margin-top: 6px; font-size: 11px; }
-.ops-side .tplswitch, .ops-side .propose-bar, .ops-side .proposal { margin: 0; }
-.ops-fab { position: fixed; right: 22px; bottom: 104px; z-index: 50; background: #e5484d; color: #fff; border: none; border-radius: 22px; padding: 10px 16px; box-shadow: var(--shadow-md); cursor: pointer; font-size: 13px; font-weight: 600; }
-.ops-fab:hover { background: #d23b40; }
 
 /* ============ 移动端适配（<=768px）============ */
 @media (max-width: 768px) {
@@ -1081,12 +1034,9 @@ onUnmounted(() => {
   .chat, .panelbox { margin: 8px; padding: 12px 12px; border-radius: 12px; }
   .topnav { padding: 10px 10px 0; }
   .topnav-user .uname { display: none; }
-  /* 右操作框变为右侧抽屉 */
   .chat-row { flex-direction: column; }
-  .ops-side { position: fixed; z-index: 60; top: 0; right: 0; bottom: 0; width: 86%; max-width: 340px; background: var(--surface); border-left: 1px solid var(--border); padding: 14px; box-shadow: -4px 0 22px rgba(0, 0, 0, 0.3); }
   .cp-side, .convo { width: auto; }
   .bubble { max-width: 88%; }
-  .ops-fab { bottom: 84px; right: 14px; }
 }
 .empty { margin: auto; text-align: center; color: var(--text-soft); max-width: 460px; }
 .empty h2 { font-size: 22px; margin-bottom: 8px; }
