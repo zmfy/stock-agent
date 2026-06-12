@@ -12,14 +12,15 @@ import { getTodayContent } from '../meetings/service';
 import { getActive, listVersionHistory } from '../rulebook/service';
 import { getLatest as getLatestScreen } from '../screen/service';
 import { buildMarketInjection } from './market-context';
+import { isTradingDay } from '../data/trade-calendar';
+import { beijingDate, dailyPhase, getStrategy, getIntradayTimeline } from '../strategy/service';
 
-export type ChatKind = 'general' | 'core_principle' | 'stock' | 'morning' | 'evening' | 'screen';
+export type ChatKind = 'general' | 'core_principle' | 'stock' | 'morning' | 'evening' | 'screen' | 'daily';
 
-export const FIXED_ROOM_KINDS = ['core_principle', 'morning', 'evening', 'screen'] as const satisfies ChatKind[];
+export const FIXED_ROOM_KINDS = ['core_principle', 'daily', 'screen'] as const satisfies ChatKind[];
 const FIXED_ROOM_TITLES: Record<typeof FIXED_ROOM_KINDS[number], string> = {
   core_principle: '当前策略探讨',
-  morning: '早会讨论',
-  evening: '晚会讨论',
+  daily: '当天策略和复盘',
   screen: '选股讨论',
 };
 
@@ -38,6 +39,7 @@ const KIND_FRAMING: Record<ChatKind, string> = {
   morning: '盘前早会：基于大盘与板块信息给出今日操作方向。',
   evening: '盘后晚会：复盘今日操作，总结成败、找原因。',
   screen: '按当前策略的选股讨论：解释本次选股结果与依据，回答关于入选/未入选个股的追问；不替用户做买卖决定。',
+  daily: '当天策略与复盘：结合今日的策略预判/盘中/复盘，与用户讨论操作与得失。',
 };
 
 const CORE_PRINCIPLE_INTERVIEW_FRAMING =
@@ -80,6 +82,13 @@ export function ensureFixedRooms(userId: string): any[] {
         .run(uuidv4(), userId, kind, FIXED_ROOM_TITLES[kind]);
     } else {
       db.prepare('UPDATE chat_sessions SET pinned = 1 WHERE id = ?').run(existing.id);
+    }
+  }
+  for (const oldKind of ['morning', 'evening']) {
+    const rows = db.prepare('SELECT id FROM chat_sessions WHERE user_id = ? AND kind = ?').all(userId, oldKind) as { id: string }[];
+    for (const r of rows) {
+      db.prepare('DELETE FROM chat_messages WHERE session_id = ?').run(r.id);
+      db.prepare('DELETE FROM chat_sessions WHERE id = ?').run(r.id);
     }
   }
   return listSessions(userId);
@@ -216,9 +225,23 @@ export async function postMessage(userId: string, sessionId: string, content: st
   if (!extra && session.kind === 'stock' && session.ref_id) {
     extra = reportContext(getLatestReportByCode(userId, session.ref_id));
   }
-  if (!extra && (session.kind === 'morning' || session.kind === 'evening')) {
-    const mc = getTodayContent(userId, session.kind);
-    if (mc) extra = `今日${session.kind === 'morning' ? '早会' : '晚会'}内容：\n${mc}`;
+  if (!extra && session.kind === 'daily') {
+    const now = Date.now();
+    const date = beijingDate(now);
+    const phase = dailyPhase(now, isTradingDay(date));
+    if (phase === 'prejudge') {
+      const r = getStrategy(userId, date, 'prejudge');
+      if (r) extra = `今日策略预判：\n${r.content}`;
+    } else if (phase === 'intraday') {
+      const tl = getIntradayTimeline(userId, date);
+      if (tl.length) extra = `今日盘中时间线：\n${tl.map((x: any) => `· ${x.content}`).join('\n')}`;
+    } else if (phase === 'review') {
+      const r = getStrategy(userId, date, 'review');
+      if (r) extra = `今日复盘：\n${r.content}`;
+    } else {
+      const r = getStrategy(userId, date, 'holiday');
+      if (r) extra = `休市快报：\n${r.content}`;
+    }
   }
   if (!extra && session.kind === 'screen') {
     const s = getLatestScreen(userId);

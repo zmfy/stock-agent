@@ -150,12 +150,12 @@ describe('chat routes', () => {
 });
 
 describe('fixed rooms', () => {
-  it('ensure-fixed-rooms 幂等建齐 4 个固定房间且都置顶', async () => {
+  it('ensure-fixed-rooms 幂等建齐 3 个固定房间且都置顶', async () => {
     await request(app).post('/api/chat/ensure-fixed-rooms').set(h(userTok));
     const again = await request(app).post('/api/chat/ensure-fixed-rooms').set(h(userTok));
     expect(again.status).toBe(200);
     const list = (await request(app).get('/api/chat/sessions').set(h(userTok))).body.data as any[];
-    for (const k of ['core_principle', 'morning', 'evening', 'screen']) {
+    for (const k of ['core_principle', 'daily', 'screen']) {
       const rooms = list.filter((s) => s.kind === k);
       expect(rooms).toHaveLength(1);
       expect(rooms[0].pinned).toBe(1);
@@ -198,6 +198,17 @@ describe('fixed rooms', () => {
     expect(cp).toHaveLength(1);            // 没有产生重复行
     expect(cp[0].id).toBe(id);             // 复用原会话
     expect(cp[0].pinned).toBe(1);          // 被置顶
+  });
+
+  it('ensure 后固定房间含 daily，删除旧 morning/evening 房间，daily 不可删(409)', async () => {
+    await request(app).post('/api/chat/sessions').set(h(userTok)).send({ kind: 'morning' });
+    await request(app).post('/api/chat/ensure-fixed-rooms').set(h(userTok));
+    const list = (await request(app).get('/api/chat/sessions').set(h(userTok))).body.data as any[];
+    expect(list.find((s: any) => s.kind === 'daily')).toBeTruthy();
+    expect(list.filter((s: any) => s.kind === 'morning' || s.kind === 'evening')).toHaveLength(0);
+    const daily = list.find((s: any) => s.kind === 'daily');
+    expect(daily.pinned).toBe(1);
+    expect((await request(app).delete(`/api/chat/sessions/${daily.id}`).set(h(userTok))).status).toBe(409);
   });
 });
 
