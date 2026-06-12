@@ -178,6 +178,27 @@ describe('fixed rooms', () => {
     expect((await request(app).put(`/api/chat/sessions/${id}/pin`).set(h(userTok)).send({ pinned: true })).status).toBe(200);
     expect((await request(app).delete(`/api/chat/sessions/${id}`).set(h(userTok))).status).toBe(200);
   });
+
+  it('已存在但未置顶的固定房间会被 ensure 置顶', async () => {
+    // 手动建一个 pinned=0 的 core_principle 会话，再 ensure 应被翻成 pinned=1
+    // 使用独立新用户，确保测试与其他用例的执行顺序无关（不受 userTok 已有固定房间的影响）
+    const adminLogin = await request(app).post('/api/auth/login').send({ username: 'stock-agent', password: 'sg123456', agreed: true });
+    const adminTok = adminLogin.body.data.accessToken;
+    const inv = await request(app).post('/api/settings/users/invite').set(h(adminTok));
+    const reg = await request(app)
+      .post('/api/auth/register')
+      .send({ username: 'fliptest_user', password: 'secret123', inviteCode: inv.body.data.code, agreed: true });
+    const freshTok = reg.body.data.accessToken;
+
+    const create = await request(app).post('/api/chat/sessions').set(h(freshTok)).send({ kind: 'core_principle' });
+    const id = create.body.data.id;
+    await request(app).post('/api/chat/ensure-fixed-rooms').set(h(freshTok));
+    const list = (await request(app).get('/api/chat/sessions').set(h(freshTok))).body.data as any[];
+    const cp = list.filter((s) => s.kind === 'core_principle');
+    expect(cp).toHaveLength(1);            // 没有产生重复行
+    expect(cp[0].id).toBe(id);             // 复用原会话
+    expect(cp[0].pinned).toBe(1);          // 被置顶
+  });
 });
 
 describe('agent profiles routes', () => {

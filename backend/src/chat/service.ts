@@ -15,8 +15,8 @@ import { buildMarketInjection } from './market-context';
 
 export type ChatKind = 'general' | 'core_principle' | 'stock' | 'morning' | 'evening' | 'screen';
 
-export const FIXED_ROOM_KINDS: ChatKind[] = ['core_principle', 'morning', 'evening', 'screen'];
-const FIXED_ROOM_TITLES: Record<string, string> = {
+export const FIXED_ROOM_KINDS = ['core_principle', 'morning', 'evening', 'screen'] as const satisfies ChatKind[];
+const FIXED_ROOM_TITLES: Record<typeof FIXED_ROOM_KINDS[number], string> = {
   core_principle: '当前策略探讨',
   morning: '早会讨论',
   evening: '晚会讨论',
