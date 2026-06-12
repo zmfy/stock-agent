@@ -32,6 +32,11 @@ router.put('/schedule', (req: Request, res: Response) => {
   }
 });
 
+// GET /api/strategy/history — 策略历史(倒序)
+router.get('/history', (req: Request, res: Response) => {
+  successResponse(res, svc.listStrategyHistory(req.user!.userId));
+});
+
 // GET /api/strategy/today — 当天策略房间渲染数据(按北京时段)
 router.get('/today', (req: Request, res: Response) => {
   const uid = req.user!.userId;

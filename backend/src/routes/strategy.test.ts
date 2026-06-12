@@ -54,3 +54,21 @@ describe('strategy today + generate routes', () => {
     expect((await request(app).post('/api/strategy/generate/foo').set(h(userTok))).status).toBe(422);
   });
 });
+
+describe('strategy history', () => {
+  it('listStrategyHistory 返回该用户记录(倒序，含 phase/date)', () => {
+    const svc = require('../strategy/service');
+    svc.recordStrategy('hist-uid', 'prejudge', '预判A', {}, '2026-06-09');
+    svc.recordStrategy('hist-uid', 'intraday', '盘中B', {}, '2026-06-10');
+    const rows = svc.listStrategyHistory('hist-uid');
+    expect(rows.length).toBe(2);
+    expect(rows[0].content).toBe('盘中B'); // 最近写的在前
+    expect(rows[0]).toHaveProperty('phase');
+    expect(rows[0]).toHaveProperty('date');
+  });
+  it('GET /history 路由返回数组', async () => {
+    const res = await request(app).get('/api/strategy/history').set(h(userTok));
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body.data)).toBe(true);
+  });
+});

@@ -72,3 +72,10 @@ export function getLatestIntraday(userId: string, date: string): any | null {
 export function hasStrategy(userId: string, date: string, phase: StrategyPhase): boolean {
   return !!getDb().prepare('SELECT 1 FROM daily_strategy WHERE user_id=? AND date=? AND phase=? LIMIT 1').get(userId, date, phase);
 }
+
+// 该用户策略历史(预判/盘中/复盘/休市快报)，按时间倒序，给「策略历史」页用。
+export function listStrategyHistory(userId: string, limit = 120): any[] {
+  return getDb()
+    .prepare('SELECT date, phase, content, created_at, updated_at FROM daily_strategy WHERE user_id = ? ORDER BY created_at DESC, rowid DESC LIMIT ?')
+    .all(userId, limit) as any[];
+}
