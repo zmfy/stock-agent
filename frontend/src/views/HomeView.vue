@@ -103,16 +103,18 @@
 
             <template v-else>
               <div class="title">
-                {{ active.title || sessionLabel(active) }}
-                <span v-if="active.kind === 'stock'" class="stock-head">
-                  <button class="mini" :disabled="analyzing" @click="doAnalyze(active)">{{ analyzing ? '按当前策略分析中…' : '🔄 重新按当前策略分析' }}</button>
-                  <button class="mini" @click="openReport(active.ref_id!)">完整报告</button>
+                <span class="title-label">{{ active.title || sessionLabel(active) }}</span>
+                <span class="title-actions">
+                  <span v-if="active.kind === 'stock'" class="stock-head">
+                    <button class="mini" :disabled="analyzing" @click="doAnalyze(active)">{{ analyzing ? '按当前策略分析中…' : '🔄 重新按当前策略分析' }}</button>
+                    <button class="mini" @click="openReport(active.ref_id!)">完整报告</button>
+                  </span>
+                  <template v-if="active.kind === 'core_principle'">
+                    <button class="mini" @click="rulebookModalOpen = true">📜 当前策略</button>
+                    <button class="mini" @click="tplOpen = true">🔀 更换组合模板</button>
+                  </template>
+                  <button class="mini clear-cur" @click="clearCurrent" title="清空当前会话的消息">🧹 清理</button>
                 </span>
-                <template v-if="active.kind === 'core_principle'">
-                  <button class="mini" @click="rulebookModalOpen = true">📜 当前策略</button>
-                  <button class="mini" @click="tplOpen = true">🔀 更换组合模板</button>
-                </template>
-                <button class="mini clear-cur" @click="clearCurrent" title="清空当前会话的消息">🧹 清理</button>
               </div>
               <!-- 房间专属动作（取代原右侧操作面板） -->
               <div v-if="active.kind === 'daily'" class="daily-room">
@@ -1054,6 +1056,8 @@ onUnmounted(() => {
 .empty h2 { font-size: 22px; margin-bottom: 8px; }
 .qbox { margin-top: 18px; text-align: left; }
 .title { font-weight: 600; font-size: 15px; padding-bottom: 10px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+.title-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.title-actions { display: flex; align-items: center; gap: 8px; flex: none; }
 .stock-head { display: flex; gap: 8px; }
 .analyzing { color: #a76b00; font-size: 13px; padding: 8px 0; }
 .briefing-time { font-size: 11px; margin: 2px 0 0; flex: 0 0 auto; }
