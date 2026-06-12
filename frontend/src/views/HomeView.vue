@@ -10,13 +10,13 @@
       <template v-if="!auth.isAdmin">
         <div class="sect-head">讨论记录</div>
         <ul class="sessions">
-          <li v-for="s in sessions" :key="s.id" :class="{ active: active?.id === s.id, 'is-pinned': s.pinned === 1 }"
+          <li v-for="s in orderedSessions" :key="s.id" :class="{ active: active?.id === s.id, 'is-pinned': s.pinned === 1, 'is-fixed': isFixedRoom(s.kind) }"
               @click="open(s)" @mouseenter="startHover(s.id)" @mouseleave="endHover">
             <span class="kind">{{ kindIcon(s.kind) }}</span>
             <span class="stitle">{{ s.title || sessionLabel(s) }}</span>
             <span v-if="generating.has(s.kind)" class="spinner sess-spin"></span>
-            <button class="pin" :class="{ on: s.pinned === 1 }" :title="s.pinned === 1 ? '取消置顶' : '置顶'" @click.stop="togglePin(s)">📌</button>
-            <button v-show="hoverDelId === s.id" class="del" title="删除会话（分析历史保留）" @click.stop="removeSession(s)">×</button>
+            <button v-if="!isFixedRoom(s.kind)" class="pin" :class="{ on: s.pinned === 1 }" :title="s.pinned === 1 ? '取消置顶' : '置顶'" @click.stop="togglePin(s)">📌</button>
+            <button v-if="!isFixedRoom(s.kind)" v-show="hoverDelId === s.id" class="del" title="删除会话（分析历史保留）" @click.stop="removeSession(s)">×</button>
           </li>
         </ul>
 
@@ -338,6 +338,17 @@ const router = useRouter();
 const route = useRoute();
 
 const sessions = ref<ChatSession[]>([]);
+const FIXED_ORDER: ChatKind[] = ['core_principle', 'morning', 'evening', 'screen'];
+function isFixedRoom(kind: ChatKind): boolean {
+  return FIXED_ORDER.includes(kind);
+}
+const orderedSessions = computed(() => {
+  const fixed = FIXED_ORDER
+    .map((k) => sessions.value.find((s) => s.kind === k))
+    .filter((s): s is ChatSession => !!s);
+  const rest = sessions.value.filter((s) => !isFixedRoom(s.kind));
+  return [...fixed, ...rest];
+});
 const active = ref<ChatSession | null>(null);
 const messages = ref<ChatMessage[]>([]);
 const input = ref('');
@@ -938,6 +949,7 @@ onMounted(async () => {
     alertsTimer = window.setInterval(loadDataAlerts, 30000);
     return;
   }
+  await chatApi.ensureFixedRooms().catch(() => {});
   await loadSessions();
   await loadMeetings();
   try {
