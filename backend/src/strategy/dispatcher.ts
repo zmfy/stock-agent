@@ -63,19 +63,23 @@ export async function runStrategyTick(deps: TickDeps = {}): Promise<void> {
   const session = inTradingSession(now);
   const gens = deps.generators ?? DEFAULT_GENERATORS;
   for (const uid of users) {
-    const cfg = getScheduleConfig(uid);
-    const state: TickState = {
-      hasPrejudge: hasStrategy(uid, date, 'prejudge'),
-      hasReview: hasStrategy(uid, date, 'review'),
-      hasHoliday: hasStrategy(uid, date, 'holiday'),
-      lastIntradayMs: parseUtc(getLatestIntraday(uid, date)?.created_at),
-    };
-    for (const phase of dueJobs(cfg, now, trading, session, state)) {
-      try {
-        await gens[phase](uid);
-      } catch (e) {
-        console.error(`[strategy_tick] ${phase} failed for ${uid}:`, (e as Error).message);
+    try {
+      const cfg = getScheduleConfig(uid);
+      const state: TickState = {
+        hasPrejudge: hasStrategy(uid, date, 'prejudge'),
+        hasReview: hasStrategy(uid, date, 'review'),
+        hasHoliday: hasStrategy(uid, date, 'holiday'),
+        lastIntradayMs: parseUtc(getLatestIntraday(uid, date)?.created_at),
+      };
+      for (const phase of dueJobs(cfg, now, trading, session, state)) {
+        try {
+          await gens[phase](uid);
+        } catch (e) {
+          console.error(`[strategy_tick] ${phase} failed for ${uid}:`, (e as Error).message);
+        }
       }
+    } catch (e) {
+      console.error(`[strategy_tick] user ${uid} setup failed:`, (e as Error).message);
     }
   }
 }

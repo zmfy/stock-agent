@@ -34,6 +34,7 @@ describe('dueJobs(纯函数)', () => {
     expect(disp.dueJobs(DEF, t, true, true, empty)).toContain('intraday');
     expect(disp.dueJobs(DEF, t, true, true, { ...empty, lastIntradayMs: t - 30 * 60000 })).not.toContain('intraday');
     expect(disp.dueJobs(DEF, t, true, true, { ...empty, lastIntradayMs: t - 90 * 60000 })).toContain('intraday');
+    expect(disp.dueJobs(DEF, t, true, true, { ...empty, lastIntradayMs: t - 60 * 60000 })).toContain('intraday');
     expect(disp.dueJobs(DEF, t, true, false, empty)).not.toContain('intraday');
     expect(disp.dueJobs({ ...DEF, intradayInterval: 0 }, t, true, true, empty)).not.toContain('intraday');
   });
@@ -70,5 +71,19 @@ describe('runStrategyTick(注入生成器，不触 AI)', () => {
     const { calls, generators } = stubGens();
     await disp.runStrategyTick({ now: WED(2), eligibleUserIds: () => [], generators });
     expect(calls).toEqual([]);
+  });
+  it('某用户生成抛错不影响其它用户', async () => {
+    const calls: string[] = [];
+    const generators = {
+      prejudge: async (uid: string) => { if (uid === 'bad') throw new Error('boom'); calls.push('prejudge:' + uid); },
+      intraday: async (uid: string) => { calls.push('intraday:' + uid); },
+      review: async (_uid: string) => {},
+      holiday: async (_uid: string) => {},
+    };
+    await disp.runStrategyTick({ now: WED(2), eligibleUserIds: () => ['bad', U], generators });
+    // bad 的 prejudge 抛错被吞，但 bad 的 intraday 仍跑、u1 全跑
+    expect(calls).toContain('intraday:bad');
+    expect(calls).toContain('prejudge:u1');
+    expect(calls).toContain('intraday:u1');
   });
 });
