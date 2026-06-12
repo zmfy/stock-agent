@@ -67,8 +67,11 @@
           </div>
         </div>
         <div class="topnav-user">
-          <span class="uname">👤 {{ auth.user?.nickname || auth.user?.username }}</span>
-          <button class="mini" @click="logout">登出</button>
+          <button class="uname-btn" @click="userMenuOpen = !userMenuOpen">👤 {{ auth.user?.nickname || auth.user?.username }} ▾</button>
+          <div v-if="userMenuOpen" class="user-menu">
+            <button @click="settingsKey = 'account'; userMenuOpen = false">账号设置</button>
+            <button @click="logout">登出</button>
+          </div>
         </div>
       </nav>
 
@@ -105,6 +108,10 @@
                   <button class="mini" :disabled="analyzing" @click="doAnalyze(active)">{{ analyzing ? '按当前策略分析中…' : '🔄 重新按当前策略分析' }}</button>
                   <button class="mini" @click="openReport(active.ref_id!)">完整报告</button>
                 </span>
+                <template v-if="active.kind === 'core_principle'">
+                  <button class="mini" @click="rulebookModalOpen = true">📜 当前策略</button>
+                  <button class="mini" @click="tplOpen = true">🔀 更换组合模板</button>
+                </template>
                 <button class="mini clear-cur" @click="clearCurrent" title="清空当前会话的消息">🧹 清理</button>
               </div>
               <!-- 房间专属动作（取代原右侧操作面板） -->
@@ -155,43 +162,12 @@
                 </template>
               </div>
               <div v-else-if="active.kind === 'core_principle'" class="room-actions">
-                <button class="ops-btn" @click="tplOpen = !tplOpen">📜 更换 / 组合模板</button>
                 <button v-if="needsInit" class="propose-btn" :disabled="synthesizing" @click="synthesizePrinciple">
                   <span v-if="synthesizing" class="spinner"></span>{{ synthesizing ? '来财生成中…' : '🛠 根据我们的聊天，帮我生成当前策略' }}
                 </button>
                 <button v-else class="propose-btn" :disabled="proposing" @click="propose">
                   <span v-if="proposing" class="spinner"></span>{{ proposing ? 'agent 拟定中…' : '🛠 根据本次讨论，让 agent 提议修改规则' }}
                 </button>
-                <div v-if="tplOpen" class="tplswitch">
-                  <div class="tpl-head">
-                    <span>更换 / 组合模板（可多选）</span>
-                    <button class="mini" @click="tplOpen = false">收起</button>
-                  </div>
-                  <div class="tplgrid">
-                    <label v-for="t in templates" :key="t.key" class="tplcheck">
-                      <input type="checkbox" :value="t.key" v-model="tplSelected" /> {{ t.label }}
-                    </label>
-                  </div>
-                  <button :disabled="!tplSelected.length" @click="previewCompose">预览组合（{{ tplSelected.length }}）</button>
-                  <div class="tpl-interview-entry">
-                    <a href="#" @click.prevent="startInterview">或：我还没想好，帮我从聊天聊出一套 →</a>
-                  </div>
-                  <div v-if="composeRes" class="composeprev">
-                    <p v-if="!composeRes.conflict" class="ok-msg">✅ 无冲突，将合并为一套：{{ composeRes.versionLabel }}</p>
-                    <template v-else>
-                      <p class="warn">⚠️ 存在冲突（字段：{{ composeRes.conflictFields.join('、') }}），将拆为多套系统，请排优先级（上=优先）：</p>
-                      <div v-for="(k, i) in orderedKeys" :key="k" class="sysrow">
-                        <span><b>{{ String.fromCharCode(65 + i) }}</b>：{{ labelOfKey(k) }}</span>
-                        <span class="ord">
-                          <button class="mini" :disabled="i === 0" @click="moveKey(i, -1)">↑</button>
-                          <button class="mini" :disabled="i === orderedKeys.length - 1" @click="moveKey(i, 1)">↓</button>
-                        </span>
-                      </div>
-                    </template>
-                    <button @click="applyCompose">换入为当前策略</button>
-                  </div>
-                  <span v-if="tplMsg" class="ok-msg">{{ tplMsg }}</span>
-                </div>
               </div>
               <div v-if="analyzing" class="analyzing">正在按你的当前策略分析 {{ active.ref_id }} …</div>
               <div v-if="active && generating.has(active.kind)" class="gen-banner">
@@ -285,6 +261,37 @@
     </main>
     <MarkdownModal :open="detailOpen" :text="detailText" @close="detailOpen = false" />
     <ReportModal :open="reportOpen" :code="reportCode" @close="reportOpen = false" />
+    <Modal v-if="rulebookModalOpen" title="当前策略" @close="rulebookModalOpen = false">
+      <RulebookView />
+    </Modal>
+    <Modal v-if="tplOpen" title="更换 / 组合模板" @close="tplOpen = false">
+      <div class="tplswitch">
+        <div class="tplgrid">
+          <label v-for="t in templates" :key="t.key" class="tplcheck">
+            <input type="checkbox" :value="t.key" v-model="tplSelected" /> {{ t.label }}
+          </label>
+        </div>
+        <button :disabled="!tplSelected.length" @click="previewCompose">预览组合（{{ tplSelected.length }}）</button>
+        <div class="tpl-interview-entry">
+          <a href="#" @click.prevent="startInterview">或：我还没想好，帮我从聊天聊出一套 →</a>
+        </div>
+        <div v-if="composeRes" class="composeprev">
+          <p v-if="!composeRes.conflict" class="ok-msg">✅ 无冲突，将合并为一套：{{ composeRes.versionLabel }}</p>
+          <template v-else>
+            <p class="warn">⚠️ 存在冲突（字段：{{ composeRes.conflictFields.join('、') }}），将拆为多套系统，请排优先级（上=优先）：</p>
+            <div v-for="(k, i) in orderedKeys" :key="k" class="sysrow">
+              <span><b>{{ String.fromCharCode(65 + i) }}</b>：{{ labelOfKey(k) }}</span>
+              <span class="ord">
+                <button class="mini" :disabled="i === 0" @click="moveKey(i, -1)">↑</button>
+                <button class="mini" :disabled="i === orderedKeys.length - 1" @click="moveKey(i, 1)">↓</button>
+              </span>
+            </div>
+          </template>
+          <button @click="applyCompose">换入为当前策略</button>
+        </div>
+        <span v-if="tplMsg" class="ok-msg">{{ tplMsg }}</span>
+      </div>
+    </Modal>
   </div>
 </template>
 
@@ -313,13 +320,13 @@ import StockPicker from '../components/StockPicker.vue';
 import ClampText from '../components/ClampText.vue';
 import MarkdownModal from '../components/MarkdownModal.vue';
 import ReportModal from '../components/ReportModal.vue';
+import Modal from './Modal.vue';
 
 const auth = useAuthStore();
 
 // 系统设置：右侧内嵌这些页面，左栏不变
 // roles: 'user' = 仅普通用户(交易功能)；'admin' = 仅 admin(运维)；'both' = 两者都有。
 const SETTINGS = [
-  { key: 'rulebook', label: '当前策略', icon: '📜', comp: RulebookView, roles: 'user' },
   { key: 'strategy_history', label: '策略历史', icon: '🗓', comp: StrategyHistoryView, roles: 'user' },
   { key: 'analysis', label: '分析历史', icon: '📊', comp: AnalysisView, roles: 'user' },
   { key: 'data', label: '数据管理', icon: '📈', comp: DataView, roles: 'admin' },
@@ -327,12 +334,12 @@ const SETTINGS = [
   { key: 'ai', label: 'AI 模型', icon: '🤖', comp: AiSettingsView, roles: 'both' },
   { key: 'plugins', label: '能力插件', icon: '🧩', comp: PluginsView, roles: 'both' },
   { key: 'crons', label: '定时任务', icon: '⏰', comp: CronsView, roles: 'admin' },
-  { key: 'account', label: '账号设置', icon: '👤', comp: SettingsView, roles: 'both' },
+  { key: 'account', label: '账号设置', icon: '👤', comp: SettingsView, roles: 'both', hidden: true },
 ];
 // '' = 聊天；否则为某个功能面板。admin 无聊天:此处覆盖 user 已水合的热路径;冷启动(user 尚未 fetchMe)时由 onMounted 兜底设为 'data'。
 const settingsKey = ref(auth.isAdmin ? 'data' : '');
 const settingsMenu = computed(() =>
-  SETTINGS.filter((s: any) => s.roles === 'both' || s.roles === (auth.isAdmin ? 'admin' : 'user')),
+  SETTINGS.filter((s: any) => !s.hidden && (s.roles === 'both' || s.roles === (auth.isAdmin ? 'admin' : 'user'))),
 );
 const currentSettingsComp = computed(() => SETTINGS.find((s) => s.key === settingsKey.value)?.comp);
 function goChat() {
@@ -441,6 +448,8 @@ function nextMonth() {
   if (calMonth.value === 12) { calMonth.value = 1; calYear.value++; } else calMonth.value++;
   loadCalendar();
 }
+const rulebookModalOpen = ref(false);
+const userMenuOpen = ref(false);
 const railOpen = ref(false); // 移动端左栏抽屉
 const activeRulebook = ref<FullRulebook | null>(null);
 const templates = ref<TemplateMeta[]>([]);
@@ -1122,4 +1131,9 @@ onUnmounted(() => {
 .daily-room { display: flex; flex-direction: column; gap: 10px; }
 .phase-head { font-weight: 700; margin: 4px 0; }
 .intraday-item { border-left: 3px solid var(--border, #e5e5e5); padding-left: 10px; margin-bottom: 10px; }
+.uname-btn { background: none; border: none; font-size: 12px; color: var(--text-soft); white-space: nowrap; cursor: pointer; padding: 4px 6px; }
+.topnav-user { position: relative; }
+.user-menu { position: absolute; top: 110%; right: 0; z-index: 60; background: var(--surface, #fff); border: 1px solid var(--border, #e5e5e5); border-radius: 8px; box-shadow: 0 6px 24px rgba(0,0,0,0.12); display: flex; flex-direction: column; min-width: 120px; }
+.user-menu button { background: none; border: none; text-align: left; padding: 8px 14px; font-size: 13px; cursor: pointer; }
+.user-menu button:hover { background: var(--hover, #f5f5f5); }
 </style>
