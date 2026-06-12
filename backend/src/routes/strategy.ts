@@ -3,7 +3,6 @@ import { z } from 'zod';
 import { authMiddleware } from '../middleware/auth';
 import { successResponse, errorResponse } from '../utils/response';
 import * as svc from '../strategy/service';
-import { beijingDate, dailyPhase, getStrategy, getIntradayTimeline } from '../strategy/service';
 import { generatePrejudge, generateIntraday, generateReview, generateHoliday } from '../strategy/generate';
 import { isTradingDay } from '../data/trade-calendar';
 
@@ -37,20 +36,20 @@ router.put('/schedule', (req: Request, res: Response) => {
 router.get('/today', (req: Request, res: Response) => {
   const uid = req.user!.userId;
   const now = Date.now();
-  const date = beijingDate(now);
+  const date = svc.beijingDate(now);
   const trading = isTradingDay(date);
   const pick = (p: 'prejudge' | 'review' | 'holiday') => {
-    const r = getStrategy(uid, date, p) as any;
+    const r = svc.getStrategy(uid, date, p) as any;
     return r ? { content: r.content, updatedAt: r.updated_at ?? r.created_at } : null;
   };
   successResponse(res, {
     date,
     isTradingDay: trading,
-    phase: dailyPhase(now, trading),
+    phase: svc.dailyPhase(now, trading),
     prejudge: pick('prejudge'),
     review: pick('review'),
     holiday: pick('holiday'),
-    intraday: (getIntradayTimeline(uid, date) as any[]).map((x) => ({ content: x.content, createdAt: x.created_at })),
+    intraday: (svc.getIntradayTimeline(uid, date) as any[]).map((x) => ({ content: x.content, createdAt: x.created_at })),
   });
 });
 
