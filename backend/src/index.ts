@@ -20,6 +20,7 @@ import screenRoutes from './routes/screen';
 import accountRoutes from './routes/account';
 import cronRoutes from './routes/cron';
 import strategyRoutes from './routes/strategy';
+import marketRoutes from './routes/market';
 
 export function createApp(): express.Express {
   const app = express();
@@ -75,6 +76,7 @@ export function createApp(): express.Express {
   app.use('/api/meetings', aiLimiter, meetingsRoutes);
   app.use('/api/strategy/generate', aiLimiter); // 仅对 AI 生成子路径限流
   app.use('/api/strategy', strategyRoutes);
+  app.use('/api/market', marketRoutes);
   app.use('/api/screen', aiLimiter, screenRoutes);
   app.use('/api/account', accountRoutes);
 
