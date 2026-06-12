@@ -26,6 +26,11 @@ router.get('/sessions', (req: Request, res: Response) => {
   successResponse(res, chat.listSessions(req.user!.userId, kind));
 });
 
+// POST /api/chat/ensure-fixed-rooms — 幂等建齐 4 个固定房间并置顶
+router.post('/ensure-fixed-rooms', (req: Request, res: Response) => {
+  successResponse(res, chat.ensureFixedRooms(req.user!.userId));
+});
+
 // GET /api/chat/sessions/:id/messages
 router.get('/sessions/:id/messages', (req: Request, res: Response) => {
   try {
@@ -87,8 +92,13 @@ router.delete('/sessions/:id/messages', (req: Request, res: Response) => {
 router.put('/sessions/:id/pin', (req: Request, res: Response) => {
   const parsed = z.object({ pinned: z.boolean() }).safeParse(req.body);
   if (!parsed.success) return errorResponse(res, 422, 'VALIDATION_ERROR', '参数校验失败');
-  chat.setPinned(req.user!.userId, req.params.id, parsed.data.pinned);
-  successResponse(res, null, parsed.data.pinned ? '已置顶' : '已取消置顶');
+  try {
+    chat.setPinned(req.user!.userId, req.params.id, parsed.data.pinned);
+    successResponse(res, null, parsed.data.pinned ? '已置顶' : '已取消置顶');
+  } catch (e: any) {
+    if (e.message === 'FIXED_ROOM') return errorResponse(res, 409, 'BUSINESS_CONFLICT', '固定房间不可更改置顶');
+    throw e;
+  }
 });
 
 // DELETE /api/chat/sessions — clear ALL chats + stock memory
@@ -99,8 +109,13 @@ router.delete('/sessions', (req: Request, res: Response) => {
 
 // DELETE /api/chat/sessions/:id
 router.delete('/sessions/:id', (req: Request, res: Response) => {
-  chat.deleteSession(req.user!.userId, req.params.id);
-  successResponse(res, null, '已删除');
+  try {
+    chat.deleteSession(req.user!.userId, req.params.id);
+    successResponse(res, null, '已删除');
+  } catch (e: any) {
+    if (e.message === 'FIXED_ROOM') return errorResponse(res, 409, 'BUSINESS_CONFLICT', '固定房间不可删除');
+    throw e;
+  }
 });
 
 export default router;

@@ -149,6 +149,37 @@ describe('chat routes', () => {
   });
 });
 
+describe('fixed rooms', () => {
+  it('ensure-fixed-rooms 幂等建齐 4 个固定房间且都置顶', async () => {
+    await request(app).post('/api/chat/ensure-fixed-rooms').set(h(userTok));
+    const again = await request(app).post('/api/chat/ensure-fixed-rooms').set(h(userTok));
+    expect(again.status).toBe(200);
+    const list = (await request(app).get('/api/chat/sessions').set(h(userTok))).body.data as any[];
+    for (const k of ['core_principle', 'morning', 'evening', 'screen']) {
+      const rooms = list.filter((s) => s.kind === k);
+      expect(rooms).toHaveLength(1);
+      expect(rooms[0].pinned).toBe(1);
+    }
+  });
+
+  it('固定房间不可取消置顶 / 删除（409）', async () => {
+    await request(app).post('/api/chat/ensure-fixed-rooms').set(h(userTok));
+    const list = (await request(app).get('/api/chat/sessions').set(h(userTok))).body.data as any[];
+    const screen = list.find((s) => s.kind === 'screen');
+    const unpin = await request(app).put(`/api/chat/sessions/${screen.id}/pin`).set(h(userTok)).send({ pinned: false });
+    expect(unpin.status).toBe(409);
+    const del = await request(app).delete(`/api/chat/sessions/${screen.id}`).set(h(userTok));
+    expect(del.status).toBe(409);
+  });
+
+  it('普通(stock)会话仍可置顶/删除', async () => {
+    const s = await request(app).post('/api/chat/sessions').set(h(userTok)).send({ kind: 'stock', refId: '600000' });
+    const id = s.body.data.id;
+    expect((await request(app).put(`/api/chat/sessions/${id}/pin`).set(h(userTok)).send({ pinned: true })).status).toBe(200);
+    expect((await request(app).delete(`/api/chat/sessions/${id}`).set(h(userTok))).status).toBe(200);
+  });
+});
+
 describe('agent profiles routes', () => {
   it('lists profiles and updates one', async () => {
     const list = await request(app).get('/api/agent/profiles').set(h(tok));

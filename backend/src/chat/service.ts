@@ -15,6 +15,14 @@ import { buildMarketInjection } from './market-context';
 
 export type ChatKind = 'general' | 'core_principle' | 'stock' | 'morning' | 'evening' | 'screen';
 
+export const FIXED_ROOM_KINDS: ChatKind[] = ['core_principle', 'morning', 'evening', 'screen'];
+const FIXED_ROOM_TITLES: Record<string, string> = {
+  core_principle: '当前策略探讨',
+  morning: '早会讨论',
+  evening: '晚会讨论',
+  screen: '选股讨论',
+};
+
 export interface ChatMessage {
   id: string;
   session_id: string;
@@ -62,6 +70,21 @@ export function listSessions(userId: string, kind?: ChatKind): any[] {
   return getDb().prepare('SELECT * FROM chat_sessions WHERE user_id = ? ORDER BY pinned DESC, created_at DESC').all(userId);
 }
 
+// 幂等确保 4 个固定房间存在且置顶；返回该用户全部会话(含这 4 个)。
+export function ensureFixedRooms(userId: string): any[] {
+  const db = getDb();
+  for (const kind of FIXED_ROOM_KINDS) {
+    const existing = db.prepare('SELECT id FROM chat_sessions WHERE user_id = ? AND kind = ?').get(userId, kind) as { id: string } | undefined;
+    if (!existing) {
+      db.prepare('INSERT INTO chat_sessions (id, user_id, kind, ref_id, title, pinned) VALUES (?, ?, ?, NULL, ?, 1)')
+        .run(uuidv4(), userId, kind, FIXED_ROOM_TITLES[kind]);
+    } else {
+      db.prepare('UPDATE chat_sessions SET pinned = 1 WHERE id = ?').run(existing.id);
+    }
+  }
+  return listSessions(userId);
+}
+
 // Clear a session's messages (keep the session) — e.g. restart the core-principle discussion.
 export function clearMessages(userId: string, sessionId: string): void {
   if (!ownSession(userId, sessionId)) return;
@@ -69,6 +92,8 @@ export function clearMessages(userId: string, sessionId: string): void {
 }
 
 export function setPinned(userId: string, sessionId: string, pinned: boolean): void {
+  const s = ownSession(userId, sessionId);
+  if (s && FIXED_ROOM_KINDS.includes(s.kind)) throw new Error('FIXED_ROOM');
   getDb().prepare('UPDATE chat_sessions SET pinned = ? WHERE id = ? AND user_id = ?').run(pinned ? 1 : 0, sessionId, userId);
 }
 
@@ -86,6 +111,7 @@ export function getMessages(userId: string, sessionId: string): ChatMessage[] {
 export function deleteSession(userId: string, sessionId: string): void {
   const s = ownSession(userId, sessionId);
   if (!s) return;
+  if (FIXED_ROOM_KINDS.includes(s.kind)) throw new Error('FIXED_ROOM');
   const db = getDb();
   db.prepare('DELETE FROM chat_messages WHERE session_id = ?').run(sessionId);
   db.prepare('DELETE FROM chat_sessions WHERE id = ?').run(sessionId);
