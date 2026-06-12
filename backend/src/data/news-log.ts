@@ -51,3 +51,17 @@ export function purgeOldLogs(): void {
   db.prepare("DELETE FROM news_content_log WHERE adopted = 1 AND collected_at < datetime('now','-3 months')").run();
   db.prepare("DELETE FROM news_content_log WHERE adopted = 0 AND collected_at < datetime('now','-7 days')").run();
 }
+
+// 自某时间点(含)以来采集的新闻标题(按 content_id 去重，取最早一次)，给「策略预判」按「上一交易日以来」取窗口用。
+export function newsTitlesSince(sinceIso: string, limit = 80): Array<{ content_id: string; title: string; collected_at: string }> {
+  return getDb()
+    .prepare(
+      `SELECT content_id, title, MIN(collected_at) AS collected_at
+       FROM news_title_log
+       WHERE collected_at >= ?
+       GROUP BY content_id
+       ORDER BY collected_at DESC
+       LIMIT ?`,
+    )
+    .all(sinceIso, limit) as Array<{ content_id: string; title: string; collected_at: string }>;
+}

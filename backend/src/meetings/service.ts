@@ -18,7 +18,7 @@ export function today(): string {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Shanghai' });
 }
 
-function marketText(): { text: string; data: any } {
+export function marketText(): { text: string; data: any } {
   const m = getLatestMarket();
   if (!m) return { text: '（暂无大盘数据，数据源不可达；请在「数据」页测速选用通达信服务器后重试，勿臆造点位）', data: null };
   const slope = m.sse_ma20_slope;
@@ -32,7 +32,7 @@ function marketText(): { text: string; data: any } {
   };
 }
 
-async function sectorText(userId: string): Promise<{ text: string; sectors: string[] }> {
+export async function sectorText(userId: string): Promise<{ text: string; sectors: string[] }> {
   const base = resolveSidecarBase(userId);
   let sectors: string[] = [];
   if (base) sectors = (await fetchHotSectors(base, 6).catch(() => null)) || [];
@@ -69,14 +69,14 @@ function buildMorningNewsWithIds(): { text: string; idMap: Record<string, string
   return { text: `自上个交易日（${since}）以来的财经要闻：\n` + lines.join('\n'), idMap };
 }
 
-function parseAdopt(coreOut: string): { tags: string[]; clean: string } {
+export function parseAdopt(coreOut: string): { tags: string[]; clean: string } {
   const m = /__ADOPT__\s*([N\d,\s]+)/.exec(coreOut);
   const tags = m ? m[1].split(',').map((s) => s.trim()).filter(Boolean) : [];
   const clean = coreOut.replace(/\n?__ADOPT__\s*[N\d,\s]+/g, '').trim();
   return { tags, clean };
 }
 
-function rulebookText(userId: string): string {
+export function rulebookText(userId: string): string {
   const rb = getActive(userId);
   if (!rb) return '（用户尚未设定当前策略）';
   const gates = rb.gates.map((g) => `${g.system}:${g.label}`).join('、');
@@ -96,7 +96,7 @@ function getMorningOfToday(userId: string): { content: string } | undefined {
 }
 
 // 子助手人设（取不到就用空串，由各 prompt 自带职责说明兜底）
-function personaOf(userId: string, role: string): string {
+export function personaOf(userId: string, role: string): string {
   return listProfiles(userId).find((p) => p.role === role)?.persona || '';
 }
 
@@ -253,7 +253,7 @@ ${body}
 若你引用了上面某几条新闻作为研判依据，请在回答最后另起一行输出：__ADOPT__ 逗号分隔的编号（如 __ADOPT__ N1,N3）；没有引用就不要输出该行。`;
 }
 
-async function defaultAiCall(userId: string, prompt: string, role: string): Promise<string> {
+export async function defaultAiCall(userId: string, prompt: string, role: string): Promise<string> {
   const cfg = getModelForRole(userId, role) || getModelForRole(userId, 'core');
   if (!cfg) throw new Error('NO_MODEL');
   const style = getProvider(cfg.provider)?.apiStyle || 'openai';
