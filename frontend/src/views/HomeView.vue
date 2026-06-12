@@ -589,7 +589,7 @@ function fmtTime(ts: string) {
   return fmtCN(ts);
 }
 function kindIcon(k: ChatKind) {
-  const icons: Record<ChatKind, string> = { general: '💬', core_principle: '📜', stock: '📊', morning: '📈', evening: '🌙', screen: '🔍' };
+  const icons: Record<ChatKind, string> = { general: '💬', core_principle: '📜', stock: '📊', morning: '📈', evening: '🌙', screen: '🔍', daily: '📋' };
   return icons[k] || '💬';
 }
 function sessionLabel(s: ChatSession) {
