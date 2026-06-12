@@ -8,7 +8,6 @@ import { runAnalysis } from '../analysis/orchestrator';
 import { getStockName, getCachedName } from '../data/service';
 import { skillDirectives } from '../plugins/service';
 import { getLatestReportByCode } from '../analysis/report-service';
-import { getTodayContent } from '../meetings/service';
 import { getActive, listVersionHistory } from '../rulebook/service';
 import { getLatest as getLatestScreen } from '../screen/service';
 import { buildMarketInjection } from './market-context';
