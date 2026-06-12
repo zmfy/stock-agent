@@ -108,11 +108,42 @@
                 <button class="mini clear-cur" @click="clearCurrent" title="清空当前会话的消息">🧹 清理</button>
               </div>
               <!-- 房间专属动作（取代原右侧操作面板） -->
-              <div v-if="active.kind === 'morning' && !meetings.morning" class="room-actions">
-                <button class="ops-btn dashed" @click="genMeeting('morning')">📈 生成今日早会</button>
-              </div>
-              <div v-else-if="active.kind === 'evening' && !meetings.evening" class="room-actions">
-                <button class="ops-btn dashed" @click="genMeeting('evening')">🌙 生成今日晚会</button>
+              <div v-if="active.kind === 'daily'" class="daily-room">
+                <div class="room-actions">
+                  <button v-if="strategyToday && !strategyToday.isTradingDay" class="ops-btn dashed" :disabled="strategyGenerating" @click="genStrategy('holiday')">🛌 生成休市快报</button>
+                  <template v-else-if="strategyToday">
+                    <button v-if="strategyToday.phase === 'prejudge'" class="ops-btn dashed" :disabled="strategyGenerating" @click="genStrategy('prejudge')">📈 生成今日预判</button>
+                    <button v-else-if="strategyToday.phase === 'intraday'" class="ops-btn dashed" :disabled="strategyGenerating" @click="genStrategy('intraday')">⏱ 生成一条盘中</button>
+                    <button v-else-if="strategyToday.phase === 'review'" class="ops-btn dashed" :disabled="strategyGenerating" @click="genStrategy('review')">🔁 生成复盘</button>
+                  </template>
+                  <button class="ops-btn" @click="scheduleOpen = !scheduleOpen">⚙ 时间设置</button>
+                </div>
+                <ScheduleSettings v-if="scheduleOpen" @saved="scheduleOpen = false" />
+                <div v-if="strategyToday" class="daily-content">
+                  <template v-if="!strategyToday.isTradingDay">
+                    <div class="phase-head">🛌 休市日 · 新闻与板块</div>
+                    <ClampText v-if="strategyToday.holiday" :text="strategyToday.holiday.content" @detail="openDetail" />
+                    <p v-else class="muted">休市快报将于设定时间生成。</p>
+                  </template>
+                  <template v-else-if="strategyToday.phase === 'prejudge'">
+                    <div class="phase-head">📈 盘前 · 今日策略预判</div>
+                    <ClampText v-if="strategyToday.prejudge" :text="strategyToday.prejudge.content" @detail="openDetail" />
+                    <p v-else class="muted">预判将于设定时间生成。</p>
+                  </template>
+                  <template v-else-if="strategyToday.phase === 'intraday'">
+                    <div class="phase-head">⏱ 盘中 · 策略时间线</div>
+                    <p v-if="!strategyToday.intraday.length" class="muted">盘中小结将按你的间隔生成。</p>
+                    <div v-for="(it, i) in [...strategyToday.intraday].reverse()" :key="i" class="intraday-item">
+                      <div class="muted">{{ fmtCN(it.createdAt) }}</div>
+                      <ClampText :text="it.content" @detail="openDetail" />
+                    </div>
+                  </template>
+                  <template v-else>
+                    <div class="phase-head">🔁 盘后 · 复盘</div>
+                    <ClampText v-if="strategyToday.review" :text="strategyToday.review.content" @detail="openDetail" />
+                    <p v-else class="muted">复盘将于设定时间生成。</p>
+                  </template>
+                </div>
               </div>
               <div v-else-if="active.kind === 'screen'" class="room-actions">
                 <template v-if="activeRulebook">
@@ -277,7 +308,7 @@ import { APP_VERSION } from '../version';
 import { useAuthStore } from '../stores/auth';
 import { chatApi, type ChatSession, type ChatMessage, type ChatKind } from '../api/chat';
 import { rulebookApi, type ProposeResult, type FullRulebook, type Gate, type TemplateMeta } from '../api/rulebook';
-import { meetingsApi, type Meeting } from '../api/meetings';
+import { strategyApi, type StrategyToday, type StrategyPhase } from '../api/strategy';
 import { screenApi, type ScreenRun } from '../api/screen';
 import { dataApi, type DataAlert } from '../api/data';
 import { fmtCN, fmtCNDate } from '../utils/time';
@@ -290,6 +321,7 @@ import DataAlertsView from './DataAlertsView.vue';
 import SettingsView from './SettingsView.vue';
 import MeetingsHistoryView from './MeetingsHistoryView.vue';
 import CronsView from './CronsView.vue';
+import ScheduleSettings from './ScheduleSettings.vue';
 import StockPicker from '../components/StockPicker.vue';
 import ClampText from '../components/ClampText.vue';
 import MarkdownModal from '../components/MarkdownModal.vue';
@@ -324,7 +356,7 @@ const router = useRouter();
 const route = useRoute();
 
 const sessions = ref<ChatSession[]>([]);
-const FIXED_ORDER: ChatKind[] = ['core_principle', 'morning', 'evening', 'screen'];
+const FIXED_ORDER: ChatKind[] = ['core_principle', 'daily', 'screen'];
 function isFixedRoom(kind: ChatKind): boolean {
   return FIXED_ORDER.includes(kind);
 }
@@ -343,7 +375,18 @@ const chatErr = ref('');
 const needsInit = ref(false);
 const analyzing = ref(false);
 const msgsEl = ref<HTMLElement | null>(null);
-const meetings = ref<{ morning: Meeting | null; evening: Meeting | null }>({ morning: null, evening: null });
+const strategyToday = ref<StrategyToday | null>(null);
+const strategyGenerating = ref(false);
+const scheduleOpen = ref(false);
+async function loadStrategyToday() {
+  try { strategyToday.value = (await strategyApi.today()).data.data; } catch { strategyToday.value = null; }
+}
+async function genStrategy(phase: StrategyPhase) {
+  strategyGenerating.value = true;
+  try { await strategyApi.generate(phase); await loadStrategyToday(); }
+  catch (e: any) { noteErrorToSession(sessions.value.find((x) => x.kind === 'daily')?.id, `生成失败：${e.response?.data?.message || ''}`); }
+  finally { strategyGenerating.value = false; }
+}
 // 正在后台生成的会话种类（morning/evening/screen）——SPA 内切换不丢
 const generating = reactive(new Set<string>());
 // 后台生成失败信息，按 kind 记录
@@ -484,17 +527,13 @@ function buildCpBriefing(rb: FullRulebook | null): string {
   );
 }
 const briefing = computed(() => {
-  if (active.value?.kind === 'morning') return meetings.value.morning?.content || '';
-  if (active.value?.kind === 'evening') return meetings.value.evening?.content || '';
   if (active.value?.kind === 'core_principle') return buildCpBriefing(activeRulebook.value);
   if (active.value?.kind === 'screen') return screen.value ? (screen.value.note + (screen.value.discussion ? '\n\n' + screen.value.discussion : '')) : '点右侧「按当前策略选股」开始';
   return '';
 });
 
-// 纪要(早会/晚会/选股)的生成时间，供展示「生成于…」判断是否过时
+// 纪要(选股)的生成时间，供展示「生成于…」判断是否过时
 const briefingTime = computed<string | null>(() => {
-  if (active.value?.kind === 'morning') return meetings.value.morning?.created_at ?? null;
-  if (active.value?.kind === 'evening') return meetings.value.evening?.created_at ?? null;
   if (active.value?.kind === 'screen') return screen.value?.created_at ?? null;
   return null;
 });
@@ -515,11 +554,7 @@ const synthSystems = computed<string[]>(() => {
   return [...new Set(gs.map((g) => g.system))].sort();
 });
 
-const adoptedNews = computed<Array<{ content_id: string; title: string }>>(() => {
-  const mt = active.value?.kind === 'morning' ? meetings.value.morning : active.value?.kind === 'evening' ? meetings.value.evening : null;
-  if (!mt || !mt.data) return [];
-  try { return (JSON.parse(mt.data).adopted_news) || []; } catch { return []; }
-});
+const adoptedNews = computed<Array<{ content_id: string; title: string }>>(() => []);
 const openMeetingNews = ref<{ title: string; content: string } | null>(null);
 async function showMeetingNews(id: string) { openMeetingNews.value = await dataApi.newsContent(id); }
 
@@ -594,6 +629,7 @@ function kindIcon(k: ChatKind) {
 }
 function sessionLabel(s: ChatSession) {
   if (s.kind === 'core_principle') return '当前策略探讨';
+  if (s.kind === 'daily') return '当天策略和复盘';
   if (s.kind === 'stock') return `个股 ${s.ref_id || ''}`;
   if (s.kind === 'screen') return '选股讨论';
   return '新对话';
@@ -613,6 +649,10 @@ async function open(s: ChatSession) {
   // A freshly opened stock session auto-runs the rule-based analysis as its opener.
   if (s.kind === 'stock' && messages.value.length === 0) {
     await doAnalyze(s);
+  }
+  // When opening a daily session, load today's strategy data.
+  if (s.kind === 'daily') {
+    await loadStrategyToday();
   }
   // When opening a screen session, ensure screen data is loaded.
   if (s.kind === 'screen') {
@@ -754,50 +794,6 @@ async function startInterview() {
     chatErr.value = e.response?.data?.message || '进入访谈失败';
   }
 }
-async function loadMeetings() {
-  try {
-    meetings.value = (await meetingsApi.today()).data.data;
-  } catch {
-    /* ignore */
-  }
-}
-async function genMeeting(kind: 'morning' | 'evening') {
-  // 已在后台生成中：只切回该会话，不重复触发
-  if (generating.has(kind)) {
-    await openMeeting(kind);
-    return;
-  }
-  delete genErr[kind];
-  generating.add(kind); // 同步置位，早于任何 await，关闭重复触发窗口
-  try {
-    await openMeeting(kind); // 立即打开会话窗口（不等生成）
-  } catch (e: any) {
-    genErr[kind] = e.response?.data?.message || '打开会话失败';
-    generating.delete(kind);
-    return;
-  }
-  // 不 await：后台生成，完成后刷新 meetings.value，briefing 靠响应式自动更新
-  meetingsApi
-    .generate(kind)
-    .then(() => loadMeetings())
-    .catch((e: any) => {
-      const msg = e.response?.data?.message || '生成失败';
-      genErr[kind] = msg;
-      noteErrorToSession(sessions.value.find((x) => x.kind === kind)?.id, `${kind === 'morning' ? '早会' : '晚会'}生成失败：${msg}`);
-    })
-    .finally(() => {
-      generating.delete(kind);
-    });
-}
-async function openMeeting(kind: 'morning' | 'evening') {
-  let s = sessions.value.find((x) => x.kind === kind);
-  if (!s) {
-    const id = (await chatApi.createSession(kind, null, kind === 'morning' ? '早会讨论' : '晚会讨论')).data.data.id;
-    await loadSessions();
-    s = sessions.value.find((x) => x.id === id);
-  }
-  if (s) await open(s);
-}
 
 const AGENT_NAME = '来财'; // 主 agent 的名字
 
@@ -930,7 +926,6 @@ onMounted(async () => {
   }
   await chatApi.ensureFixedRooms().catch(() => {});
   await loadSessions();
-  await loadMeetings();
   try {
     screen.value = (await screenApi.latest()).data.data;
   } catch {
@@ -1149,4 +1144,7 @@ onUnmounted(() => {
 .alert-bar { cursor: pointer; padding: 8px 16px; font-size: 13px; font-weight: 600; color: #fff; }
 .alert-bar.err { background: #d33; }
 .alert-bar.warn { background: #d9a300; }
+.daily-room { display: flex; flex-direction: column; gap: 10px; }
+.phase-head { font-weight: 700; margin: 4px 0; }
+.intraday-item { border-left: 3px solid var(--border, #e5e5e5); padding-left: 10px; margin-bottom: 10px; }
 </style>
