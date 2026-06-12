@@ -35,4 +35,5 @@ export const chatApi = {
   clearAll: () => api.delete('/chat/sessions'),
   postNote: (id: string, content: string) =>
     api.post<{ data: ChatMessage }>(`/chat/sessions/${id}/note`, { content }),
+  ensureFixedRooms: () => api.post<{ data: ChatSession[] }>('/chat/ensure-fixed-rooms'),
 };
