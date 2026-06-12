@@ -259,6 +259,7 @@
           </div>
 
         </div>
+        <MarketStatusBar v-if="!auth.isAdmin" />
       </section>
     </main>
     <MarkdownModal :open="detailOpen" :text="detailText" @close="detailOpen = false" />
@@ -323,6 +324,7 @@ import ClampText from '../components/ClampText.vue';
 import MarkdownModal from '../components/MarkdownModal.vue';
 import ReportModal from '../components/ReportModal.vue';
 import Modal from './Modal.vue';
+import MarketStatusBar from './MarketStatusBar.vue';
 
 const auth = useAuthStore();
 
