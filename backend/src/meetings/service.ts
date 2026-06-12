@@ -69,7 +69,7 @@ function buildMorningNewsWithIds(): { text: string; idMap: Record<string, string
   return { text: `自上个交易日（${since}）以来的财经要闻：\n` + lines.join('\n'), idMap };
 }
 
-export function parseAdopt(coreOut: string): { tags: string[]; clean: string } {
+function parseAdopt(coreOut: string): { tags: string[]; clean: string } {
   const m = /__ADOPT__\s*([N\d,\s]+)/.exec(coreOut);
   const tags = m ? m[1].split(',').map((s) => s.trim()).filter(Boolean) : [];
   const clean = coreOut.replace(/\n?__ADOPT__\s*[N\d,\s]+/g, '').trim();
@@ -96,7 +96,7 @@ function getMorningOfToday(userId: string): { content: string } | undefined {
 }
 
 // 子助手人设（取不到就用空串，由各 prompt 自带职责说明兜底）
-export function personaOf(userId: string, role: string): string {
+function personaOf(userId: string, role: string): string {
   return listProfiles(userId).find((p) => p.role === role)?.persona || '';
 }
 

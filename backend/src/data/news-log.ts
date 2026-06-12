@@ -60,7 +60,7 @@ export function newsTitlesSince(sinceIso: string, limit = 80): Array<{ content_i
        FROM news_title_log
        WHERE collected_at >= ?
        GROUP BY content_id
-       ORDER BY collected_at DESC
+       ORDER BY MIN(collected_at) DESC
        LIMIT ?`,
     )
     .all(sinceIso, limit) as Array<{ content_id: string; title: string; collected_at: string }>;
