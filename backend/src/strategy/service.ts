@@ -29,7 +29,7 @@ export function setScheduleConfig(userId: string, input: Partial<ScheduleConfig>
       `INSERT INTO daily_strategy_config (user_id, prejudge_time, intraday_interval, review_time, holiday_brief_time)
        VALUES (?, ?, ?, ?, ?)
        ON CONFLICT(user_id) DO UPDATE SET prejudge_time=excluded.prejudge_time, intraday_interval=excluded.intraday_interval,
-         review_time=excluded.review_time, holiday_brief_time=excluded.holiday_brief_time`,
+         review_time=excluded.review_time, holiday_brief_time=excluded.holiday_brief_time, updated_at=CURRENT_TIMESTAMP`,
     )
     .run(userId, merged.prejudgeTime, merged.intradayInterval, merged.reviewTime, merged.holidayBriefTime);
   return merged;
@@ -53,7 +53,7 @@ export function recordStrategy(userId: string, phase: StrategyPhase, content: st
   if (SINGLETON.includes(phase)) {
     const existing = db.prepare('SELECT id FROM daily_strategy WHERE user_id=? AND date=? AND phase=?').get(userId, date, phase) as { id: string } | undefined;
     if (existing) {
-      db.prepare('UPDATE daily_strategy SET content=?, data=?, created_at=CURRENT_TIMESTAMP WHERE id=?').run(content, dataJson, existing.id);
+      db.prepare('UPDATE daily_strategy SET content=?, data=?, updated_at=CURRENT_TIMESTAMP WHERE id=?').run(content, dataJson, existing.id);
       return;
     }
   }

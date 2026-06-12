@@ -472,15 +472,25 @@ function migrate(): void {
     phase TEXT NOT NULL,
     content TEXT,
     data TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
   db.exec('CREATE INDEX IF NOT EXISTS idx_daily_strategy_user_date ON daily_strategy (user_id, date, phase)');
+  const dsCols = db.prepare('PRAGMA table_info(daily_strategy)').all() as { name: string }[];
+  if (dsCols.length && !dsCols.some((c) => c.name === 'updated_at')) {
+    db.exec('ALTER TABLE daily_strategy ADD COLUMN updated_at DATETIME DEFAULT CURRENT_TIMESTAMP');
+  }
+  const dscCols = db.prepare('PRAGMA table_info(daily_strategy_config)').all() as { name: string }[];
+  if (dscCols.length && !dscCols.some((c) => c.name === 'updated_at')) {
+    db.exec('ALTER TABLE daily_strategy_config ADD COLUMN updated_at DATETIME DEFAULT CURRENT_TIMESTAMP');
+  }
   db.exec(`CREATE TABLE IF NOT EXISTS daily_strategy_config (
     user_id TEXT PRIMARY KEY,
     prejudge_time TEXT DEFAULT '08:30',
     intraday_interval INTEGER DEFAULT 60,
     review_time TEXT DEFAULT '15:30',
-    holiday_brief_time TEXT DEFAULT '09:00'
+    holiday_brief_time TEXT DEFAULT '09:00',
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
 }
 
