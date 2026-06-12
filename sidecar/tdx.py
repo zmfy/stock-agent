@@ -277,6 +277,34 @@ def stocks():
     return _call(fn)
 
 
+_IDX_MARKET = {"sh": 1, "sz": 0, "bj": 2}
+
+
+def index_realtime(prefixed):
+    # prefixed 形如 'sh000001'：前2位市场，后6位代码。用原始 pytdx 显式 market 取指数实时。
+    pfx, code = prefixed[:2].lower(), prefixed[-6:]
+    market = _IDX_MARKET.get(pfx)
+    if market is None:
+        return None
+    def fn(c):
+        raw = getattr(c, "client", None)
+        if raw is None:
+            return None
+        q = raw.get_security_quotes([(market, code)])
+        if not q:
+            return None
+        r = q[0]
+        return {
+            "price": _f(r.get("price")),
+            "prev_close": _f(r.get("last_close")),
+            "open": _f(r.get("open")),
+            "high": _f(r.get("high")),
+            "low": _f(r.get("low")),
+            "time": str(r.get("servertime") or ""),
+        }
+    return _call(fn)
+
+
 def realtime(code):
     def fn(c):
         q = c.quotes(symbol=code)

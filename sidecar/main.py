@@ -496,6 +496,16 @@ def realtime(code: str):
     return {"source": "sina-rt" if data else None, "data": data or {}}
 
 
+@app.get("/index-rt/{code}")
+def index_quote(code: str):
+    """指数实时行情（显式 market pytdx 协议）。code: 'sh000001','sz399001','sz399006','sh000688','bj899050' 等前缀格式。
+    北证(bj) 服务端不推送，返回 source=null。"""
+    rt = _timed(lambda: tdx.index_realtime(code), 6)
+    if rt and rt.get("price") is not None:
+        return {"source": "tdx-idx", "data": rt}
+    return {"source": None, "data": {}}
+
+
 @app.get("/news")
 def news(limit: int = 20, order: str = ""):
     for reg in _order_providers("news", order):
