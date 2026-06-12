@@ -33,7 +33,10 @@ let timer: number | undefined;
 function pctClass(p: number | null) { return p == null ? '' : p >= 0 ? 'up' : 'down'; }
 function fmtUpdated(s: string | null) { return s ? String(s).slice(0, 16) : '—'; }
 async function load() {
-  try { st.value = (await marketApi.status()).data.data; } catch { /* ignore */ }
+  try {
+    st.value = (await marketApi.status()).data.data;
+    if (!st.value.alertLevel) alertsOpen.value = false; // 告警清除后收起明细，避免下次恢复时自动弹开
+  } catch { /* ignore */ }
 }
 onMounted(() => { load(); timer = window.setInterval(load, 30000); });
 onUnmounted(() => { if (timer) clearInterval(timer); });
