@@ -1,6 +1,6 @@
 import cron from 'node-cron';
 import { runNightly } from './nightly';
-import { runMeetings } from './meetings';
+import { runStrategyTick } from '../strategy/dispatcher';
 import { runStockUniverse, runEod, runRealtime } from './shared-data';
 import * as svc from '../data/service';
 
@@ -16,11 +16,10 @@ const TZ = 'Asia/Shanghai';
 
 export const CRON_JOBS: CronJobDef[] = [
   { key: 'nightly', label: '夜间数据刷新', description: '清理日志/同步交易日历/刷新新闻+大盘+缓存个股', defaultExpr: '0 23 * * *', run: runNightly },
-  { key: 'meeting_morning', label: '早会生成', description: '刷新大盘 + 为合格用户生成早会(休市跳过)', defaultExpr: '0 8 * * *', run: () => runMeetings('morning') },
-  { key: 'meeting_evening', label: '晚会复盘', description: '刷新大盘 + 生成晚会(休市跳过)', defaultExpr: '45 16 * * *', run: () => runMeetings('evening') },
   { key: 'stock_universe', label: '股票库同步', description: '全量名单 diff 入库', defaultExpr: '25 9 * * *', run: () => runStockUniverse() },
   { key: 'eod', label: '行情 EOD 入库', description: '全量个股日线(首次365/之后增量)', defaultExpr: '0 1 * * *', run: () => runEod() },
   { key: 'realtime', label: '实时行情(交易时段)', description: 'TDX 拉已缓存股票实时盘口五档，每5分钟、仅交易时段', defaultExpr: '*/5 * * * *', run: () => runRealtime() },
+  { key: 'strategy_tick', label: '策略调度', description: '每5分钟按各用户配置生成预判/盘中/复盘/休市快报(交易日历闸门)', defaultExpr: '*/5 * * * *', run: () => runStrategyTick() },
 ];
 
 // ---- 纯助手 ----
