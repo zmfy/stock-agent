@@ -1044,7 +1044,9 @@ onUnmounted(() => {
 .cal-x { position: absolute; top: 0; right: 2px; font-size: 8px; color: #c98; font-style: normal; }
 .cal-foot { margin-top: 6px; font-size: 11px; }
 .topnav .cal-wrap { position: relative; margin-top: 0; }
-.topnav .cal-pop { position: absolute; top: 110%; right: 0; z-index: 50; max-width: calc(100vw - 24px); background: var(--card, #fff); border: 1px solid var(--border, #e5e5e5); border-radius: 8px; padding: 10px; box-shadow: 0 6px 24px rgba(0,0,0,0.12); }
+/* 顶栏里日历改为向下弹出：重置基础规则的 bottom/left/margin-bottom（原侧栏向上弹），
+   给 7 列网格留出最小宽度，窄屏不溢出。视觉(背景/边框/阴影)沿用基础 .cal-pop。 */
+.topnav .cal-pop { top: 110%; bottom: auto; left: auto; right: 0; margin-bottom: 0; min-width: 248px; max-width: calc(100vw - 24px); }
 
 /* ============ 移动端适配（<=768px）============ */
 @media (max-width: 768px) {
