@@ -625,8 +625,8 @@ function kindIcon(k: ChatKind) {
   return icons[k] || '💬';
 }
 function sessionLabel(s: ChatSession) {
-  if (s.kind === 'core_principle') return '当前策略探讨';
-  if (s.kind === 'daily') return '当天策略和复盘';
+  if (s.kind === 'core_principle') return '策略探讨';
+  if (s.kind === 'daily') return '操盘和复盘';
   if (s.kind === 'stock') return `个股 ${s.ref_id || ''}`;
   if (s.kind === 'screen') return '选股讨论';
   return '新对话';
@@ -767,7 +767,7 @@ async function noteErrorToSession(sessionId: string | undefined | null, msg: str
 async function openCorePrinciple() {
   let s = sessions.value.find((x) => x.kind === 'core_principle');
   if (!s) {
-    const id = (await chatApi.createSession('core_principle', null, '当前策略探讨')).data.data.id;
+    const id = (await chatApi.createSession('core_principle', null, '策略探讨')).data.data.id;
     await loadSessions();
     s = sessions.value.find((x) => x.id === id);
   }

@@ -1,7 +1,7 @@
 <template>
   <div class="sh">
     <header class="bar"><h1>策略历史</h1></header>
-    <p v-if="!list.length" class="muted">还没有策略记录。预判/盘中/复盘会按你的设定时间自动生成，也可在「当天策略和复盘」房间手动生成。</p>
+    <p v-if="!list.length" class="muted">还没有策略记录。预判/盘中/复盘会按你的设定时间自动生成，也可在「操盘和复盘」房间手动生成。</p>
     <section v-for="(m, i) in list" :key="i" class="card">
       <div class="head" @click="toggle(i)">
         <span class="tag" :class="m.phase">{{ phaseLabel(m.phase) }}</span>

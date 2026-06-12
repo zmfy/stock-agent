@@ -18,8 +18,8 @@ export type ChatKind = 'general' | 'core_principle' | 'stock' | 'morning' | 'eve
 
 export const FIXED_ROOM_KINDS = ['core_principle', 'daily', 'screen'] as const satisfies ChatKind[];
 const FIXED_ROOM_TITLES: Record<typeof FIXED_ROOM_KINDS[number], string> = {
-  core_principle: '当前策略探讨',
-  daily: '当天策略和复盘',
+  core_principle: '策略探讨',
+  daily: '操盘和复盘',
   screen: '选股讨论',
 };
 
@@ -80,7 +80,7 @@ export function ensureFixedRooms(userId: string): any[] {
       db.prepare('INSERT INTO chat_sessions (id, user_id, kind, ref_id, title, pinned) VALUES (?, ?, ?, NULL, ?, 1)')
         .run(uuidv4(), userId, kind, FIXED_ROOM_TITLES[kind]);
     } else {
-      db.prepare('UPDATE chat_sessions SET pinned = 1 WHERE id = ?').run(existing.id);
+      db.prepare('UPDATE chat_sessions SET pinned = 1, title = ? WHERE id = ?').run(FIXED_ROOM_TITLES[kind], existing.id);
     }
   }
   for (const oldKind of ['morning', 'evening']) {
