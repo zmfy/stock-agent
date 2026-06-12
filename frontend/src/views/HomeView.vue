@@ -1003,7 +1003,6 @@ onUnmounted(() => {
 .tnav-scroll { flex: 1; min-width: 0; display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; }
 .tnav-scroll::-webkit-scrollbar { height: 6px; }
 .topnav-user { flex: none; display: flex; align-items: center; gap: 8px; }
-.uname { font-size: 12px; color: var(--text-soft); white-space: nowrap; }
 .tnav { flex: none; white-space: nowrap; background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 6px 13px; font-size: 13px; cursor: pointer; color: var(--text-soft); display: inline-flex; align-items: center; gap: 5px; transition: all 0.15s; }
 .tnav:hover { border-color: var(--accent); color: var(--accent-600); }
 .tnav.active { background: #e5484d; color: #fff; border-color: #e5484d; }
@@ -1047,7 +1046,6 @@ onUnmounted(() => {
   .main { width: 100%; }
   .chat, .panelbox { margin: 8px; padding: 12px 12px; border-radius: 12px; }
   .topnav { padding: 10px 10px 0; }
-  .topnav-user .uname { display: none; }
   .chat-row { flex-direction: column; }
   .cp-side, .convo { width: auto; }
   .bubble { max-width: 88%; }
@@ -1080,8 +1078,7 @@ onUnmounted(() => {
 .mtime { font-size: 10px; color: var(--muted); margin-top: 3px; }
 .msg.user .mtime { text-align: right; }
 .typing { color: #999; }
-.tplswitch { font-size: 13px; background: #f7f9fc; border: 1px solid #dfe7f2; border-radius: 6px; padding: 6px 10px; margin: 6px 0; }
-.tpl-head { display: flex; justify-content: space-between; align-items: center; }
+.tplswitch { font-size: 13px; display: flex; flex-direction: column; gap: 8px; }
 .tplgrid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 2px 12px; margin: 6px 0; }
 .tplcheck { font-size: 12px; }
 .composeprev { margin-top: 8px; border-top: 1px dashed #cdd; padding-top: 6px; }
