@@ -118,7 +118,7 @@
                   </template>
                   <button class="ops-btn" @click="scheduleOpen = !scheduleOpen">⚙ 时间设置</button>
                 </div>
-                <ScheduleSettings v-if="scheduleOpen" @saved="scheduleOpen = false" />
+                <ScheduleSettings v-if="scheduleOpen" />
                 <div v-if="strategyToday" class="daily-content">
                   <template v-if="!strategyToday.isTradingDay">
                     <div class="phase-head">🛌 休市日 · 新闻与板块</div>
@@ -222,19 +222,6 @@
                   </div>
                 </div>
               </template>
-
-              <div v-if="adoptedNews.length" class="adopted-news-box">
-                <div class="an-head">来财采用的新闻</div>
-                <ul class="an-list">
-                  <li v-for="an in adoptedNews" :key="an.content_id">
-                    <a href="#" @click.prevent="showMeetingNews(an.content_id)">{{ an.title }}</a>
-                  </li>
-                </ul>
-                <div v-if="openMeetingNews" class="an-content">
-                  <div class="an-content-head"><b>{{ openMeetingNews.title }}</b><button class="mini" @click="openMeetingNews = null">关闭</button></div>
-                  <p>{{ openMeetingNews.content || '（无正文）' }}</p>
-                </div>
-              </div>
 
               <div class="msgs" ref="msgsEl">
                 <div v-for="m in messages" :key="m.id" class="msg" :class="m.role">
@@ -384,10 +371,10 @@ async function loadStrategyToday() {
 async function genStrategy(phase: StrategyPhase) {
   strategyGenerating.value = true;
   try { await strategyApi.generate(phase); await loadStrategyToday(); }
-  catch (e: any) { noteErrorToSession(sessions.value.find((x) => x.kind === 'daily')?.id, `生成失败：${e.response?.data?.message || ''}`); }
+  catch (e: any) { await noteErrorToSession(sessions.value.find((x) => x.kind === 'daily')?.id, `生成失败：${e.response?.data?.message || ''}`); }
   finally { strategyGenerating.value = false; }
 }
-// 正在后台生成的会话种类（morning/evening/screen）——SPA 内切换不丢
+// 正在后台生成的会话种类（screen）——SPA 内切换不丢
 const generating = reactive(new Set<string>());
 // 后台生成失败信息，按 kind 记录
 const genErr = reactive<Record<string, string>>({});
@@ -554,9 +541,6 @@ const synthSystems = computed<string[]>(() => {
   return [...new Set(gs.map((g) => g.system))].sort();
 });
 
-const adoptedNews = computed<Array<{ content_id: string; title: string }>>(() => []);
-const openMeetingNews = ref<{ title: string; content: string } | null>(null);
-async function showMeetingNews(id: string) { openMeetingNews.value = await dataApi.newsContent(id); }
 
 async function propose() {
   if (!active.value) return;
@@ -1110,15 +1094,6 @@ onUnmounted(() => {
 .composer button:hover:not(:disabled) { background: var(--accent-600); }
 .composer button:disabled { opacity: 0.5; cursor: not-allowed; }
 .err { color: var(--danger); }
-.adopted-news-box { background: #f3faf3; border: 1px solid #cce8cc; border-radius: 8px; padding: 8px 12px; margin: 6px 0; flex: 0 0 auto; max-height: 30vh; overflow-y: auto; }
-.an-head { font-size: 12px; font-weight: 600; color: #2a8a2a; margin-bottom: 4px; }
-.an-list { list-style: none; padding: 0; margin: 0; }
-.an-list li { padding: 3px 0; font-size: 13px; }
-.an-list a { color: #34699a; text-decoration: none; }
-.an-list a:hover { text-decoration: underline; }
-.an-content { margin-top: 8px; border-top: 1px dashed #b7d7b7; padding-top: 8px; }
-.an-content-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: 13px; margin-bottom: 4px; }
-.an-content p { font-size: 12px; line-height: 1.65; white-space: pre-wrap; margin: 0; color: #444; }
 .screen-box { background: #f7faff; border: 1px solid #d6e4ff; border-radius: 8px; padding: 8px 12px; margin: 6px 0; flex: 0 0 auto; max-height: 40vh; overflow-y: auto; }
 .screen-results { margin-top: 6px; }
 .screen-hist { margin: 6px 0; border-top: 1px dashed #d6e4ff; padding-top: 6px; max-height: 260px; overflow-y: auto; }
