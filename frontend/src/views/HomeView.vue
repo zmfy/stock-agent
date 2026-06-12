@@ -67,7 +67,7 @@
           </div>
         </div>
         <div class="topnav-user">
-          <button class="uname-btn" @click="userMenuOpen = !userMenuOpen">👤 {{ auth.user?.nickname || auth.user?.username }} ▾</button>
+          <button class="mini uname-btn" @click="userMenuOpen = !userMenuOpen">👤 {{ auth.user?.nickname || auth.user?.username }} ▾</button>
           <div v-if="userMenuOpen" class="user-menu">
             <button @click="settingsKey = 'account'; userMenuOpen = false">账号设置</button>
             <button @click="logout">登出</button>
@@ -1134,7 +1134,7 @@ onUnmounted(() => {
 .daily-room { display: flex; flex-direction: column; gap: 10px; }
 .phase-head { font-weight: 700; margin: 4px 0; }
 .intraday-item { border-left: 3px solid var(--border, #e5e5e5); padding-left: 10px; margin-bottom: 10px; }
-.uname-btn { background: none; border: none; font-size: 12px; color: var(--text-soft); white-space: nowrap; cursor: pointer; padding: 4px 6px; }
+.uname-btn { white-space: nowrap; }
 .topnav-user { position: relative; }
 .user-menu { position: absolute; top: 110%; right: 0; z-index: 60; background: var(--surface, #fff); border: 1px solid var(--border, #e5e5e5); border-radius: 8px; box-shadow: 0 6px 24px rgba(0,0,0,0.12); display: flex; flex-direction: column; min-width: 120px; }
 .user-menu button { background: none; border: none; text-align: left; padding: 8px 14px; font-size: 13px; cursor: pointer; }
