@@ -40,3 +40,17 @@ describe('strategy schedule routes', () => {
     expect((await request(app).get('/api/strategy/schedule')).status).toBe(401);
   });
 });
+
+describe('strategy today + generate routes', () => {
+  it('GET /today 返回结构', async () => {
+    const res = await request(app).get('/api/strategy/today').set(h(userTok));
+    expect(res.status).toBe(200);
+    expect(res.body.data).toHaveProperty('phase');
+    expect(res.body.data).toHaveProperty('isTradingDay');
+    expect(Array.isArray(res.body.data.intraday)).toBe(true);
+    expect(res.body.data).toHaveProperty('prejudge');
+  });
+  it('POST /generate/未知phase → 422', async () => {
+    expect((await request(app).post('/api/strategy/generate/foo').set(h(userTok))).status).toBe(422);
+  });
+});

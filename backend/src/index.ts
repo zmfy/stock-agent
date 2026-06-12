@@ -73,7 +73,8 @@ export function createApp(): express.Express {
   app.use('/api/agent', agentRoutes);
   app.use('/api/chat', aiLimiter, chatRoutes);
   app.use('/api/meetings', aiLimiter, meetingsRoutes);
-  app.use('/api/strategy', strategyRoutes); // 纯配置 CRUD，不挂 aiLimiter；后续 AI 生成端点按路由单独限流
+  app.use('/api/strategy/generate', aiLimiter); // 仅对 AI 生成子路径限流
+  app.use('/api/strategy', strategyRoutes);
   app.use('/api/screen', aiLimiter, screenRoutes);
   app.use('/api/account', accountRoutes);
 
