@@ -306,7 +306,7 @@ import PluginsView from './PluginsView.vue';
 import DataView from './DataView.vue';
 import DataAlertsView from './DataAlertsView.vue';
 import SettingsView from './SettingsView.vue';
-import MeetingsHistoryView from './MeetingsHistoryView.vue';
+import StrategyHistoryView from './StrategyHistoryView.vue';
 import CronsView from './CronsView.vue';
 import ScheduleSettings from './ScheduleSettings.vue';
 import StockPicker from '../components/StockPicker.vue';
@@ -320,7 +320,7 @@ const auth = useAuthStore();
 // roles: 'user' = 仅普通用户(交易功能)；'admin' = 仅 admin(运维)；'both' = 两者都有。
 const SETTINGS = [
   { key: 'rulebook', label: '当前策略', icon: '📜', comp: RulebookView, roles: 'user' },
-  { key: 'meetings', label: '早晚会历史', icon: '🗓', comp: MeetingsHistoryView, roles: 'user' },
+  { key: 'strategy_history', label: '策略历史', icon: '🗓', comp: StrategyHistoryView, roles: 'user' },
   { key: 'analysis', label: '分析历史', icon: '📊', comp: AnalysisView, roles: 'user' },
   { key: 'data', label: '数据管理', icon: '📈', comp: DataView, roles: 'admin' },
   { key: 'alerts', label: '数据告警', icon: '🚨', comp: DataAlertsView, roles: 'admin' },
