@@ -558,17 +558,19 @@ export async function ingestRealtime(userId: string, opts: { now?: number } = {}
       /* 单只失败跳过，不中断整轮 */
     }
   }
+  let idxCount = 0;
   for (const idx of MARKET_INDICES) {
     try {
       const rt = await fetchIndexRealtime(base, idx.key);
       if (rt && rt.data && (rt.data as any).price != null) {
         cacheRealtime(idx.key, rt.data as Record<string, any>, rt.source ?? 'tdx-idx');
+        idxCount++;
       }
     } catch {
       /* 单个指数失败跳过 */
     }
   }
-  console.log(`[realtime] 写入 ${count}/${codes.length} 只`);
+  console.log(`[realtime] 写入股票 ${count}/${codes.length}，指数 ${idxCount}/${MARKET_INDICES.length}`);
   return { skipped: false, count };
 }
 

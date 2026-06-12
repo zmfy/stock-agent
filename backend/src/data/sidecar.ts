@@ -65,7 +65,9 @@ export async function fetchRealtime(base: string, code: string): Promise<{ sourc
 }
 
 export async function fetchIndexRealtime(base: string, key: string): Promise<{ source: string | null; data: Record<string, unknown> } | null> {
-  return getJson(`${base}/index-rt/${key}`, 1500);
+  const d = await getJson(`${base}/index-rt/${key}`, 1500);
+  if (!d || !d.data) return null;
+  return { source: d.source ?? null, data: d.data };
 }
 
 export async function fetchFundamentals(base: string, code: string, order?: string[]): Promise<{ source: string | null; data: Record<string, unknown> } | null> {
