@@ -259,8 +259,8 @@
           </div>
 
         </div>
-        <MarketStatusBar v-if="!auth.isAdmin" />
       </section>
+      <MarketStatusBar v-if="!auth.isAdmin" />
     </main>
     <MarkdownModal :open="detailOpen" :text="detailText" @close="detailOpen = false" />
     <ReportModal :open="reportOpen" :code="reportCode" @close="reportOpen = false" />
