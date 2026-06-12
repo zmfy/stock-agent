@@ -1,7 +1,7 @@
 import { getDb } from '../db';
 import { QuoteRow, StockSnapshot, RealtimeQuoteView } from '../types';
 import { v4 as uuidv4 } from 'uuid';
-import { resolveSidecarBase, fetchFundamentals, fetchQuotes, fetchMarket, fetchName, fetchNews, fetchAllStocks, orderedProviders, fetchRealtime, fetchIndexBars } from './sidecar';
+import { resolveSidecarBase, fetchFundamentals, fetchQuotes, fetchMarket, fetchName, fetchNews, fetchAllStocks, orderedProviders, fetchRealtime, fetchIndexBars, fetchIndexRealtime } from './sidecar';
 import { recordCollected } from './news-log';
 import { lastTradingDayBefore, isTradingDay } from './trade-calendar';
 
@@ -484,6 +484,14 @@ export function listCachedCodes(): string[] {
   return (getDb().prepare('SELECT DISTINCT code FROM quote_daily').all() as { code: string }[]).map((r) => r.code);
 }
 
+export const MARKET_INDICES: Array<{ key: string; name: string }> = [
+  { key: 'sh000001', name: '上证综指' },
+  { key: 'sz399001', name: '深证成指' },
+  { key: 'sz399006', name: '创业板指' },
+  { key: 'sh000688', name: '科创50' },
+  { key: 'bj899050', name: '北证50' },
+];
+
 // 实时行情(含盘口五档)列；fetched_at/source/code 单独处理
 const RT_COLS = [
   'price', 'open', 'high', 'low', 'prev_close', 'volume',
@@ -548,6 +556,16 @@ export async function ingestRealtime(userId: string, opts: { now?: number } = {}
       }
     } catch {
       /* 单只失败跳过，不中断整轮 */
+    }
+  }
+  for (const idx of MARKET_INDICES) {
+    try {
+      const rt = await fetchIndexRealtime(base, idx.key);
+      if (rt && rt.data && (rt.data as any).price != null) {
+        cacheRealtime(idx.key, rt.data as Record<string, any>, rt.source ?? 'tdx-idx');
+      }
+    } catch {
+      /* 单个指数失败跳过 */
     }
   }
   console.log(`[realtime] 写入 ${count}/${codes.length} 只`);

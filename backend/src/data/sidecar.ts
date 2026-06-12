@@ -64,6 +64,10 @@ export async function fetchRealtime(base: string, code: string): Promise<{ sourc
   return { source: d.source ?? null, data: d.data };
 }
 
+export async function fetchIndexRealtime(base: string, key: string): Promise<{ source: string | null; data: Record<string, unknown> } | null> {
+  return getJson(`${base}/index-rt/${key}`, 1500);
+}
+
 export async function fetchFundamentals(base: string, code: string, order?: string[]): Promise<{ source: string | null; data: Record<string, unknown> } | null> {
   const d = await getJson(`${base}/fundamentals/${code}${order && order.length ? `?order=${order.join(',')}` : ''}`);
   const data = d?.data ?? (d && !('source' in d) ? d : null);   // 兼容旧裸对象

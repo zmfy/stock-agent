@@ -1,0 +1,47 @@
+import path from 'path';
+import os from 'os';
+import fs from 'fs';
+
+process.env.DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'sa-mktstatus-'));
+
+const { getDb } = require('../db');
+const svc = require('./service');
+const { getMarketStatus } = require('./market-status');
+
+const WED_SESSION = Date.UTC(2026, 5, 10, 2, 0, 0);
+const WED_PRE = Date.UTC(2026, 5, 10, 0, 0, 0);
+
+beforeEach(() => {
+  getDb().exec("DELETE FROM realtime_quote; DELETE FROM sync_status; DELETE FROM cron_status; DELETE FROM market_sentiment;");
+});
+
+describe('getMarketStatus', () => {
+  it('盘中且当天有缓存 → basis=实时,带点数与涨跌幅', () => {
+    svc.cacheRealtime('sh000001', { price: 4031.5, prev_close: 3987.0, time: '10:00' }, 'tdx-idx');
+    const st = getMarketStatus(WED_SESSION, 'ok');
+    const sh = st.indices.find((x: any) => x.code === 'sh000001');
+    expect(sh).toMatchObject({ name: '上证综指', point: 4031.5, basis: '实时' });
+    expect(sh.changePct).toBeCloseTo(1.12, 1);
+    expect(st.updatedAt).toBeTruthy();
+  });
+  it('非盘中(盘前) → basis=收盘(缓存里上次收盘点)', () => {
+    svc.cacheRealtime('sh000001', { price: 4031.5, prev_close: 3987.0 }, 'tdx-idx');
+    const sh = getMarketStatus(WED_PRE, 'ok').indices.find((x: any) => x.code === 'sh000001');
+    expect(sh.basis).toBe('收盘');
+    expect(sh.point).toBe(4031.5);
+  });
+  it('无缓存指数 → point=null', () => {
+    const bj = getMarketStatus(WED_SESSION, 'ok').indices.find((x: any) => x.code === 'bj899050');
+    expect(bj.point).toBeNull();
+  });
+  it('alerts 汇总：sidecar down → alertLevel=error', () => {
+    const st = getMarketStatus(WED_SESSION, 'down');
+    expect(st.alertLevel).toBe('error');
+    expect(st.alerts.some((a: any) => a.source === 'sidecar')).toBe(true);
+  });
+  it('数据正常 → alertLevel=null', () => {
+    getDb().prepare("INSERT INTO market_sentiment (date, source) VALUES ('2026-06-10','t')").run();
+    const st = getMarketStatus(WED_SESSION, 'ok');
+    expect(st.alertLevel).toBeNull();
+  });
+});
