@@ -358,7 +358,7 @@ const router = useRouter();
 const route = useRoute();
 
 const sessions = ref<ChatSession[]>([]);
-const FIXED_ORDER: ChatKind[] = ['core_principle', 'daily', 'screen', 'ai_model'];
+const FIXED_ORDER: ChatKind[] = ['ai_model', 'core_principle', 'daily', 'screen'];
 function isFixedRoom(kind: ChatKind): boolean {
   return FIXED_ORDER.includes(kind);
 }
