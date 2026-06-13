@@ -40,4 +40,14 @@ router.post('/reset', (req: Request, res: Response) => {
   successResponse(res, out, '已清空当前用户数据（已自动备份）');
 });
 
+// PUT /api/account/profile { nickname } — 改当前用户昵称(用户名不可改)
+router.put('/profile', (req: Request, res: Response) => {
+  const parsed = z.object({ nickname: z.string() }).safeParse(req.body);
+  if (!parsed.success) return errorResponse(res, 422, 'VALIDATION_ERROR', '参数校验失败');
+  const nickname = parsed.data.nickname.trim();
+  if (nickname.length > 30) return errorResponse(res, 422, 'VALIDATION_ERROR', '昵称不能超过 30 字');
+  const user = svc.updateNickname(req.user!.userId, nickname);
+  successResponse(res, user, '已保存');
+});
+
 export default router;

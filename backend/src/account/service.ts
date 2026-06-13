@@ -126,3 +126,8 @@ export function resetUser(userId: string): { backupId: string; backupLabel: stri
   wipeUserData(userId);
   return { backupId: b.id, backupLabel: b.label };
 }
+
+export function updateNickname(userId: string, nickname: string): { id: string; username: string; role: string; nickname: string | null } {
+  getDb().prepare('UPDATE users SET nickname = ? WHERE id = ?').run(nickname, userId);
+  return getDb().prepare('SELECT id, username, role, nickname FROM users WHERE id = ?').get(userId) as any;
+}
