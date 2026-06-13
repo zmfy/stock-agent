@@ -70,3 +70,16 @@ describe('screen service', () => {
     expect(h[0]).toHaveProperty('picks');
   });
 });
+
+describe('选股讨论结论锚点', () => {
+  it('discussScreen 输出含「🧠 来财推荐：」单独成行', async () => {
+    const aiCall = async (_p: string, role: string) => `（${role}）`;
+    const out = await svc.discussScreen(
+      'u-anchor',
+      '测试范围',
+      [{ code: '600519', name: '贵州茅台', aPass: true, bPass: false, passed: 1, total: 1, failed: [], reason: '入选' }],
+      aiCall,
+    );
+    expect(out).toContain('\n🧠 来财推荐：\n');
+  });
+});

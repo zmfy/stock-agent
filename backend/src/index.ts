@@ -15,7 +15,6 @@ import dataRoutes from './routes/data';
 import analysisRoutes from './routes/analysis';
 import agentRoutes from './routes/agent';
 import chatRoutes from './routes/chat';
-import meetingsRoutes from './routes/meetings';
 import screenRoutes from './routes/screen';
 import accountRoutes from './routes/account';
 import cronRoutes from './routes/cron';
@@ -73,7 +72,6 @@ export function createApp(): express.Express {
   app.use('/api/analysis', aiLimiter, analysisRoutes);
   app.use('/api/agent', agentRoutes);
   app.use('/api/chat', aiLimiter, chatRoutes);
-  app.use('/api/meetings', aiLimiter, meetingsRoutes);
   app.use('/api/strategy/generate', aiLimiter); // 仅对 AI 生成子路径限流
   app.use('/api/strategy', strategyRoutes);
   app.use('/api/market', marketRoutes);

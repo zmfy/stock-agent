@@ -1,6 +1,6 @@
 import { isTradingDay } from '../data/trade-calendar';
 import { inTradingSession } from '../data/service';
-import { eligibleUserIds } from '../meetings/service';
+import { eligibleUserIds } from './context';
 import { ScheduleConfig, StrategyPhase, getScheduleConfig, beijingDate, hasStrategy, getLatestIntraday } from './service';
 import { generatePrejudge, generateIntraday, generateReview, generateHoliday } from './generate';
 

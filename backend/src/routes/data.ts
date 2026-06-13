@@ -165,6 +165,11 @@ router.get('/stocks/search', (req: Request, res: Response) => {
   successResponse(res, svc.searchStocks(String(req.query.q || ''), 20));
 });
 
+// GET /api/data/stocks/dict — 全量 code+name 字典（前端泡泡个股 linkify 本地匹配用）
+router.get('/stocks/dict', (_req: Request, res: Response) => {
+  successResponse(res, svc.getStockDict());
+});
+
 // ---- 通达信(TDX)行情服务器：测速 + 选用 ----
 router.get('/tdx/servers/test', adminMiddleware, async (req: Request, res: Response) => {
   const base = resolveSidecarBase(req.user!.userId);

@@ -92,30 +92,34 @@
                     <button class="mini" @click="rulebookModalOpen = true">📜 当前策略</button>
                     <button class="mini" @click="tplOpen = true">🔀 更换组合模板</button>
                   </template>
+                  <template v-if="active.kind === 'daily'">
+                    <button v-if="strategyToday && !strategyToday.isTradingDay" class="mini" :disabled="strategyGenerating" @click="genStrategy('holiday')">🛌 生成休市快报</button>
+                    <template v-else-if="strategyToday">
+                      <button v-if="strategyToday.phase === 'prejudge'" class="mini" :disabled="strategyGenerating" @click="genStrategy('prejudge')">📈 生成今日预判</button>
+                      <button v-else-if="strategyToday.phase === 'intraday'" class="mini" :disabled="strategyGenerating" @click="genStrategy('intraday')">⏱ 生成一条盘中</button>
+                      <button v-else-if="strategyToday.phase === 'review'" class="mini" :disabled="strategyGenerating" @click="genStrategy('review')">🔁 生成复盘</button>
+                    </template>
+                    <button class="mini" @click="scheduleOpen = !scheduleOpen">⚙ 时间设置</button>
+                  </template>
+                  <template v-if="active.kind === 'screen'">
+                    <button v-if="activeRulebook" class="mini" @click="runScreen">🔍 按当前策略选股</button>
+                    <button v-else class="mini" @click="openCorePrinciple">去「当前策略」定一套 →</button>
+                  </template>
                   <button class="mini clear-cur" @click="clearCurrent" title="清空当前会话的消息">🧹 清理</button>
                 </span>
               </div>
               <!-- 房间专属动作（取代原右侧操作面板） -->
               <div v-if="active.kind === 'daily'" class="daily-room">
-                <div class="room-actions">
-                  <button v-if="strategyToday && !strategyToday.isTradingDay" class="ops-btn dashed" :disabled="strategyGenerating" @click="genStrategy('holiday')">🛌 生成休市快报</button>
-                  <template v-else-if="strategyToday">
-                    <button v-if="strategyToday.phase === 'prejudge'" class="ops-btn dashed" :disabled="strategyGenerating" @click="genStrategy('prejudge')">📈 生成今日预判</button>
-                    <button v-else-if="strategyToday.phase === 'intraday'" class="ops-btn dashed" :disabled="strategyGenerating" @click="genStrategy('intraday')">⏱ 生成一条盘中</button>
-                    <button v-else-if="strategyToday.phase === 'review'" class="ops-btn dashed" :disabled="strategyGenerating" @click="genStrategy('review')">🔁 生成复盘</button>
-                  </template>
-                  <button class="ops-btn" @click="scheduleOpen = !scheduleOpen">⚙ 时间设置</button>
-                </div>
                 <ScheduleSettings v-if="scheduleOpen" />
                 <div v-if="strategyToday" class="daily-content">
                   <template v-if="!strategyToday.isTradingDay">
                     <div class="phase-head">🛌 休市日 · 新闻与板块</div>
-                    <ClampText v-if="strategyToday.holiday" :text="strategyToday.holiday.content" @detail="openDetail" />
+                    <ConclusionBubble v-if="strategyToday.holiday" :text="strategyToday.holiday.content" @detail="openDetail" />
                     <p v-else class="muted">休市快报将于设定时间生成。</p>
                   </template>
                   <template v-else-if="strategyToday.phase === 'prejudge'">
                     <div class="phase-head">📈 盘前 · 今日策略预判</div>
-                    <ClampText v-if="strategyToday.prejudge" :text="strategyToday.prejudge.content" @detail="openDetail" />
+                    <ConclusionBubble v-if="strategyToday.prejudge" :text="strategyToday.prejudge.content" @detail="openDetail" />
                     <p v-else class="muted">预判将于设定时间生成。</p>
                   </template>
                   <template v-else-if="strategyToday.phase === 'intraday'">
@@ -123,24 +127,18 @@
                     <p v-if="!strategyToday.intraday.length" class="muted">盘中小结将按你的间隔生成。</p>
                     <div v-for="(it, i) in [...strategyToday.intraday].reverse()" :key="i" class="intraday-item">
                       <div class="muted">{{ fmtCN(it.createdAt) }}</div>
-                      <ClampText :text="it.content" @detail="openDetail" />
+                      <ConclusionBubble :text="it.content" @detail="openDetail" />
                     </div>
                   </template>
                   <template v-else>
                     <div class="phase-head">🔁 盘后 · 复盘</div>
-                    <ClampText v-if="strategyToday.review" :text="strategyToday.review.content" @detail="openDetail" />
+                    <ConclusionBubble v-if="strategyToday.review" :text="strategyToday.review.content" @detail="openDetail" />
                     <p v-else class="muted">复盘将于设定时间生成。</p>
                   </template>
                 </div>
               </div>
-              <div v-else-if="active.kind === 'screen'" class="room-actions">
-                <template v-if="activeRulebook">
-                  <button class="ops-btn" @click="runScreen">🔍 按当前策略选股</button>
-                </template>
-                <template v-else>
-                  <span class="muted">还没有当前策略，无法选股。</span>
-                  <button class="ops-btn" @click="openCorePrinciple">去「当前策略」房间定一套 →</button>
-                </template>
+              <div v-else-if="active.kind === 'screen' && !activeRulebook" class="room-actions">
+                <span class="muted">还没有当前策略，无法选股。先去「当前策略」房间定一套。</span>
               </div>
               <div v-else-if="active.kind === 'core_principle'" class="room-actions">
                 <button v-if="needsInit" class="propose-btn" :disabled="synthesizing" @click="synthesizePrinciple">
@@ -158,7 +156,20 @@
                 生成失败：{{ genErr[active.kind] }}（可再次点击对应按钮重试）
               </div>
               <div v-if="briefing && briefingTime" class="briefing-time muted">🕐 生成于 {{ fmtCN(briefingTime) }}</div>
-              <div v-if="briefing" class="briefing"><ClampText :text="briefing" @detail="openDetail" /></div>
+              <div v-if="active?.kind === 'core_principle'" class="briefing cp-briefing">
+                <template v-if="activeRulebook">
+                  <div class="cp-head">
+                    📜 {{ activeRulebook.version.version_label }}
+                    <span v-if="activeRulebook.version.created_at" class="muted"> · 最后更换 {{ fmtCNDate(activeRulebook.version.created_at) }}</span>
+                    <button class="clamp-more" @click="openDetail(cpDetailText)">详细 ›</button>
+                  </div>
+                  <div class="cp-guide muted">你想优化哪一方面？例如：放宽/收紧某条门槛、增删条件、调整仓位或止损、修改人设。说出你的想法，我们讨论后，点下方「🛠 让 agent 提议修改规则」，我会给出带版本号的修改方案供你确认。</div>
+                </template>
+                <StockText v-else :text="briefing" :clamp="false" />
+              </div>
+              <div v-else-if="active?.kind === 'screen' && briefing" class="briefing">
+                <ConclusionBubble :text="briefing" @detail="openDetail" />
+              </div>
 
               <template v-if="active?.kind === 'screen' && screen">
                 <div class="screen-box">
@@ -182,7 +193,7 @@
 
               <div class="msgs" ref="msgsEl">
                 <div v-for="m in messages" :key="m.id" class="msg" :class="m.role">
-                  <div class="bubble"><ClampText :text="m.content" @detail="openDetail" /></div>
+                  <div class="bubble"><StockText :text="m.content" :clamp="active?.kind !== 'stock'" @detail="openDetail" /></div>
                   <div v-if="m.created_at" class="mtime">{{ fmtTime(m.created_at) }}</div>
                 </div>
                 <div v-if="sending" class="msg assistant"><div class="bubble typing">思考中…</div></div>
@@ -278,7 +289,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, nextTick, onMounted, onUnmounted } from 'vue';
+import { ref, reactive, computed, nextTick, onMounted, onUnmounted, provide } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { APP_VERSION } from '../version';
 import { useAuthStore } from '../stores/auth';
@@ -299,7 +310,8 @@ import StrategyHistoryView from './StrategyHistoryView.vue';
 import CronsView from './CronsView.vue';
 import ScheduleSettings from './ScheduleSettings.vue';
 import StockPicker from '../components/StockPicker.vue';
-import ClampText from '../components/ClampText.vue';
+import StockText from '../components/StockText.vue';
+import ConclusionBubble from '../components/ConclusionBubble.vue';
 import MarkdownModal from '../components/MarkdownModal.vue';
 import ReportModal from '../components/ReportModal.vue';
 import Modal from './Modal.vue';
@@ -462,8 +474,15 @@ function buildCpBriefing(rb: FullRulebook | null): string {
 }
 const briefing = computed(() => {
   if (active.value?.kind === 'core_principle') return buildCpBriefing(activeRulebook.value);
-  if (active.value?.kind === 'screen') return screen.value ? (screen.value.note + (screen.value.discussion ? '\n\n' + screen.value.discussion : '')) : '点右侧「按当前策略选股」开始';
+  if (active.value?.kind === 'screen') return screen.value ? (screen.value.note + (screen.value.discussion ? '\n\n' + screen.value.discussion : '')) : '点上方「🔍 按当前策略选股」开始';
   return '';
+});
+
+// 策略探讨「详细」弹层只展示规则正文，去掉尾部引导语（引导语已在泡泡里单独显示，避免重复）。
+const cpDetailText = computed(() => {
+  const b = briefing.value;
+  const idx = b.indexOf('\n———');
+  return idx >= 0 ? b.slice(0, idx).trimEnd() : b;
 });
 
 // 纪要(选股)的生成时间，供展示「生成于…」判断是否过时
@@ -750,6 +769,7 @@ async function openStockCode(code: string) {
   }
   if (s) await open(s);
 }
+provide('openStock', (code: string) => { void openStockCode(code); });
 async function loadScreenHistory() {
   try {
     screenHistory.value = await screenApi.history(20);
@@ -1046,6 +1066,11 @@ onUnmounted(() => {
 .synth-sys li, .synth-soft li { font-size: 13px; }
 .tpl-interview-entry { margin: 6px 0; font-size: 12px; }
 .tpl-interview-entry a { color: var(--accent, #2a8a2a); }
+.cp-head { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-weight: 600; }
+.cp-guide { margin-top: 6px; font-size: 13px; line-height: 1.5; }
+.cp-head .clamp-more { font-weight: 400; }
+.clamp-more { font-size: 12px; color: var(--accent, #2a8a2a); background: none; border: none; cursor: pointer; padding: 0; }
+.clamp-more:hover { text-decoration: underline; }
 .alert-bar { cursor: pointer; padding: 8px 16px; font-size: 13px; font-weight: 600; color: #fff; }
 .alert-bar.err { background: #d33; }
 .alert-bar.warn { background: #d9a300; }

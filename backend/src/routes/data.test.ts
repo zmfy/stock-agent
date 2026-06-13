@@ -248,3 +248,16 @@ describe('data routes', () => {
     expect(r.status).toBe(422);
   });
 });
+
+describe('GET /api/data/stocks/dict', () => {
+  it('返回 {version, items[[code,name]]}，普通用户可访问', async () => {
+    const { getDb } = require('../db');
+    getDb().prepare("INSERT OR REPLACE INTO stock_names (code, name) VALUES ('600519','贵州茅台')").run();
+    const r = await request(app).get('/api/data/stocks/dict').set(uh());
+    expect(r.status).toBe(200);
+    expect(typeof r.body.data.version).toBe('string');
+    expect(Array.isArray(r.body.data.items)).toBe(true);
+    const hit = r.body.data.items.find((it: [string, string]) => it[0] === '600519');
+    expect(hit).toEqual(['600519', '贵州茅台']);
+  });
+});

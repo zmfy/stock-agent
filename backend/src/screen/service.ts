@@ -24,7 +24,7 @@ function personaOf(userId: string, role: string): string {
 
 // 选股的多 agent 讨论：数据员说明候选池 → 分析师按原则点评/排序 → 来财给推荐清单与理由。
 // 没有可用模型时返回空串（选股结果照常返回，只是没有讨论纪要）。
-async function discussScreen(
+export async function discussScreen(
   userId: string,
   note: string,
   results: ScreenResult[],

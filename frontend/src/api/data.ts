@@ -68,6 +68,7 @@ export const dataApi = {
   newsLog: (limit = 50) => api.get('/data/news/log?limit=' + limit).then((r) => r.data.data as Array<{ id: string; content_id: string; title: string; source: string; collected_at: string; adopted: number }>),
   newsContent: (id: string) => api.get('/data/news/content/' + id).then((r) => r.data.data as { title: string; content: string; source: string; collected_at: string; adopted: number }),
   stockSearch: (q: string) => api.get<{ data: Array<{ code: string; name: string }> }>(`/data/stocks/search?q=${encodeURIComponent(q)}`),
+  stocksDict: () => api.get('/data/stocks/dict').then((r) => r.data.data as { version: string; items: [string, string][] }),
   probe: (kind = 'quote') => api.get('/data/probe?kind=' + kind).then((r) => r.data.data as Array<{ key: string; label: string; reachable: boolean; latencyMs: number | null; error: string | null }>),
   probeList: (kind = 'quote') => api.get('/data/probe/list?kind=' + kind).then((r) => r.data.data as Array<{ key: string; label: string }>),
   probeOne: (kind: string, provider: string) => api.get(`/data/probe?kind=${kind}&provider=${provider}`).then((r) => (r.data.data[0] || null) as { key: string; label: string; reachable: boolean; latencyMs: number | null; error: string | null } | null),

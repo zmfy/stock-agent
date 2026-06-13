@@ -789,3 +789,13 @@ function numOrNull(v: unknown): number | null {
 function round2(v: number | null): number | null {
   return v === null ? null : Math.round(v * 100) / 100;
 }
+
+// 个股字典（code+name 全量），供前端聊天泡泡本地匹配个股做链接用。
+export function getStockDict(): { version: string; items: [string, string][] } {
+  const db = getDb();
+  const rows = db
+    .prepare("SELECT code, name FROM stock_names WHERE name IS NOT NULL AND name <> '' ORDER BY code")
+    .all() as { code: string; name: string }[];
+  const agg = db.prepare('SELECT COUNT(*) AS n, MAX(fetched_at) AS m FROM stock_names').get() as { n: number; m: string | null };
+  return { version: `${agg.n}:${agg.m ?? ''}`, items: rows.map((r) => [r.code, r.name]) };
+}

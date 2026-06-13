@@ -3,7 +3,7 @@ import { refreshNews } from '../data/service';
 import { newsTitlesSince } from '../data/news-log';
 import { getCorePersona } from '../agent/profiles-service';
 import { lastTradingDayBefore } from '../data/trade-calendar';
-import { marketText, sectorText, rulebookText, defaultAiCall } from '../meetings/service';
+import { marketText, sectorText, rulebookText, defaultAiCall } from './context';
 import { beijingDate, recordStrategy, getStrategy, getIntradayTimeline } from './service';
 
 export interface GenStrategyOpts {
@@ -24,16 +24,16 @@ function prejudgeNewsText(now: number): string {
 }
 
 function prejudgePrompt(persona: string, market: string, sectors: string, news: string, rb: string, hasRb: boolean): string {
-  return `${persona}\n场景：盘前【策略预判】。基于以下信息，给出今天的操作预判（方向、关注板块、风险点；${hasRb ? '结合用户当前策略' : '无个人策略，仅给大盘/板块层面预判'}）。\n大盘：${market}\n板块：${sectors}\n自上一交易日以来的新闻：\n${news}\n${hasRb ? `用户当前策略：\n${rb}` : ''}\n请用中文给出简洁、可执行的预判：`;
+  return `${persona}\n场景：盘前【策略预判】。基于以下信息，给出今天的操作预判（方向、关注板块、风险点；${hasRb ? '结合用户当前策略' : '无个人策略，仅给大盘/板块层面预判'}）。\n大盘：${market}\n板块：${sectors}\n自上一交易日以来的新闻：\n${news}\n${hasRb ? `用户当前策略：\n${rb}` : ''}\n请先用一行输出「结论：<一句话方向与重点，≤40字>」，再换行给出简洁、可执行的预判（方向/板块/风险）：`;
 }
 function intradayPrompt(persona: string, market: string, sectors: string, rb: string, hasRb: boolean): string {
-  return `${persona}\n场景：盘中【实时策略】。总结当前大盘走势与板块热度，并${hasRb ? '结合用户当前策略' : '在大盘/板块层面'}给出用户此刻可能的交易策略。\n大盘：${market}\n板块：${sectors}\n${hasRb ? `用户当前策略：\n${rb}` : ''}\n请用中文给出简洁的盘中小结（这一时点）：`;
+  return `${persona}\n场景：盘中【实时策略】。总结当前大盘走势与板块热度，并${hasRb ? '结合用户当前策略' : '在大盘/板块层面'}给出用户此刻可能的交易策略。\n大盘：${market}\n板块：${sectors}\n${hasRb ? `用户当前策略：\n${rb}` : ''}\n请先用一行输出「结论：<一句话当下研判，≤40字>」，再换行给出简洁的盘中小结（这一时点）：`;
 }
 function reviewPrompt(persona: string, market: string, prejudge: string, intraday: string, rb: string, hasRb: boolean): string {
-  return `${persona}\n场景：盘后【复盘】。只复盘今天这个交易日：对照实际行情，复盘今早的「策略预判」与当天的「盘中策略」，总结对错、原因与改进。\n今日大盘：${market}\n今日预判：\n${prejudge || '（今日无预判）'}\n今日盘中时间线：\n${intraday || '（今日无盘中记录）'}\n${hasRb ? `用户当前策略：\n${rb}` : ''}\n请用中文给出复盘（哪些对/错、为什么、下次怎么调整）：`;
+  return `${persona}\n场景：盘后【复盘】。只复盘今天这个交易日：对照实际行情，复盘今早的「策略预判」与当天的「盘中策略」，总结对错、原因与改进。\n今日大盘：${market}\n今日预判：\n${prejudge || '（今日无预判）'}\n今日盘中时间线：\n${intraday || '（今日无盘中记录）'}\n${hasRb ? `用户当前策略：\n${rb}` : ''}\n请先用一行输出「结论：<一句话复盘定论，≤40字>」，再换行给出复盘（哪些对/错、为什么、下次怎么调整）：`;
 }
 function holidayPrompt(persona: string, sectors: string, news: string): string {
-  return `${persona}\n场景：【休市日快报】。今天休市，无操作。请仅做：① 近期消息面/新闻归纳；② 可能受影响的板块（说明逻辑）。\n板块：${sectors}\n近期新闻：\n${news}\n请用中文给出简洁的休市快报：`;
+  return `${persona}\n场景：【休市日快报】。今天休市，无操作。请仅做：① 近期消息面/新闻归纳；② 可能受影响的板块（说明逻辑）。\n板块：${sectors}\n近期新闻：\n${news}\n请先用一行输出「结论：<一句话消息面/受影响板块要点，≤40字>」，再换行给出简洁的休市快报：`;
 }
 
 export async function generatePrejudge(userId: string, opts: GenStrategyOpts = {}): Promise<string> {

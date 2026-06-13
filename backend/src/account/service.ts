@@ -10,7 +10,6 @@ const PER_USER_TABLES = [
   'agent_profiles',
   'chat_sessions',
   'reports',
-  'meetings',
   'screenings',
   'data_sources',
   'shared_ai_optout',

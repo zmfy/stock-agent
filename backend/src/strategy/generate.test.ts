@@ -48,15 +48,36 @@ describe('generators 落库到正确 phase', () => {
     await gen.generateHoliday(U, { aiCall, fetchNews: async () => {}, now: NOON });
     expect(svc.getStrategy(U, D, 'holiday')?.content).toContain('受影响板块');
   });
+  it('四类生成 prompt 均要求首行输出「结论：」', async () => {
+    const p1 = recordingAi(); await gen.generatePrejudge(U, { aiCall: p1.aiCall, fetchNews: async () => {}, now: NOON });
+    const p2 = recordingAi(); await gen.generateIntraday(U, { aiCall: p2.aiCall, now: NOON });
+    const p3 = recordingAi(); await gen.generateReview(U, { aiCall: p3.aiCall, now: NOON });
+    const p4 = recordingAi(); await gen.generateHoliday(U, { aiCall: p4.aiCall, fetchNews: async () => {}, now: NOON });
+    for (const p of [p1, p2, p3, p4]) {
+      expect(p.prompts.join('\n')).toContain('结论：');
+    }
+  });
 });
 
 describe('预判新闻窗口=自上一交易日以来(覆盖节后)', () => {
+  // now 钉死在 NOON(北京 2026-06-10 周三)→ 无日历兜底下 lastTradingDayBefore='2026-06-09'(周二)，
+  // 窗口起点 '2026-06-09 00:00:00'。新闻 collected_at 也用固定值，避免依赖真实时钟造成 flaky。
   it('预判 prompt 含上一交易日之后采集的新闻标题', async () => {
     const cid = 'c1';
-    getDb().prepare("INSERT INTO news_content_log (id, title, content, source, collected_at) VALUES (?, '节前重大利好', '正文', 'test', datetime('now','-1 day'))").run(cid);
-    getDb().prepare("INSERT INTO news_title_log (id, content_id, title, source, collected_at) VALUES ('t1', ?, '节前重大利好', 'test', datetime('now','-1 day'))").run(cid);
+    getDb().prepare("INSERT INTO news_content_log (id, title, content, source, collected_at) VALUES (?, '节前重大利好', '正文', 'test', '2026-06-09 12:00:00')").run(cid);
+    getDb().prepare("INSERT INTO news_title_log (id, content_id, title, source, collected_at) VALUES ('t1', ?, '节前重大利好', 'test', '2026-06-09 12:00:00')").run(cid);
     const { aiCall, prompts } = recordingAi('预判');
-    await gen.generatePrejudge(U, { aiCall, fetchNews: async () => {}, now: Date.now() });
+    await gen.generatePrejudge(U, { aiCall, fetchNews: async () => {}, now: NOON });
     expect(prompts.join('\n')).toContain('节前重大利好');
+  });
+
+  // 窗口边界：上一交易日之前(更早)采集的新闻不应进入预判窗口。
+  it('预判 prompt 不含上一交易日之前的旧新闻', async () => {
+    const cid = 'c2';
+    getDb().prepare("INSERT INTO news_content_log (id, title, content, source, collected_at) VALUES (?, '陈年旧闻', '正文', 'test', '2026-06-01 12:00:00')").run(cid);
+    getDb().prepare("INSERT INTO news_title_log (id, content_id, title, source, collected_at) VALUES ('t2', ?, '陈年旧闻', 'test', '2026-06-01 12:00:00')").run(cid);
+    const { aiCall, prompts } = recordingAi('预判');
+    await gen.generatePrejudge(U, { aiCall, fetchNews: async () => {}, now: NOON });
+    expect(prompts.join('\n')).not.toContain('陈年旧闻');
   });
 });
