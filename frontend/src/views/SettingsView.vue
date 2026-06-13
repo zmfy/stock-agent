@@ -13,6 +13,15 @@
 
     <!-- ===== 我的账号：修改密码（所有用户） ===== -->
     <div v-show="tab === 'account'">
+    <section class="card acct-info">
+      <h2>账号信息</h2>
+      <div class="row"><label>用户名</label><span class="ro">{{ auth.user?.username }}</span></div>
+      <div class="row"><label>昵称</label>
+        <input v-model="nickname" maxlength="30" placeholder="给自己起个昵称(可留空)" />
+        <button class="mini" :disabled="savingProfile" @click="saveProfile">{{ savingProfile ? '保存中…' : '保存' }}</button>
+        <span v-if="profileMsg" class="muted">{{ profileMsg }}</span>
+      </div>
+    </section>
     <section class="card">
       <h2>修改密码</h2>
       <div class="form">
@@ -149,6 +158,23 @@ import { fmtCN } from '../utils/time';
 
 const auth = useAuthStore();
 const tab = ref<'account' | 'backup' | 'users'>('account');
+
+// ---- 账号信息：昵称编辑 ----
+const nickname = ref(auth.user?.nickname || '');
+const savingProfile = ref(false);
+const profileMsg = ref('');
+async function saveProfile() {
+  savingProfile.value = true; profileMsg.value = '';
+  try {
+    await accountApi.updateProfile(nickname.value.trim());
+    await auth.fetchMe();
+    profileMsg.value = '已保存';
+  } catch (e: any) {
+    profileMsg.value = e.response?.data?.message || '保存失败';
+  } finally {
+    savingProfile.value = false;
+  }
+}
 
 // ---- 数据备份与重置 ----
 const backups = ref<Backup[]>([]);
@@ -368,4 +394,10 @@ onMounted(async () => {
 .danger { color: #c00; }
 .reset { margin-top: 12px; padding: 12px; border: 1px dashed #ccc; border-radius: 6px; max-width: 320px; }
 button:disabled { opacity: 0.5; cursor: not-allowed; }
+.mini { font-size: 12px; padding: 3px 9px; border: 1px solid var(--border,#e5e5e5); border-radius: 6px; background: var(--surface,#fff); cursor: pointer; }
+.acct-info { border: 1px solid var(--border, #e5e5e5); border-radius: 10px; padding: 12px 16px; margin-bottom: 14px; }
+.acct-info .row { display: flex; align-items: center; gap: 8px; margin: 6px 0; font-size: 13px; }
+.acct-info label { width: 56px; color: var(--muted, #888); }
+.acct-info .ro { color: var(--text, #333); }
+.acct-info input { width: 220px; padding: 4px 6px; }
 </style>

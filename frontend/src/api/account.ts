@@ -8,6 +8,7 @@ export interface Backup {
 }
 
 export const accountApi = {
+  updateProfile: (nickname: string) => api.put<{ data: { id: string; username: string; role: string; nickname: string | null } }>('/account/profile', { nickname }),
   backup: (label?: string) => api.post<{ data: { id: string; label: string } }>('/account/backup', { label }),
   listBackups: () => api.get<{ data: Backup[] }>('/account/backups'),
   restore: (id: string) => api.post(`/account/backups/${id}/restore`),
