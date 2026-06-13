@@ -13,6 +13,7 @@
     <div class="right">
       <button v-if="st.alertLevel" class="alert-toggle" @click="alertsOpen = !alertsOpen">⚠ 数据异常 {{ st.alerts.length }} 条</button>
       <span class="muted updated">数据更新于 {{ fmtUpdated(st.updatedAt) }}</span>
+      <CalendarPopover />
     </div>
     <div v-if="alertsOpen && st.alerts.length" class="alert-pop">
       <div v-for="(a, i) in st.alerts" :key="i" class="alert-row" :class="a.level">
@@ -25,6 +26,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue';
 import { marketApi, type MarketStatus } from '../api/market';
+import CalendarPopover from './CalendarPopover.vue';
 
 const st = ref<MarketStatus | null>(null);
 const alertsOpen = ref(false);

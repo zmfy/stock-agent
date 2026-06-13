@@ -45,27 +45,6 @@
             <span class="ticon">{{ s.icon }}</span>{{ s.label }}
           </button>
         </div>
-        <div v-if="!auth.isAdmin" class="cal-wrap">
-          <button class="mini" @click="toggleCalendar">📅 A 股日历</button>
-          <div v-if="calOpen" class="cal-pop">
-            <div class="cal-nav">
-              <button class="mini" @click="prevMonth">‹</button>
-              <span>{{ calYear }} 年 {{ calMonth }} 月</span>
-              <button class="mini" @click="nextMonth" :disabled="atCalMax">›</button>
-            </div>
-            <div class="cal-grid cal-head">
-              <span v-for="w in ['一','二','三','四','五','六','日']" :key="w">{{ w }}</span>
-            </div>
-            <div class="cal-grid">
-              <span v-for="n in calLead" :key="'b'+n" class="cal-cell blank"></span>
-              <span v-for="d in calDays" :key="d.date" class="cal-cell" :class="{ closed: !d.trading, today: d.date === calToday }">
-                {{ Number(d.date.slice(8, 10)) }}
-                <i v-if="!d.trading" class="cal-x">休</i>
-              </span>
-            </div>
-            <div class="cal-foot muted">灰色=休市（周末/节假日），不开早晚会；今日高亮。</div>
-          </div>
-        </div>
         <div class="topnav-user">
           <button class="mini uname-btn" @click="userMenuOpen = !userMenuOpen">👤 {{ auth.user?.nickname || auth.user?.username }} ▾</button>
           <div v-if="userMenuOpen" class="user-menu">
@@ -407,51 +386,6 @@ async function loadDataAlerts() {
   }
 }
 
-// A 股日历弹窗
-const calToday = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Shanghai' }); // YYYY-MM-DD（北京）
-const calOpen = ref(false);
-const calYear = ref(Number(calToday.slice(0, 4)));
-const calMonth = ref(Number(calToday.slice(5, 7)));
-const calDays = ref<Array<{ date: string; trading: boolean }>>([]);
-// 当月 1 号是周几（周一=0 … 周日=6），用于网格前置空格
-const calLead = computed(() => {
-  const first = `${calYear.value}-${String(calMonth.value).padStart(2, '0')}-01`;
-  return (new Date(first + 'T00:00:00Z').getUTCDay() + 6) % 7;
-});
-// 日历封顶：只显示到当年 12 月；每年 11/30 之后才放开到明年 12 月。
-const calMax = (() => {
-  const y = Number(calToday.slice(0, 4));
-  const m = Number(calToday.slice(5, 7));
-  const d = Number(calToday.slice(8, 10));
-  const afterNov30 = m > 11 || (m === 11 && d >= 30);
-  return { year: afterNov30 ? y + 1 : y, month: 12 };
-})();
-const atCalMax = computed(() => calYear.value > calMax.year || (calYear.value === calMax.year && calMonth.value >= calMax.month));
-async function loadCalendar() {
-  try {
-    calDays.value = (await dataApi.tradeCalendar(calYear.value, calMonth.value)).days;
-  } catch {
-    calDays.value = [];
-  }
-}
-function toggleCalendar() {
-  calOpen.value = !calOpen.value;
-  // 每次打开都回到当前月份（不记忆上次翻到哪），并重新加载。
-  if (calOpen.value) {
-    calYear.value = Number(calToday.slice(0, 4));
-    calMonth.value = Number(calToday.slice(5, 7));
-    loadCalendar();
-  }
-}
-function prevMonth() {
-  if (calMonth.value === 1) { calMonth.value = 12; calYear.value--; } else calMonth.value--;
-  loadCalendar();
-}
-function nextMonth() {
-  if (atCalMax.value) return; // 封顶：不允许翻到当年(或明年)12 月之后
-  if (calMonth.value === 12) { calMonth.value = 1; calYear.value++; } else calMonth.value++;
-  loadCalendar();
-}
 const rulebookModalOpen = ref(false);
 const userMenuOpen = ref(false);
 const railOpen = ref(false); // 移动端左栏抽屉
@@ -1023,22 +957,6 @@ onUnmounted(() => {
 .ops-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
 .ops-btn.dashed { border-style: dashed; background: #f0f7f2; }
 .ops-btn:disabled { opacity: 0.6; cursor: not-allowed; }
-.cal-wrap { position: relative; margin-top: auto; }
-.cal-pop { position: absolute; bottom: 100%; right: 0; left: 0; margin-bottom: 6px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow-md); padding: 10px; z-index: 50; }
-.cal-nav { display: flex; justify-content: space-between; align-items: center; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
-.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
-.cal-head span { text-align: center; font-size: 11px; color: var(--muted); padding: 2px 0; }
-.cal-cell { position: relative; text-align: center; font-size: 12px; padding: 5px 0; border-radius: 6px; cursor: default; }
-.cal-cell.blank { visibility: hidden; }
-.cal-cell.closed { background: #f0f0f0; color: #aaa; }
-.cal-cell.today { outline: 2px solid var(--accent); font-weight: 700; }
-.cal-x { position: absolute; top: 0; right: 2px; font-size: 8px; color: #c98; font-style: normal; }
-.cal-foot { margin-top: 6px; font-size: 11px; }
-.topnav .cal-wrap { position: relative; margin-top: 0; }
-/* 顶栏里日历改为向下弹出：重置基础规则的 bottom/left/margin-bottom（原侧栏向上弹），
-   给 7 列网格留出最小宽度，窄屏不溢出。视觉(背景/边框/阴影)沿用基础 .cal-pop。 */
-.topnav .cal-pop { top: 110%; bottom: auto; left: auto; right: 0; margin-bottom: 0; min-width: 248px; max-width: calc(100vw - 24px); }
-
 /* ============ 移动端适配（<=768px）============ */
 @media (max-width: 768px) {
   .hamburger { display: inline-flex; align-items: center; }
