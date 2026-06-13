@@ -1,12 +1,13 @@
 import { v4 as uuidv4 } from 'uuid';
 import { getDb } from '../db';
-import { getModelForRole } from '../ai/service';
+import { getModelForRole, getRoleAssignment, listConfigs } from '../ai/service';
+import { ROLES } from '../ai/roles';
 import { getProvider } from '../ai/providers';
 import { chat } from '../ai/manager';
-import { getCorePersona } from '../agent/profiles-service';
+import { getCorePersona, listProfiles } from '../agent/profiles-service';
 import { runAnalysis } from '../analysis/orchestrator';
 import { getStockName, getCachedName } from '../data/service';
-import { skillDirectives } from '../plugins/service';
+import { skillDirectives, listForUser } from '../plugins/service';
 import { getLatestReportByCode } from '../analysis/report-service';
 import { getActive, listVersionHistory } from '../rulebook/service';
 import { getLatest as getLatestScreen } from '../screen/service';
@@ -14,13 +15,14 @@ import { buildMarketInjection } from './market-context';
 import { isTradingDay } from '../data/trade-calendar';
 import { beijingDate, dailyPhase, getStrategy, getIntradayTimeline } from '../strategy/service';
 
-export type ChatKind = 'general' | 'core_principle' | 'stock' | 'morning' | 'evening' | 'screen' | 'daily';
+export type ChatKind = 'general' | 'core_principle' | 'stock' | 'morning' | 'evening' | 'screen' | 'daily' | 'ai_model';
 
-export const FIXED_ROOM_KINDS = ['core_principle', 'daily', 'screen'] as const satisfies ChatKind[];
+export const FIXED_ROOM_KINDS = ['core_principle', 'daily', 'screen', 'ai_model'] as const satisfies ChatKind[];
 const FIXED_ROOM_TITLES: Record<typeof FIXED_ROOM_KINDS[number], string> = {
   core_principle: '策略探讨',
   daily: '操盘和复盘',
   screen: '选股讨论',
+  ai_model: 'AI 模型探讨',
 };
 
 export interface ChatMessage {
@@ -39,6 +41,7 @@ const KIND_FRAMING: Record<ChatKind, string> = {
   evening: '盘后晚会：复盘今日操作，总结成败、找原因。',
   screen: '按当前策略的选股讨论：解释本次选股结果与依据，回答关于入选/未入选个股的追问；不替用户做买卖决定。',
   daily: '当天策略与复盘：结合今日的策略预判/盘中/复盘，与用户讨论操作与得失。',
+  ai_model: '用户在和你探讨本系统的 AI 模型与能力插件配置。你是「AI 模型顾问」：依据下方"当前配置"如实回答模型选择、各角色用哪个模型、报错排查、插件用途等问题；当用户想真正修改时，引导他点本房间标题栏的「🤖 AI 模型」或「🧩 能力插件」按钮去设置。你不直接修改配置，也不杜撰系统没有的模型/参数。',
 };
 
 const CORE_PRINCIPLE_INTERVIEW_FRAMING =
@@ -167,13 +170,37 @@ export interface PostOptions {
   extraContext?: string;
 }
 
-async function defaultAiCall(userId: string, prompt: string): Promise<{ raw: string; provider: string; model: string }> {
-  const cfg = getModelForRole(userId, 'core');
+async function defaultAiCall(userId: string, prompt: string, role = 'core'): Promise<{ raw: string; provider: string; model: string }> {
+  const cfg = getModelForRole(userId, role);
   if (!cfg) throw new Error('NO_MODEL');
   const style = getProvider(cfg.provider)?.apiStyle || 'openai';
   const acct = cfg.scope === 'shared' && cfg.ownerConfigId ? { userId, configId: cfg.ownerConfigId } : undefined;
   const raw = await chat(style, { baseUrl: cfg.baseUrl, model: cfg.model, apiKey: cfg.apiKey }, prompt, 1500, acct);
   return { raw, provider: cfg.provider, model: cfg.model };
+}
+
+// 给「AI 模型探讨」房间的顾问注入当前配置摘要（不含任何密钥）。
+function buildAiConfigContext(userId: string): string {
+  const parts: string[] = [];
+  try {
+    const roleLines = ROLES.map((r) => {
+      const m = getModelForRole(userId, r.key);
+      const a = getRoleAssignment(userId, r.key);
+      const mode = a?.mode === 'manual' ? '手动' : '自动';
+      const model = m ? `${m.provider}/${m.model}` : '未配置';
+      return `· ${r.label}：${model}（${mode}）`;
+    }).join('\n');
+    parts.push(`角色模型分配：\n${roleLines}`);
+  } catch { /* 降级 */ }
+  try {
+    const enabled = listConfigs(userId).filter((c: any) => c.enabled).map((c: any) => c.provider);
+    parts.push(`已启用模型 provider：${enabled.length ? enabled.join('、') : '（无）'}`);
+  } catch { /* 降级 */ }
+  try {
+    const plugs = listForUser(userId).map((p: any) => `${p.label}：${p.enabled ? '开' : '关'}`);
+    parts.push(`能力插件：\n${plugs.join('\n')}`);
+  } catch { /* 降级 */ }
+  return `当前 AI 配置：\n${parts.join('\n\n')}`;
 }
 
 function reportContext(report: any): string {
@@ -218,7 +245,10 @@ export async function postMessage(userId: string, sessionId: string, content: st
   if (!session) throw new Error('NOT_FOUND');
   addMessage(sessionId, 'user', content);
   const history = getMessages(userId, sessionId);
-  const persona = getCorePersona(userId);
+  const role = session.kind === 'ai_model' ? 'ai_helper' : 'core';
+  const persona = role === 'core'
+    ? getCorePersona(userId)
+    : (listProfiles(userId).find((p) => p.role === role)?.persona || getCorePersona(userId));
   // Ground stock-session follow-ups in the latest analysis report for that code.
   let extra = opts.extraContext;
   if (!extra && session.kind === 'stock' && session.ref_id) {
@@ -261,6 +291,9 @@ export async function postMessage(userId: string, sessionId: string, content: st
       extra = `当前策略【${rb.version.version_label}】人设：${rb.version.persona}\n硬门槛：${g}\n\n原则演进记忆（最近变更，知道为什么是现在这样）：\n${hist}`;
     }
   }
+  if (!extra && session.kind === 'ai_model') {
+    extra = buildAiConfigContext(userId);
+  }
   // 行情数据注入（个股/大盘，动态窗口）。仅当调用方未显式传 extraContext 时。
   if (!opts.extraContext) {
     try {
@@ -273,7 +306,7 @@ export async function postMessage(userId: string, sessionId: string, content: st
   let framing = KIND_FRAMING[session.kind as ChatKind];
   if (session.kind === 'core_principle' && !getActive(userId)) framing = CORE_PRINCIPLE_INTERVIEW_FRAMING;
   const prompt = buildPrompt(persona, framing, history, extra, skillDirectives(userId));
-  const aiCall = opts.aiCall || ((p: string) => defaultAiCall(userId, p));
+  const aiCall = opts.aiCall || ((p: string) => defaultAiCall(userId, p, role));
   const { raw } = await aiCall(prompt);
   return addMessage(sessionId, 'assistant', (raw || '').trim() || '（无回复）');
 }

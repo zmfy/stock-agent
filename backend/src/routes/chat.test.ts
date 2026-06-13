@@ -215,7 +215,7 @@ describe('fixed rooms', () => {
 describe('agent profiles routes', () => {
   it('lists profiles and updates one', async () => {
     const list = await request(app).get('/api/agent/profiles').set(h(tok));
-    expect(list.body.data).toHaveLength(6);
+    expect(list.body.data).toHaveLength(7);
     const upd = await request(app).put('/api/agent/profiles/core').set(h(tok)).send({ persona: '稳健中线主 agent' });
     expect(upd.status).toBe(200);
     const after = await request(app).get('/api/agent/profiles').set(h(tok));

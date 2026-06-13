@@ -5,7 +5,7 @@ import { getModelForRole } from '../ai/service';
 import { getProvider } from '../ai/providers';
 import { chat } from '../ai/manager';
 
-export const PROFILE_ROLES = ['core', 'data', 'analysis', 'qualitative', 'review', 'validation'] as const;
+export const PROFILE_ROLES = ['core', 'data', 'analysis', 'qualitative', 'review', 'validation', 'ai_helper'] as const;
 export type ProfileRole = (typeof PROFILE_ROLES)[number];
 
 const DEFAULT_MAIN_PERSONA =

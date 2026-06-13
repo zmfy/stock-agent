@@ -119,3 +119,30 @@ describe('addAssistantNote', () => {
     expect(chat.addAssistantNote('someone-else', sid, 'x')).toBeNull();
   });
 });
+
+describe('ai_model 固定房间', () => {
+  it('ensureFixedRooms 建齐含 AI 模型探讨', () => {
+    const svc2 = require('./service');
+    const sessions = svc2.ensureFixedRooms('u-fixed4');
+    const room = sessions.find((s: any) => s.kind === 'ai_model');
+    expect(room).toBeTruthy();
+    expect(room.pinned).toBe(1);
+    expect(room.title).toBe('AI 模型探讨');
+    for (const k of ['core_principle', 'daily', 'screen']) {
+      expect(sessions.some((s: any) => s.kind === k)).toBe(true);
+    }
+  });
+});
+
+describe('ai_model 房间用 ai_helper 角色并注入当前配置', () => {
+  it('postMessage 注入「当前 AI 配置」且带顾问 framing', async () => {
+    const svc3 = require('./service');
+    const sid = svc3.createSession('u-aim', 'ai_model', null, 'AI 模型探讨');
+    let captured = '';
+    await svc3.postMessage('u-aim', sid, 'deepseek 和 qwen 哪个适合分析？', {
+      aiCall: async (p: string) => { captured = p; return '建议……要改点上方按钮'; },
+    });
+    expect(captured).toContain('当前 AI 配置');
+    expect(captured).toContain('AI 模型顾问'); // KIND_FRAMING 注入
+  });
+});

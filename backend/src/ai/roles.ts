@@ -15,6 +15,7 @@ export const ROLES: RoleDef[] = [
   { key: 'qualitative', label: '软料归纳（研报/新闻提炼）', prefer: 'balanced', hint: '把抓回的研报/新闻提炼成要点' },
   { key: 'review', label: '复盘总结', prefer: 'strong', hint: '根据战绩复盘、提议规则优化' },
   { key: 'validation', label: '数据校验', prefer: 'fast', hint: '核验每天取得的数据：上传优先、交叉验证、合理性检查' },
+  { key: 'ai_helper', label: 'AI 模型顾问', prefer: 'balanced', hint: '答疑 AI 模型选择/角色分配/报错排查/插件用途，引导用户去「AI 模型」「能力插件」设置，不替用户改配置' },
 ];
 
 export function getRole(key: string): RoleDef | undefined {

@@ -76,9 +76,22 @@ describe('ai/service (per-user)', () => {
     svc.setEnabled(A, 'ollama', true);
   });
 
-  it('listRoleAssignments returns all 5 roles with resolved models', () => {
+  it('listRoleAssignments returns all 7 roles with resolved models', () => {
     const roles = svc.listRoleAssignments(A);
-    expect(roles.map((r: any) => r.role)).toEqual(['core', 'data', 'analysis', 'qualitative', 'review', 'validation']);
+    expect(roles.map((r: any) => r.role)).toEqual(['core', 'data', 'analysis', 'qualitative', 'review', 'validation', 'ai_helper']);
     expect(roles.every((r: any) => r.resolvedProvider)).toBe(true);
+  });
+});
+
+describe('ai_helper 角色', () => {
+  const roles = require('./roles');
+  const profiles = require('../agent/profiles-service');
+  it('ai_helper 在 ROLES 与 PROFILE_ROLES 中', () => {
+    expect(roles.ROLES.some((r: any) => r.key === 'ai_helper')).toBe(true);
+    expect(profiles.PROFILE_ROLES).toContain('ai_helper');
+  });
+  it('getModelForRole(ai_helper) 回退到 core 的解析结果', () => {
+    const s = require('./service');
+    expect(s.getModelForRole('u-aih', 'ai_helper')).toEqual(s.getModelForRole('u-aih', 'core'));
   });
 });

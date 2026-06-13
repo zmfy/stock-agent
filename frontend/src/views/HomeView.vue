@@ -105,6 +105,10 @@
                     <button v-if="activeRulebook" class="mini" @click="runScreen">🔍 按当前策略选股</button>
                     <button v-else class="mini" @click="openCorePrinciple">去「当前策略」定一套 →</button>
                   </template>
+                  <template v-if="active.kind === 'ai_model'">
+                    <button class="mini" @click="aiModelModalOpen = true">🤖 AI 模型</button>
+                    <button class="mini" @click="pluginsModalOpen = true">🧩 能力插件</button>
+                  </template>
                   <button class="mini clear-cur" @click="clearCurrent" title="清空当前会话的消息">🧹 清理</button>
                 </span>
               </div>
@@ -192,6 +196,9 @@
               </template>
 
               <div class="msgs" ref="msgsEl">
+                <div v-if="active?.kind === 'ai_model' && !messages.length" class="msg assistant">
+                  <div class="bubble">问我 AI 模型怎么选、各角色用哪个、报错怎么处理、插件干嘛用；要改配置点上方「🤖 AI 模型」「🧩 能力插件」。</div>
+                </div>
                 <div v-for="m in messages" :key="m.id" class="msg" :class="m.role">
                   <div class="bubble"><StockText :text="m.content" :clamp="active?.kind !== 'stock'" @detail="openDetail" /></div>
                   <div v-if="m.created_at" class="mtime">{{ fmtTime(m.created_at) }}</div>
@@ -256,6 +263,12 @@
     <ReportModal :open="reportOpen" :code="reportCode" @close="reportOpen = false" />
     <Modal v-if="rulebookModalOpen" title="当前策略" @close="rulebookModalOpen = false">
       <RulebookView />
+    </Modal>
+    <Modal v-if="aiModelModalOpen" title="AI 模型" @close="aiModelModalOpen = false">
+      <AiSettingsView />
+    </Modal>
+    <Modal v-if="pluginsModalOpen" title="能力插件" @close="pluginsModalOpen = false">
+      <PluginsView />
     </Modal>
     <Modal v-if="tplOpen" title="更换 / 组合模板" @close="tplOpen = false">
       <div class="tplswitch">
@@ -326,8 +339,8 @@ const SETTINGS = [
   { key: 'analysis', label: '分析历史', icon: '📊', comp: AnalysisView, roles: 'user' },
   { key: 'data', label: '数据管理', icon: '📈', comp: DataView, roles: 'admin' },
   { key: 'alerts', label: '数据告警', icon: '🚨', comp: DataAlertsView, roles: 'admin' },
-  { key: 'ai', label: 'AI 模型', icon: '🤖', comp: AiSettingsView, roles: 'both' },
-  { key: 'plugins', label: '能力插件', icon: '🧩', comp: PluginsView, roles: 'both' },
+  { key: 'ai', label: 'AI 模型', icon: '🤖', comp: AiSettingsView, roles: 'admin' },
+  { key: 'plugins', label: '能力插件', icon: '🧩', comp: PluginsView, roles: 'admin' },
   { key: 'crons', label: '定时任务', icon: '⏰', comp: CronsView, roles: 'admin' },
   { key: 'account', label: '账号设置', icon: '👤', comp: SettingsView, roles: 'both', hidden: true },
 ];
@@ -345,7 +358,7 @@ const router = useRouter();
 const route = useRoute();
 
 const sessions = ref<ChatSession[]>([]);
-const FIXED_ORDER: ChatKind[] = ['core_principle', 'daily', 'screen'];
+const FIXED_ORDER: ChatKind[] = ['core_principle', 'daily', 'screen', 'ai_model'];
 function isFixedRoom(kind: ChatKind): boolean {
   return FIXED_ORDER.includes(kind);
 }
@@ -404,6 +417,8 @@ const railOpen = ref(false); // 移动端左栏抽屉
 const activeRulebook = ref<FullRulebook | null>(null);
 const templates = ref<TemplateMeta[]>([]);
 const tplOpen = ref(false);
+const aiModelModalOpen = ref(false);
+const pluginsModalOpen = ref(false);
 const tplSelected = ref<string[]>([]);
 const orderedKeys = ref<string[]>([]);
 const composeRes = ref<{ conflict: boolean; conflictFields: string[]; systems: any[]; versionLabel: string } | null>(null);
@@ -574,7 +589,7 @@ function fmtTime(ts: string) {
   return fmtCN(ts);
 }
 function kindIcon(k: ChatKind) {
-  const icons: Record<ChatKind, string> = { general: '💬', core_principle: '📜', stock: '📊', morning: '📈', evening: '🌙', screen: '🔍', daily: '📋' };
+  const icons: Record<ChatKind, string> = { general: '💬', core_principle: '📜', stock: '📊', morning: '📈', evening: '🌙', screen: '🔍', daily: '📋', ai_model: '🤖' };
   return icons[k] || '💬';
 }
 function sessionLabel(s: ChatSession) {
@@ -582,6 +597,7 @@ function sessionLabel(s: ChatSession) {
   if (s.kind === 'daily') return '操盘和复盘';
   if (s.kind === 'stock') return `个股 ${s.ref_id || ''}`;
   if (s.kind === 'screen') return '选股讨论';
+  if (s.kind === 'ai_model') return 'AI 模型探讨';
   return '新对话';
 }
 

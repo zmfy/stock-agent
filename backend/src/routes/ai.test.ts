@@ -70,10 +70,10 @@ describe('ai routes', () => {
     expect(active.body.data.model).toBe('deepseek-chat');
   });
 
-  it('GET /roles returns all 5 roles, resolved to the only enabled config', async () => {
+  it('GET /roles returns all 7 roles, resolved to the only enabled config', async () => {
     const res = await request(app).get('/api/ai/roles').set(h(adminTok));
     expect(res.status).toBe(200);
-    expect(res.body.data.map((r: any) => r.role)).toEqual(['core', 'data', 'analysis', 'qualitative', 'review', 'validation']);
+    expect(res.body.data.map((r: any) => r.role)).toEqual(['core', 'data', 'analysis', 'qualitative', 'review', 'validation', 'ai_helper']);
     expect(res.body.data.every((r: any) => r.resolvedProvider === 'deepseek')).toBe(true);
   });
 
