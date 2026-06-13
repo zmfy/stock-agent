@@ -8,21 +8,22 @@ import { getCorePersona, listProfiles } from '../agent/profiles-service';
 import { runAnalysis } from '../analysis/orchestrator';
 import { getStockName, getCachedName } from '../data/service';
 import { skillDirectives, listForUser } from '../plugins/service';
-import { getLatestReportByCode } from '../analysis/report-service';
+import { getLatestReportByCode, listReports } from '../analysis/report-service';
 import { getActive, listVersionHistory } from '../rulebook/service';
 import { getLatest as getLatestScreen } from '../screen/service';
 import { buildMarketInjection } from './market-context';
 import { isTradingDay } from '../data/trade-calendar';
-import { beijingDate, dailyPhase, getStrategy, getIntradayTimeline } from '../strategy/service';
+import { beijingDate, dailyPhase, getStrategy, getIntradayTimeline, listStrategyHistory } from '../strategy/service';
 
-export type ChatKind = 'general' | 'core_principle' | 'stock' | 'morning' | 'evening' | 'screen' | 'daily' | 'ai_model';
+export type ChatKind = 'general' | 'core_principle' | 'stock' | 'morning' | 'evening' | 'screen' | 'daily' | 'ai_model' | 'history';
 
-export const FIXED_ROOM_KINDS = ['core_principle', 'daily', 'screen', 'ai_model'] as const satisfies ChatKind[];
+export const FIXED_ROOM_KINDS = ['core_principle', 'daily', 'screen', 'ai_model', 'history'] as const satisfies ChatKind[];
 const FIXED_ROOM_TITLES: Record<typeof FIXED_ROOM_KINDS[number], string> = {
   core_principle: '策略探讨',
   daily: '操盘和复盘',
   screen: '选股讨论',
   ai_model: 'AI 模型探讨',
+  history: '历史分析',
 };
 
 export interface ChatMessage {
@@ -42,6 +43,7 @@ const KIND_FRAMING: Record<ChatKind, string> = {
   screen: '按当前策略的选股讨论：解释本次选股结果与依据，回答关于入选/未入选个股的追问；不替用户做买卖决定。',
   daily: '当天策略与复盘：结合今日的策略预判/盘中/复盘，与用户讨论操作与得失。',
   ai_model: '用户在和你探讨本系统的 AI 模型与能力插件配置。你是「AI 模型顾问」：依据下方"当前配置"如实回答模型选择、各角色用哪个模型、报错排查、插件用途等问题；当用户想真正修改时，引导他点本房间标题栏的「🤖 AI 模型」或「🧩 能力插件」按钮去设置。你不直接修改配置，也不杜撰系统没有的模型/参数。',
+  history: '用户在和你回顾历史。结合下方"历史摘要"（最近的策略预判/盘中/复盘记录与个股分析报告），与用户讨论过往策略对错、个股分析结论与经验总结。要看明细可点本房间标题栏的「🗂 策略历史」「📊 分析历史」。基于已有记录作答，不杜撰没发生过的历史。',
 };
 
 const CORE_PRINCIPLE_INTERVIEW_FRAMING =
@@ -203,6 +205,28 @@ function buildAiConfigContext(userId: string): string {
   return `当前 AI 配置：\n${parts.join('\n\n')}`;
 }
 
+// 给「历史分析」房间注入最近策略历史 + 个股分析报告摘要，供来财据实回顾。
+function buildHistoryContext(userId: string): string {
+  const PHASE: Record<string, string> = { prejudge: '预判', intraday: '盘中', review: '复盘', holiday: '休市' };
+  const parts: string[] = [];
+  try {
+    const rows = listStrategyHistory(userId, 8) as Array<{ date: string; phase: string; content: string }>;
+    const lines = rows.map((r) => {
+      const head = (r.content || '').split('\n').find((l) => l.trim()) || '';
+      const snippet = head.length > 40 ? head.slice(0, 40) + '…' : head;
+      return `· ${r.date} ${PHASE[r.phase] || r.phase}：${snippet}`;
+    });
+    parts.push(`最近策略：\n${lines.length ? lines.join('\n') : '（无）'}`);
+  } catch { /* 降级 */ }
+  try {
+    const reps = (listReports(userId) as Array<{ stock_code: string; stock_name: string | null; one_liner: string; created_at: string }>).slice(0, 8);
+    const lines = reps.map((r) => `· ${r.stock_name || r.stock_code} ${r.stock_code}：${r.one_liner}（${(r.created_at || '').slice(0, 10)}）`);
+    parts.push(`最近个股分析：\n${lines.length ? lines.join('\n') : '（无）'}`);
+  } catch { /* 降级 */ }
+  const body = parts.join('\n\n');
+  return `历史摘要：\n${body || '（暂无历史记录）'}`;
+}
+
 function reportContext(report: any): string {
   if (!report) return '';
   const fails = (report.gate_results || [])
@@ -293,6 +317,9 @@ export async function postMessage(userId: string, sessionId: string, content: st
   }
   if (!extra && session.kind === 'ai_model') {
     extra = buildAiConfigContext(userId);
+  }
+  if (!extra && session.kind === 'history') {
+    extra = buildHistoryContext(userId);
   }
   // 行情数据注入（个股/大盘，动态窗口）。仅当调用方未显式传 extraContext 时。
   if (!opts.extraContext) {

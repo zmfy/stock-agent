@@ -146,3 +146,32 @@ describe('ai_model 房间用 ai_helper 角色并注入当前配置', () => {
     expect(captured).toContain('AI 模型顾问'); // KIND_FRAMING 注入
   });
 });
+
+describe('history 固定房间', () => {
+  it('ensureFixedRooms 建齐含 历史分析', () => {
+    const svcH = require('./service');
+    const sessions = svcH.ensureFixedRooms('u-hist5');
+    const room = sessions.find((s: any) => s.kind === 'history');
+    expect(room).toBeTruthy();
+    expect(room.pinned).toBe(1);
+    expect(room.title).toBe('历史分析');
+    for (const k of ['ai_model', 'core_principle', 'daily', 'screen']) {
+      expect(sessions.some((s: any) => s.kind === k)).toBe(true);
+    }
+  });
+});
+
+describe('history 房间注入历史摘要', () => {
+  it('postMessage 注入「历史摘要」且含最近策略内容', async () => {
+    const svcH = require('./service');
+    const strat = require('../strategy/service');
+    strat.recordStrategy('u-histctx', 'prejudge', '结论：今日偏多关注券商', {}, '2026-06-10');
+    const sid = svcH.createSession('u-histctx', 'history', null, '历史分析');
+    let captured = '';
+    await svcH.postMessage('u-histctx', sid, '上次预判说了啥？', {
+      aiCall: async (p: string) => { captured = p; return '上次预判偏多'; },
+    });
+    expect(captured).toContain('历史摘要');
+    expect(captured).toContain('偏多关注券商');
+  });
+});

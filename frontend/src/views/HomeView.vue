@@ -109,6 +109,10 @@
                     <button class="mini" @click="aiModelModalOpen = true">🤖 AI 模型</button>
                     <button class="mini" @click="pluginsModalOpen = true">🧩 能力插件</button>
                   </template>
+                  <template v-if="active.kind === 'history'">
+                    <button class="mini" @click="strategyHistOpen = true">🗂 策略历史</button>
+                    <button class="mini" @click="analysisHistOpen = true">📊 分析历史</button>
+                  </template>
                   <button class="mini clear-cur" @click="clearCurrent" title="清空当前会话的消息">🧹 清理</button>
                 </span>
               </div>
@@ -267,6 +271,8 @@
     <Modal v-if="aiModelModalOpen" title="AI 模型" @close="aiModelModalOpen = false">
       <AiSettingsView />
     </Modal>
+    <Modal v-if="strategyHistOpen" title="策略历史" @close="strategyHistOpen = false"><StrategyHistoryView /></Modal>
+    <Modal v-if="analysisHistOpen" title="分析历史" @close="analysisHistOpen = false"><AnalysisView /></Modal>
     <Modal v-if="pluginsModalOpen" title="能力插件" @close="pluginsModalOpen = false">
       <PluginsView />
     </Modal>
@@ -335,8 +341,8 @@ const auth = useAuthStore();
 // 系统设置：右侧内嵌这些页面，左栏不变
 // roles: 'user' = 仅普通用户(交易功能)；'admin' = 仅 admin(运维)；'both' = 两者都有。
 const SETTINGS = [
-  { key: 'strategy_history', label: '策略历史', icon: '🗓', comp: StrategyHistoryView, roles: 'user' },
-  { key: 'analysis', label: '分析历史', icon: '📊', comp: AnalysisView, roles: 'user' },
+  { key: 'strategy_history', label: '策略历史', icon: '🗓', comp: StrategyHistoryView, roles: 'user', hidden: true },
+  { key: 'analysis', label: '分析历史', icon: '📊', comp: AnalysisView, roles: 'user', hidden: true },
   { key: 'data', label: '数据管理', icon: '📈', comp: DataView, roles: 'admin' },
   { key: 'alerts', label: '数据告警', icon: '🚨', comp: DataAlertsView, roles: 'admin' },
   { key: 'ai', label: 'AI 模型', icon: '🤖', comp: AiSettingsView, roles: 'admin' },
@@ -358,7 +364,7 @@ const router = useRouter();
 const route = useRoute();
 
 const sessions = ref<ChatSession[]>([]);
-const FIXED_ORDER: ChatKind[] = ['ai_model', 'core_principle', 'daily', 'screen'];
+const FIXED_ORDER: ChatKind[] = ['ai_model', 'core_principle', 'daily', 'screen', 'history'];
 function isFixedRoom(kind: ChatKind): boolean {
   return FIXED_ORDER.includes(kind);
 }
@@ -419,6 +425,8 @@ const templates = ref<TemplateMeta[]>([]);
 const tplOpen = ref(false);
 const aiModelModalOpen = ref(false);
 const pluginsModalOpen = ref(false);
+const strategyHistOpen = ref(false);
+const analysisHistOpen = ref(false);
 const tplSelected = ref<string[]>([]);
 const orderedKeys = ref<string[]>([]);
 const composeRes = ref<{ conflict: boolean; conflictFields: string[]; systems: any[]; versionLabel: string } | null>(null);
@@ -589,7 +597,7 @@ function fmtTime(ts: string) {
   return fmtCN(ts);
 }
 function kindIcon(k: ChatKind) {
-  const icons: Record<ChatKind, string> = { general: '💬', core_principle: '📜', stock: '📊', morning: '📈', evening: '🌙', screen: '🔍', daily: '📋', ai_model: '🤖' };
+  const icons: Record<ChatKind, string> = { general: '💬', core_principle: '📜', stock: '📊', morning: '📈', evening: '🌙', screen: '🔍', daily: '📋', ai_model: '🤖', history: '🗂' };
   return icons[k] || '💬';
 }
 function sessionLabel(s: ChatSession) {
@@ -598,6 +606,7 @@ function sessionLabel(s: ChatSession) {
   if (s.kind === 'stock') return `个股 ${s.ref_id || ''}`;
   if (s.kind === 'screen') return '选股讨论';
   if (s.kind === 'ai_model') return 'AI 模型探讨';
+  if (s.kind === 'history') return '历史分析';
   return '新对话';
 }
 

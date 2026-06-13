@@ -8,7 +8,7 @@ const router = Router();
 router.use(authMiddleware);
 
 // Keep in sync with ChatKind in ../chat/service.ts — a missing kind here makes createSession 422.
-// 'daily' 和 'ai_model' 故意不在此列：这两个房间仅由 ensure-fixed-rooms 建，禁止用户直接创建。
+// 'daily'/'ai_model'/'history' 故意不在此列：这三个房间仅由 ensure-fixed-rooms 建，禁止用户直接创建。
 const KINDS = ['general', 'core_principle', 'stock', 'morning', 'evening', 'screen'] as const;
 
 // POST /api/chat/sessions

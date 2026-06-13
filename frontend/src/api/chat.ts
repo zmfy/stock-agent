@@ -1,6 +1,6 @@
 import api from './client';
 
-export type ChatKind = 'general' | 'core_principle' | 'stock' | 'morning' | 'evening' | 'screen' | 'daily' | 'ai_model';
+export type ChatKind = 'general' | 'core_principle' | 'stock' | 'morning' | 'evening' | 'screen' | 'daily' | 'ai_model' | 'history';
 
 export interface ChatSession {
   id: string;
