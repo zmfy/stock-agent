@@ -9,6 +9,7 @@ import * as sources from '../data/sources-service';
 import { resolveSidecarBase, pingHealth, probe, probeList, probeOne, tdxTestServers, tdxSetServer, proxyGet, proxySet, proxyTest } from '../data/sidecar';
 import { getDataAlerts, type SidecarState } from '../data/alerts';
 import { listTitleLog, getContent } from '../data/news-log';
+import { defaultAiCall as explainAi } from '../strategy/context';
 import { monthCalendar } from '../data/trade-calendar';
 
 const router = Router();
@@ -87,6 +88,27 @@ router.get('/stock-detail/:code', async (req: Request, res: Response) => {
     successResponse(res, detail);
   } catch (e: any) {
     return errorResponse(res, 502, 'UPSTREAM_ERROR', `获取个股信息失败：${e?.message || ''}`);
+  }
+});
+
+// GET /api/data/news-relevance/:code/:id — 按需让 AI 一句话解释「这条新闻为何与该股相关」
+router.get('/news-relevance/:code/:id', async (req: Request, res: Response) => {
+  try {
+    const c = getContent(req.params.id);
+    if (!c) return errorResponse(res, 404, 'RESOURCE_NOT_FOUND', '新闻不存在');
+    const code = req.params.code.replace(/^(sh|sz|bj)/i, '');
+    const name = svc.getCachedName(code) || code;
+    const profile = await svc.getStockProfile(req.user!.userId, code, false);
+    const ind = profile.industry ? `，所属行业：${profile.industry}` : '';
+    const prompt =
+      `你是股票分析助手。下面这条新闻与股票【${name}（${code}）${ind}】有什么关系？` +
+      `用一句话（不超过 45 字）说明它为什么相关、或可能对该股有何影响；若其实关系不大，直接说「与该股关联不大」。\n` +
+      `新闻标题：${c.title}\n新闻摘要：${(c.content || '').slice(0, 300)}`;
+    const out = await explainAi(req.user!.userId, prompt, 'core');
+    successResponse(res, { relevance: out.trim().replace(/\s+/g, ' ').slice(0, 120) });
+  } catch (e: any) {
+    if (e.message === 'NO_MODEL') return errorResponse(res, 400, 'BUSINESS_CONFLICT', '请先在「AI 模型」配置并启用一个可用模型');
+    return errorResponse(res, 502, 'UPSTREAM_ERROR', `解释失败：${e?.message || ''}`);
   }
 });
 

@@ -45,7 +45,7 @@ export interface StockDetail {
           limitUp: number | null; limitDown: number | null; turnoverRate: number | null; volumeRatio: number | null; asOf: string | null };
   profile: { industry: string | null; summary: string | null; products: string | null;
              roeTtm: number | null; pe: number | null; pb: number | null; ps: number | null; netProfit: number | null; updatedAt: string | null };
-  news: Array<{ contentId: string; title: string; collectedAt: string; related: boolean }>;
+  news: Array<{ contentId: string; title: string; collectedAt: string; related: boolean; reason: string }>;
 }
 
 export interface DataSource {
@@ -102,6 +102,8 @@ export const dataApi = {
   snapshot: (code: string) => api.get<{ data: StockSnapshot }>(`/data/snapshot/${code}`),
   stockDetail: (code: string, refresh = false) =>
     api.get(`/data/stock-detail/${code}${refresh ? '?refresh=1' : ''}`).then((r) => r.data.data as StockDetail),
+  newsRelevance: (code: string, contentId: string) =>
+    api.get(`/data/news-relevance/${code}/${contentId}`).then((r) => r.data.data as { relevance: string }),
   refresh: (code?: string) => api.post<{ data: { marketRefreshed: boolean; snapshot: StockSnapshot | null } }>('/data/refresh', { code }),
   uploadCsv: (file: File, code?: string) => {
     const fd = new FormData();

@@ -888,17 +888,31 @@ export function getStockDict(): { version: string; items: [string, string][] } {
 
 export function relatedNews(
   code: string, name: string | null, industry: string | null, limit = 8
-): Array<{ contentId: string; title: string; collectedAt: string; related: boolean }> {
+): Array<{ contentId: string; title: string; collectedAt: string; related: boolean; reason: string }> {
   const rows = listTitleLog(100); // {content_id, title, collected_at, ...} 已按 collected_at desc
   const seen = new Set<string>();
   const uniq = rows.filter((r) => (seen.has(r.content_id) ? false : (seen.add(r.content_id), true)));
   const baseName = (name || '').replace(/(股份|集团|科技|控股|实业|有限公司|公司)$/g, '').trim();
-  const kw = [baseName, industry || ''].filter((k) => k && k.length >= 2);
+  // F10 行业是层级串(如「食品饮料-白酒Ⅱ-白酒Ⅲ」)；拆段并去掉尾部罗马数字/层级标(白酒Ⅱ→白酒)。
+  const indKw = Array.from(new Set(
+    (industry || '')
+      .split(/[-/、,，]/)
+      .map((s) => s.replace(/[Ⅰ-ⅿ0-9]+$/g, '').trim())
+      .filter((s) => s.length >= 2)
+  ));
+  const kw = [baseName, ...indKw].filter((k) => k && k.length >= 2);
   const isRel = (t: string) => kw.some((k) => t.includes(k));
+  // 命中原因(即时、关键词层面);更深的"为何影响该股"由点开时的 AI 解释补充。
+  const reasonOf = (t: string): string => {
+    if (baseName && baseName.length >= 2 && t.includes(baseName)) return `提及「${baseName}」`;
+    const hitInd = indKw.find((k) => t.includes(k));
+    if (hitInd) return `同行业「${hitInd}」`;
+    return '近期市场热点';
+  };
   const related = uniq.filter((r) => isRel(r.title));
   const rest = uniq.filter((r) => !isRel(r.title));
   return [...related, ...rest].slice(0, limit).map((r) => ({
-    contentId: r.content_id, title: r.title, collectedAt: r.collected_at, related: isRel(r.title),
+    contentId: r.content_id, title: r.title, collectedAt: r.collected_at, related: isRel(r.title), reason: reasonOf(r.title),
   }));
 }
 
@@ -908,7 +922,7 @@ export interface StockDetail {
           limitUp: number | null; limitDown: number | null; turnoverRate: number | null; volumeRatio: number | null; asOf: string | null };
   profile: { industry: string | null; summary: string | null; products: string | null;
              roeTtm: number | null; pe: number | null; pb: number | null; ps: number | null; netProfit: number | null; updatedAt: string | null };
-  news: Array<{ contentId: string; title: string; collectedAt: string; related: boolean }>;
+  news: Array<{ contentId: string; title: string; collectedAt: string; related: boolean; reason: string }>;
 }
 
 // fetched_at(UTC 'YYYY-MM-DD HH:MM:SS') → 北京日 'YYYY-MM-DD'

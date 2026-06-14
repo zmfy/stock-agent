@@ -315,7 +315,11 @@
                 <div class="sd-sub">相关热点新闻</div>
                 <div v-for="nws in stockDetail.news" :key="nws.contentId" class="sd-news">
                   <a href="#" @click.prevent="toggleNews(nws.contentId)">{{ nws.related ? '🔵 ' : '' }}{{ nws.title }}</a>
-                  <div class="muted">{{ fmtCN(nws.collectedAt) }}</div>
+                  <div class="muted">{{ fmtCN(nws.collectedAt) }} · {{ nws.reason }}</div>
+                  <div v-if="openNewsId === nws.contentId" class="sd-newsrel">
+                    <span v-if="newsRelLoading" class="muted">💡 来财分析关联中…</span>
+                    <span v-else-if="newsRel">💡 {{ newsRel }}</span>
+                  </div>
                   <p v-if="openNewsId === nws.contentId && openNewsBody" class="sd-newsbody">{{ openNewsBody }}</p>
                 </div>
                 <div v-if="!stockDetail.news.length" class="muted">暂无相关新闻。</div>
@@ -452,6 +456,8 @@ const sdLoading = ref(false);
 const sdErr = ref('');
 const openNewsId = ref<string | null>(null);
 const openNewsBody = ref('');
+const newsRel = ref('');            // 点开新闻时 AI 给的「与该股关系」一句话
+const newsRelLoading = ref(false);
 let sdTimer: ReturnType<typeof setInterval> | null = null;
 
 function pctCls(p: number | null) { return p == null ? '' : p >= 0 ? 'up' : 'down'; }
@@ -467,8 +473,16 @@ async function loadStockDetail(refresh = false) {
 }
 async function toggleNews(id: string) {
   if (openNewsId.value === id) { openNewsId.value = null; return; }
-  openNewsId.value = id; openNewsBody.value = '';
+  openNewsId.value = id; openNewsBody.value = ''; newsRel.value = '';
   try { openNewsBody.value = (await dataApi.newsContent(id)).content || '（无正文）'; } catch { openNewsBody.value = '（正文加载失败）'; }
+  // 按需让 AI 解释这条新闻为何与该股相关(只对点开的这条调一次)
+  const code = active.value?.ref_id;
+  if (code) {
+    newsRelLoading.value = true;
+    try { newsRel.value = (await dataApi.newsRelevance(code, id)).relevance || ''; }
+    catch { newsRel.value = ''; }
+    finally { newsRelLoading.value = false; }
+  }
 }
 
 const strategyToday = ref<StrategyToday | null>(null);
@@ -1250,6 +1264,7 @@ onUnmounted(() => {
 .sd-asof { font-size: 11px; margin-top: 4px; }
 .sd-news { font-size: 12px; padding: 4px 0; border-top: 1px solid #f0f4fa; }
 .sd-news a { color: #34699a; text-decoration: none; }
+.sd-newsrel { color: #2563a8; font-size: 12px; margin: 4px 0 0; line-height: 1.5; }
 .sd-newsbody { color: #555; margin: 4px 0 0; white-space: pre-wrap; }
 .spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: spin 0.6s linear infinite; vertical-align: -1px; margin-right: 4px; }
 @keyframes spin { to { transform: rotate(360deg); } }

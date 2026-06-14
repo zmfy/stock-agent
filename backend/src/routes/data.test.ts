@@ -262,6 +262,16 @@ describe('data routes', () => {
     expect(r.body.data.live.limitUp).toBe(110); // 收盘基准：昨收100×1.1
     expect(r.body.data.profile.products).toContain('茅台');
     expect(Array.isArray(r.body.data.news)).toBe(true);
+    // 相关新闻每条带 reason
+    if (r.body.data.news.length) expect(typeof r.body.data.news[0].reason).toBe('string');
+  });
+
+  it('GET /news-relevance/:code/:id 用 AI 解释该新闻为何与该股相关', async () => {
+    const [{ content_id }] = require('../data/news-log').recordCollected([{ title: '白酒消费回暖', content: '...', source: 'em' }]);
+    jest.spyOn(require('../strategy/context'), 'defaultAiCall').mockResolvedValue('白酒消费回暖利好龙头，对贵州茅台构成正面影响。');
+    const r = await request(app).get(`/api/data/news-relevance/600519/${content_id}`).set(h());
+    expect(r.status).toBe(200);
+    expect(r.body.data.relevance).toContain('茅台');
   });
 });
 

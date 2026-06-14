@@ -49,5 +49,18 @@ describe('relatedNews', () => {
     expect(out[0].related).toBe(true); // 含「贵州茅台」或「白酒」的排前
     expect(out.some((n: any) => n.title.includes('茅台') || n.title.includes('白酒'))).toBe(true);
     expect(out.every((n: any) => typeof n.contentId === 'string' && n.title)).toBe(true);
+    // 每条都带命中原因；命中股名的标「提及」，命中行业的标「同行业」，其余「近期市场热点」
+    expect(out.every((n: any) => typeof n.reason === 'string' && n.reason.length > 0)).toBe(true);
+    const moutai = out.find((n: any) => n.title.includes('贵州茅台'));
+    expect(moutai && moutai.reason).toContain('提及');
+    const baijiu = out.find((n: any) => n.title.includes('白酒板块'));
+    expect(baijiu && baijiu.reason).toContain('同行业');
+  });
+  it('行业为 F10 层级串(食品饮料-白酒Ⅱ-白酒Ⅲ)时也能按「白酒」命中', () => {
+    recordCollected([{ title: '白酒消费回暖', source: 't' }]);
+    const out = svc.relatedNews('600519', '贵州茅台', '食品饮料-白酒Ⅱ-白酒Ⅲ', 8);
+    const hit = out.find((n: any) => n.title.includes('白酒消费'));
+    expect(hit && hit.related).toBe(true);
+    expect(hit && hit.reason).toContain('白酒');
   });
 });
