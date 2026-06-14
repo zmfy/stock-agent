@@ -283,7 +283,8 @@ def fundamentals(code: str, order: str = ""):
     merged: dict = {}
     first_source = None
     for reg in _order_providers("fundamentals", order):
-        data = _timed(lambda r=reg: r["fn"](code, 0), 10)
+        # 20s：通达信冷启动(选服务器+F10+股本三次调用)实测 ~9.6s，10s 偶尔超时→空→个股分析被校验门槛硬拦。
+        data = _timed(lambda r=reg: r["fn"](code, 0), 20)
         if not isinstance(data, dict):
             continue
         contributed = False

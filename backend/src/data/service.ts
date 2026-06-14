@@ -626,7 +626,9 @@ export async function refreshStock(userId: string, code: string, order?: string[
   if (!base) return;
   const ord = order ?? (await safeOrder(base, 'fundamentals'));
   const [f, q] = await Promise.all([fetchFundamentals(base, code, ord), fetchQuotes(base, code, 250)]);
-  if (f) cacheFundamentals(code, today(), f.data, f.source ?? 'akshare');
+  // 仅在确有基本面字段时才写库——避免一次（通达信冷启动超时等）空抓 `{}` 覆盖/遮蔽之前的好数据。
+  const hasFund = !!f && !!f.data && ['roe_ttm', 'pe', 'pb', 'ps', 'net_profit', 'turnover_rate'].some((k) => (f.data as any)[k] != null);
+  if (hasFund) cacheFundamentals(code, today(), f!.data, f!.source ?? 'akshare');
   if (q && q.rows.length) cacheQuotes(q.rows, q.source ?? 'akshare');
 }
 
@@ -692,6 +694,11 @@ export async function getStockSnapshot(userId: string, code: string): Promise<St
   // 此时也要重取，避免被不完整的旧缓存卡住。Pass explicit empty order to skip the probe round-trip.
   if (shouldDeepFetch(code) || fundamentalsIncomplete(code)) {
     await refreshStock(userId, code, []).catch(() => {});
+    // 通达信首次取数是冷启动(~10s,偶尔超时→空)。若仍不全,再试一次——此时连接已热(~0.1s),
+    // 通常即可补齐;避免用户碰到「数据未通过校验」的偶发硬拦。
+    if (fundamentalsIncomplete(code)) {
+      await refreshStock(userId, code, []).catch(() => {});
+    }
   }
   if (!latestMarket()) {
     await refreshMarket(userId, []).catch(() => {});
