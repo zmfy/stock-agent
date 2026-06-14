@@ -279,6 +279,51 @@
             </div>
           </aside>
 
+          <!-- 右：个股房间信息面板 -->
+          <aside v-if="active?.kind === 'stock'" class="chat-side">
+            <div class="side-head">📊 个股信息
+              <button class="mini sd-refresh" :disabled="sdLoading" @click="loadStockDetail(true)">{{ sdLoading ? '…' : '🔄' }}</button>
+            </div>
+            <div class="side-body" v-if="stockDetail">
+              <div class="sd-sec">
+                <div class="sd-row"><b class="sd-price" :class="pctCls(stockDetail.live.changePct)">{{ fmtNum(stockDetail.live.price) }}</b>
+                  <span v-if="stockDetail.live.changePct != null" :class="pctCls(stockDetail.live.changePct)">{{ stockDetail.live.changePct >= 0 ? '+' : '' }}{{ stockDetail.live.changePct.toFixed(2) }}%</span>
+                  <span class="tag">{{ stockDetail.live.basis }}</span>
+                </div>
+                <div class="sd-grid">
+                  <span>涨停 <b class="up">{{ fmtNum(stockDetail.live.limitUp) }}</b></span>
+                  <span>跌停 <b class="down">{{ fmtNum(stockDetail.live.limitDown) }}</b></span>
+                  <span>换手 {{ stockDetail.live.turnoverRate != null ? stockDetail.live.turnoverRate.toFixed(2) + '%' : '—' }}</span>
+                  <span v-if="stockDetail.live.volumeRatio != null">量比约 {{ stockDetail.live.volumeRatio }}</span>
+                </div>
+                <div class="muted sd-asof" v-if="stockDetail.live.asOf">数据 {{ stockDetail.live.asOf }}</div>
+              </div>
+              <div class="sd-sec">
+                <div class="sd-sub">公司资料</div>
+                <div v-if="stockDetail.profile.industry" class="sd-line">行业：{{ stockDetail.profile.industry }}</div>
+                <div v-if="stockDetail.profile.summary" class="sd-line">{{ stockDetail.profile.summary }}</div>
+                <div v-if="stockDetail.profile.products" class="sd-line">主营：{{ stockDetail.profile.products }}</div>
+                <div class="sd-grid">
+                  <span>ROE {{ fmtPct(stockDetail.profile.roeTtm) }}</span>
+                  <span>PE {{ fmtNum(stockDetail.profile.pe) }}</span>
+                  <span>PB {{ fmtNum(stockDetail.profile.pb) }}</span>
+                  <span>PS {{ fmtNum(stockDetail.profile.ps) }}</span>
+                </div>
+                <div v-if="!stockDetail.profile.industry && !stockDetail.profile.summary && !stockDetail.profile.products" class="muted">资料暂不可用</div>
+              </div>
+              <div class="sd-sec">
+                <div class="sd-sub">相关热点新闻</div>
+                <div v-for="nws in stockDetail.news" :key="nws.contentId" class="sd-news">
+                  <a href="#" @click.prevent="toggleNews(nws.contentId)">{{ nws.related ? '🔵 ' : '' }}{{ nws.title }}</a>
+                  <div class="muted">{{ fmtCN(nws.collectedAt) }}</div>
+                  <p v-if="openNewsId === nws.contentId && openNewsBody" class="sd-newsbody">{{ openNewsBody }}</p>
+                </div>
+                <div v-if="!stockDetail.news.length" class="muted">暂无相关新闻。</div>
+              </div>
+            </div>
+            <div class="side-body" v-else><span class="muted">{{ sdLoading ? '加载中…' : (sdErr || '暂无行情数据（先在本房间分析一次）') }}</span></div>
+          </aside>
+
         </div>
       </section>
       <MarketStatusBar v-if="!auth.isAdmin" />
@@ -337,7 +382,7 @@ import { chatApi, type ChatSession, type ChatMessage, type ChatKind } from '../a
 import { rulebookApi, type ProposeResult, type FullRulebook, type Gate, type TemplateMeta } from '../api/rulebook';
 import { strategyApi, type StrategyToday, type StrategyPhase } from '../api/strategy';
 import { screenApi, type ScreenRun } from '../api/screen';
-import { dataApi, type DataAlert } from '../api/data';
+import { dataApi, type DataAlert, type StockDetail } from '../api/data';
 import { fmtCN, fmtCNDate } from '../utils/time';
 import AnalysisView from './AnalysisView.vue';
 import RulebookView from './RulebookView.vue';
@@ -400,6 +445,32 @@ const chatErr = ref('');
 const needsInit = ref(false);
 const analyzing = ref(false);
 const msgsEl = ref<HTMLElement | null>(null);
+
+// 个股房间右侧信息面板（实时行情 / 公司资料 / 相关新闻），进入房间加载并每 5 分钟轮询
+const stockDetail = ref<StockDetail | null>(null);
+const sdLoading = ref(false);
+const sdErr = ref('');
+const openNewsId = ref<string | null>(null);
+const openNewsBody = ref('');
+let sdTimer: ReturnType<typeof setInterval> | null = null;
+
+function pctCls(p: number | null) { return p == null ? '' : p >= 0 ? 'up' : 'down'; }
+function fmtNum(v: number | null) { return v == null ? '—' : (Math.round(v * 100) / 100).toString(); }
+function fmtPct(v: number | null) { return v == null ? '—' : v.toFixed(2) + '%'; }
+
+async function loadStockDetail(refresh = false) {
+  if (active.value?.kind !== 'stock' || !active.value.ref_id) return;
+  sdLoading.value = true; sdErr.value = '';
+  try { stockDetail.value = await dataApi.stockDetail(active.value.ref_id, refresh); }
+  catch (e: any) { sdErr.value = e.response?.data?.message || '获取失败'; }
+  finally { sdLoading.value = false; }
+}
+async function toggleNews(id: string) {
+  if (openNewsId.value === id) { openNewsId.value = null; return; }
+  openNewsId.value = id; openNewsBody.value = '';
+  try { openNewsBody.value = (await dataApi.newsContent(id)).content || '（无正文）'; } catch { openNewsBody.value = '（正文加载失败）'; }
+}
+
 const strategyToday = ref<StrategyToday | null>(null);
 const strategyGenerating = ref(false);
 const scheduleOpen = ref(false);
@@ -650,6 +721,8 @@ async function loadSessions() {
 async function open(s: ChatSession) {
   settingsKey.value = ''; // 打开会话即回到聊天视图
   railOpen.value = false; // 手机端选中会话后收起抽屉
+  // 离开个股房间时停掉行情轮询并清空面板，避免悬挂的定时器
+  if (sdTimer && s.kind !== 'stock') { clearInterval(sdTimer); sdTimer = null; stockDetail.value = null; }
   active.value = s;
   chatErr.value = '';
   proposal.value = null;
@@ -659,6 +732,13 @@ async function open(s: ChatSession) {
   // A freshly opened stock session auto-runs the rule-based analysis as its opener.
   if (s.kind === 'stock' && messages.value.length === 0) {
     await doAnalyze(s);
+  }
+  // 个股房间：无论是否已有消息都加载右侧信息面板，并每 5 分钟轮询刷新行情
+  if (s.kind === 'stock') {
+    stockDetail.value = null; openNewsId.value = null;
+    await loadStockDetail();
+    if (sdTimer) clearInterval(sdTimer);
+    sdTimer = setInterval(() => { if (active.value?.kind === 'stock') loadStockDetail(); }, 5 * 60 * 1000);
   }
   // When opening a daily session, load today's strategy data.
   if (s.kind === 'daily') {
@@ -989,6 +1069,7 @@ onMounted(async () => {
 });
 onUnmounted(() => {
   if (alertsTimer) clearInterval(alertsTimer);
+  if (sdTimer) clearInterval(sdTimer);
 });
 </script>
 
@@ -1155,6 +1236,20 @@ onUnmounted(() => {
 .sh-row:last-child { border-bottom: none; margin-bottom: 0; }
 .sh-pick { padding: 3px 6px; border-radius: 4px; cursor: pointer; font-size: 12px; display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
 .sh-pick:hover { background: #e8f0fe; }
+.up { color: #d33; }
+.down { color: #2a8a2a; }
+.sd-refresh { float: right; padding: 0 6px; font-size: 12px; }
+.sd-sec { padding: 8px 0; border-bottom: 1px solid #eef2fa; }
+.sd-sec:last-child { border-bottom: none; }
+.sd-sub { font-size: 12px; font-weight: 600; color: #2563a8; margin-bottom: 4px; }
+.sd-price { font-size: 18px; }
+.sd-row { display: flex; align-items: baseline; gap: 8px; }
+.sd-grid { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; color: #555; margin-top: 4px; }
+.sd-line { font-size: 12px; color: #444; line-height: 1.6; margin: 2px 0; }
+.sd-asof { font-size: 11px; margin-top: 4px; }
+.sd-news { font-size: 12px; padding: 4px 0; border-top: 1px solid #f0f4fa; }
+.sd-news a { color: #34699a; text-decoration: none; }
+.sd-newsbody { color: #555; margin: 4px 0 0; white-space: pre-wrap; }
 .spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: spin 0.6s linear infinite; vertical-align: -1px; margin-right: 4px; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .cp-cta { max-width: 460px; margin: 18px auto 22px; padding: 18px 20px; background: var(--accent-soft, #f3faf3); border: 1px solid var(--accent, #2a8a2a); border-radius: 12px; text-align: center; }
