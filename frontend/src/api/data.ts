@@ -39,6 +39,15 @@ export interface StockSnapshot {
   };
 }
 
+export interface StockDetail {
+  code: string; name: string | null;
+  live: { basis: '实时' | '收盘'; price: number | null; prevClose: number | null; changePct: number | null;
+          limitUp: number | null; limitDown: number | null; turnoverRate: number | null; volumeRatio: number | null; asOf: string | null };
+  profile: { industry: string | null; summary: string | null; products: string | null;
+             roeTtm: number | null; pe: number | null; pb: number | null; ps: number | null; netProfit: number | null; updatedAt: string | null };
+  news: Array<{ contentId: string; title: string; collectedAt: string; related: boolean }>;
+}
+
 export interface DataSource {
   id: string;
   name: string;
@@ -91,6 +100,8 @@ export const dataApi = {
   deleteSource: (id: string) => api.delete(`/data/sources/${id}`),
   getSource: () => api.get<{ data: { sidecarConfigured: boolean; base: string | null; sidecarHealthy: boolean } }>('/data/source'),
   snapshot: (code: string) => api.get<{ data: StockSnapshot }>(`/data/snapshot/${code}`),
+  stockDetail: (code: string, refresh = false) =>
+    api.get(`/data/stock-detail/${code}${refresh ? '?refresh=1' : ''}`).then((r) => r.data.data as StockDetail),
   refresh: (code?: string) => api.post<{ data: { marketRefreshed: boolean; snapshot: StockSnapshot | null } }>('/data/refresh', { code }),
   uploadCsv: (file: File, code?: string) => {
     const fd = new FormData();
