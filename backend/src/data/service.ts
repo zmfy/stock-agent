@@ -834,6 +834,40 @@ function round2(v: number | null): number | null {
   return v === null ? null : Math.round(v * 100) / 100;
 }
 
+export function limitPctFor(code: string, name: string | null): number {
+  const c = code.replace(/^(sh|sz|bj)/i, '');
+  const isST = !!name && /ST/i.test(name);
+  if (c.startsWith('30') || c.startsWith('688')) return 0.20; // 创业板/科创板（ST 也 20%）
+  if (c.startsWith('8') || c.startsWith('4') || c.startsWith('920')) return 0.30; // 北交所
+  if (isST) return 0.05; // 主板 ST
+  return 0.10; // 主板
+}
+
+export function computeLimitPrices(prevClose: number | null, code: string, name: string | null): { up: number | null; down: number | null } {
+  if (prevClose == null) return { up: null, down: null };
+  const pct = limitPctFor(code, name);
+  return { up: Math.round(prevClose * (1 + pct) * 100) / 100, down: Math.round(prevClose * (1 - pct) * 100) / 100 };
+}
+
+// 当日已交易分钟（北京时段 09:30–11:30 + 13:00–15:00，封顶 240）
+export function elapsedTradingMinutes(nowMs: number = Date.now()): number {
+  const bj = new Date(nowMs + 8 * 3600 * 1000);
+  const mins = bj.getUTCHours() * 60 + bj.getUTCMinutes();
+  const o1 = 9 * 60 + 30, c1 = 11 * 60 + 30, o2 = 13 * 60, c2 = 15 * 60;
+  let m = 0;
+  if (mins >= o1) m += Math.min(mins, c1) - o1;
+  if (mins >= o2) m += Math.min(mins, c2) - o2;
+  return Math.max(0, Math.min(240, m));
+}
+
+// 量比 ≈ (当日量/已开盘分钟) / (5日均量/240)。任一缺失/非正 → null
+export function computeVolumeRatio(todayVol: number | null, elapsedMin: number, avg5Vol: number | null): number | null {
+  if (todayVol == null || avg5Vol == null || avg5Vol <= 0 || elapsedMin <= 0) return null;
+  const ratio = (todayVol / elapsedMin) / (avg5Vol / 240);
+  if (!isFinite(ratio) || ratio <= 0) return null;
+  return Math.round(ratio * 100) / 100;
+}
+
 // 个股字典（code+name 全量），供前端聊天泡泡本地匹配个股做链接用。
 export function getStockDict(): { version: string; items: [string, string][] } {
   const db = getDb();
