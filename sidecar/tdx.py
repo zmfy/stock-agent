@@ -213,6 +213,46 @@ def parse_f10_indicators(txt):
     }
 
 
+def _f10_cell(lines, label):
+    """在 F10 ｜全角竖线表里找 label 紧邻右侧单元格值。"""
+    for ln in lines:
+        cells = [x.strip() for x in ln.split("｜")]
+        for i, cel in enumerate(cells):
+            if cel.startswith(label) and i + 1 < len(cells):
+                v = cells[i + 1].strip()
+                if v:
+                    return v
+    return None
+
+
+def stock_profile(code):
+    """F10 公司概况(行业/概述) + 经营分析(主营产品)。返回 {industry, summary, products}，缺失为 None。"""
+    out = {"industry": None, "summary": None, "products": None}
+    try:
+        gk = _call(lambda c: c.F10(symbol=code, name="公司概况"))
+        if isinstance(gk, str) and gk:
+            lines = gk.split("\n")
+            out["industry"] = _f10_cell(lines, "所属行业") or _f10_cell(lines, "行业")
+            comp = _f10_cell(lines, "公司名称")
+            scope = _f10_cell(lines, "经营范围") or _f10_cell(lines, "主营业务")
+            parts = [x for x in [comp, scope] if x]
+            if parts:
+                out["summary"] = ("；".join(parts))[:200]
+    except Exception:
+        pass
+    try:
+        jy = _call(lambda c: c.F10(symbol=code, name="经营分析"))
+        if isinstance(jy, str) and jy:
+            m = re.search(r"(?m)^【1\.主营业务】(.+?)【", jy, re.S)
+            if m:
+                txt = re.sub(r"[┌┐└┘├┤┬┴┼─｜\s]", "", m.group(1)).strip()
+                if txt:
+                    out["products"] = txt[:200]
+    except Exception:
+        pass
+    return out
+
+
 def _f10_text(code):
     return _call(lambda c: c.F10(symbol=code, name="财务分析"))
 

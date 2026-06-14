@@ -300,6 +300,15 @@ def fundamentals(code: str, order: str = ""):
     return {"source": first_source, "data": merged}
 
 
+@app.get("/profile/{code}")
+def profile(code: str):
+    code = code[-6:]
+    try:
+        return tdx.stock_profile(code)
+    except Exception as e:
+        return {"industry": None, "summary": None, "products": None, "error": str(e)[:120]}
+
+
 def _bs_quote(code: str, days: int):
     if not _ensure_bs():
         return None
