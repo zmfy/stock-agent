@@ -37,24 +37,23 @@ describe('量比 / 已开盘分钟', () => {
 
 describe('relatedNews', () => {
   const { recordCollected } = require('./news-log');
-  it('命中股名/行业优先，不足补最近', () => {
+  it('只返回直接相关(命中股名/行业)的新闻，关系不大的不显示', () => {
     recordCollected([
       { title: '贵州茅台发布年度分红方案', source: 't' },
       { title: '某科技公司财报', source: 't' },
       { title: '白酒板块今日走强', source: 't' },
       { title: '大盘震荡收跌', source: 't' },
     ]);
-    const out = svc.relatedNews('600519', '贵州茅台', '白酒', 3);
-    expect(out.length).toBe(3);
-    expect(out[0].related).toBe(true); // 含「贵州茅台」或「白酒」的排前
-    expect(out.some((n: any) => n.title.includes('茅台') || n.title.includes('白酒'))).toBe(true);
+    const out = svc.relatedNews('600519', '贵州茅台', '白酒', 8);
+    // 仅 2 条命中(贵州茅台 / 白酒)；某科技、大盘 等不相关的被排除
+    expect(out.length).toBe(2);
+    expect(out.every((n: any) => n.related === true)).toBe(true);
     expect(out.every((n: any) => typeof n.contentId === 'string' && n.title)).toBe(true);
-    // 每条都带命中原因；命中股名的标「提及」，命中行业的标「同行业」，其余「近期市场热点」
-    expect(out.every((n: any) => typeof n.reason === 'string' && n.reason.length > 0)).toBe(true);
     const moutai = out.find((n: any) => n.title.includes('贵州茅台'));
     expect(moutai && moutai.reason).toContain('提及');
     const baijiu = out.find((n: any) => n.title.includes('白酒板块'));
     expect(baijiu && baijiu.reason).toContain('同行业');
+    expect(out.some((n: any) => n.title.includes('大盘震荡') || n.title.includes('某科技'))).toBe(false);
   });
   it('行业为 F10 层级串(食品饮料-白酒Ⅱ-白酒Ⅲ)时也能按「白酒」命中', () => {
     recordCollected([{ title: '白酒消费回暖', source: 't' }]);

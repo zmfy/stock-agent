@@ -907,12 +907,11 @@ export function relatedNews(
     if (baseName && baseName.length >= 2 && t.includes(baseName)) return `提及「${baseName}」`;
     const hitInd = indKw.find((k) => t.includes(k));
     if (hitInd) return `同行业「${hitInd}」`;
-    return '近期市场热点';
+    return '相关';
   };
-  const related = uniq.filter((r) => isRel(r.title));
-  const rest = uniq.filter((r) => !isRel(r.title));
-  return [...related, ...rest].slice(0, limit).map((r) => ({
-    contentId: r.content_id, title: r.title, collectedAt: r.collected_at, related: isRel(r.title), reason: reasonOf(r.title),
+  // 只返回与该股直接相关(命中股名/行业)的新闻；关系不大的不显示——无命中则空列表。
+  return uniq.filter((r) => isRel(r.title)).slice(0, limit).map((r) => ({
+    contentId: r.content_id, title: r.title, collectedAt: r.collected_at, related: true, reason: reasonOf(r.title),
   }));
 }
 
