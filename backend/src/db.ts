@@ -334,6 +334,11 @@ function initSchema(): void {
       ask4 REAL, ask4_vol REAL, ask5 REAL, ask5_vol REAL,
       time TEXT, source TEXT, fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
+    CREATE TABLE IF NOT EXISTS stock_profile (
+      code TEXT PRIMARY KEY,
+      industry TEXT, summary TEXT, products TEXT,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
   `);
 
   migrate();

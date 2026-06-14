@@ -1,7 +1,7 @@
 import { getDb } from '../db';
 import { QuoteRow, StockSnapshot, RealtimeQuoteView } from '../types';
 import { v4 as uuidv4 } from 'uuid';
-import { resolveSidecarBase, fetchFundamentals, fetchQuotes, fetchMarket, fetchName, fetchNews, fetchAllStocks, orderedProviders, fetchRealtime, fetchIndexBars, fetchIndexRealtime } from './sidecar';
+import { resolveSidecarBase, fetchFundamentals, fetchQuotes, fetchMarket, fetchName, fetchNews, fetchAllStocks, orderedProviders, fetchRealtime, fetchIndexBars, fetchIndexRealtime, fetchProfile } from './sidecar';
 import { recordCollected } from './news-log';
 import { lastTradingDayBefore, isTradingDay } from './trade-calendar';
 
@@ -521,6 +521,30 @@ export function cacheRealtime(code: string, d: Record<string, any>, source: stri
 
 export function getRealtime(code: string): Record<string, any> | null {
   return (getDb().prepare('SELECT * FROM realtime_quote WHERE code=?').get(code) as Record<string, any>) ?? null;
+}
+
+export function getCachedFundamentals(code: string): Record<string, any> {
+  const r = getDb().prepare('SELECT data FROM fundamentals WHERE code = ? ORDER BY date DESC LIMIT 1').get(code) as { data: string } | undefined;
+  if (!r?.data) return {};
+  try { return JSON.parse(r.data); } catch { return {}; }
+}
+
+export interface StockProfileRow { industry: string | null; summary: string | null; products: string | null; updatedAt: string | null; }
+
+export async function getStockProfile(userId: string, code: string, refresh = false): Promise<StockProfileRow> {
+  const db = getDb();
+  const existing = db.prepare('SELECT industry, summary, products, updated_at AS updatedAt FROM stock_profile WHERE code = ?').get(code) as StockProfileRow | undefined;
+  if (existing && !refresh) return existing;
+  const base = resolveSidecarBase(userId);
+  const fetched = base ? await fetchProfile(base, code) : null;
+  if (fetched && (fetched.industry || fetched.summary || fetched.products)) {
+    db.prepare(
+      `INSERT INTO stock_profile (code, industry, summary, products, updated_at) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+       ON CONFLICT(code) DO UPDATE SET industry=excluded.industry, summary=excluded.summary, products=excluded.products, updated_at=CURRENT_TIMESTAMP`
+    ).run(code, fetched.industry, fetched.summary, fetched.products);
+    return db.prepare('SELECT industry, summary, products, updated_at AS updatedAt FROM stock_profile WHERE code = ?').get(code) as StockProfileRow;
+  }
+  return existing ?? { industry: null, summary: null, products: null, updatedAt: null };
 }
 
 // 把 sidecar live 返回的 data 规范化为 snapshot.realtime 视图(含五档)

@@ -77,6 +77,16 @@ export async function fetchFundamentals(base: string, code: string, order?: stri
   return { source: d?.source ?? null, data };
 }
 
+export async function fetchProfile(base: string, code: string): Promise<{ industry: string | null; summary: string | null; products: string | null } | null> {
+  const d = await getJson(`${base}/profile/${code}`, 12000);
+  if (!d || typeof d !== 'object') return null;
+  return {
+    industry: d.industry ?? null,
+    summary: d.summary ?? null,
+    products: d.products ?? null,
+  };
+}
+
 export interface ProbeResult { key: string; label: string; reachable: boolean; latencyMs: number | null; error: string | null }
 
 export async function probe(base: string, kind: string, provider = ''): Promise<ProbeResult[]> {
