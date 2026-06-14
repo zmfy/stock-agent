@@ -26,9 +26,10 @@ export const chatApi = {
   listSessions: (kind?: ChatKind) =>
     api.get<{ data: ChatSession[] }>(`/chat/sessions${kind ? `?kind=${kind}` : ''}`),
   getMessages: (id: string) => api.get<{ data: ChatMessage[] }>(`/chat/sessions/${id}/messages`),
-  postMessage: (id: string, content: string) =>
-    api.post<{ data: ChatMessage }>(`/chat/sessions/${id}/messages`, { content }),
+  postMessage: (id: string, content: string, interviewMode?: boolean) =>
+    api.post<{ data: ChatMessage }>(`/chat/sessions/${id}/messages`, { content, interviewMode }),
   analyze: (id: string) => api.post<{ data: { report: any; message: ChatMessage } }>(`/chat/sessions/${id}/analyze`),
+  interviewKickoff: (id: string) => api.post<{ data: ChatMessage | null }>(`/chat/sessions/${id}/interview-kickoff`),
   deleteSession: (id: string) => api.delete(`/chat/sessions/${id}`),
   setPinned: (id: string, pinned: boolean) => api.put(`/chat/sessions/${id}/pin`, { pinned }),
   clearMessages: (id: string) => api.delete(`/chat/sessions/${id}/messages`),

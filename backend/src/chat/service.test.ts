@@ -175,3 +175,34 @@ describe('history 房间注入历史摘要', () => {
     expect(captured).toContain('偏多关注券商');
   });
 });
+
+describe('访谈开场 kickoffInterview', () => {
+  it('core_principle 无策略无消息时，AI 主动发开场白', async () => {
+    const svcK = require('./service');
+    const sid = svcK.createSession('u-kick', 'core_principle', null, '策略探讨');
+    const msg = await svcK.kickoffInterview('u-kick', sid, { aiCall: async () => ({ raw: '你好，我们来把你的当前策略聊出来。你平时主要看基本面还是走势？', provider: 'x', model: 'y' }) });
+    expect(msg).toBeTruthy();
+    expect(msg.role).toBe('assistant');
+    expect(svcK.getMessages('u-kick', sid)).toHaveLength(1);
+  });
+  it('已有消息则不重复开场(返回 null)', async () => {
+    const svcK = require('./service');
+    const sid = svcK.createSession('u-kick2', 'core_principle', null, '策略探讨');
+    await svcK.kickoffInterview('u-kick2', sid, { aiCall: async () => ({ raw: '开场1', provider: 'x', model: 'y' }) });
+    const again = await svcK.kickoffInterview('u-kick2', sid, { aiCall: async () => ({ raw: '开场2', provider: 'x', model: 'y' }) });
+    expect(again).toBeNull();
+  });
+});
+
+describe('就绪信号 __READY__', () => {
+  it('core_principle 注入就绪说明；含 __READY__ 的回复保留标记', async () => {
+    const svcR = require('./service');
+    const sid = svcR.createSession('u-ready', 'core_principle', null, '策略探讨');
+    let captured = '';
+    const m = await svcR.postMessage('u-ready', sid, '我主要看基本面，ROE>15，长期持有', {
+      aiCall: async (p: string) => { captured = p; return { raw: '明白，你偏价值。\n__READY__', provider: 'x', model: 'y' }; },
+    });
+    expect(captured).toContain('__READY__');     // prompt 注入了就绪信号说明
+    expect(m.content).toContain('__READY__');    // 标记保留在内容里供前端判断
+  });
+});

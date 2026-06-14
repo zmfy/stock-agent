@@ -154,6 +154,11 @@ function addMessage(sessionId: string, role: ChatMessage['role'], content: strin
 // 主 agent 的名字。用户在系统里说「来财」即指主 agent。
 export const AGENT_NAME = '来财';
 
+// 去掉推理模型的 <think>…</think> 思考块，只留给用户看的正文。
+function stripThink(raw: string): string {
+  return (raw || '').replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+}
+
 function buildPrompt(persona: string, framing: string, history: ChatMessage[], extraContext?: string, directives?: string): string {
   const convo = history.map((m) => `${m.role === 'user' ? '用户' : '助手'}：${m.content}`).join('\n');
   return `你的名字叫「${AGENT_NAME}」，是用户的操盘主助手；当用户称呼「${AGENT_NAME}」时就是在叫你。
@@ -170,6 +175,7 @@ ${convo}
 export interface PostOptions {
   aiCall?: (prompt: string) => Promise<{ raw: string; provider: string; model: string }>;
   extraContext?: string;
+  interviewMode?: boolean; // 从「我还没想好，帮我从聊天聊出一套」进来：从头访谈，不带入现有策略。
 }
 
 async function defaultAiCall(userId: string, prompt: string, role = 'core'): Promise<{ raw: string; provider: string; model: string }> {
@@ -303,7 +309,7 @@ export async function postMessage(userId: string, sessionId: string, content: st
       extra = `本次选股范围：${s.note}\n讨论纪要：${s.discussion || '（无）'}\n候选与结果：\n${top}`;
     }
   }
-  if (!extra && session.kind === 'core_principle') {
+  if (!extra && session.kind === 'core_principle' && !opts.interviewMode) {
     const rb = getActive(userId);
     if (rb) {
       const g = rb.gates
@@ -331,9 +337,34 @@ export async function postMessage(userId: string, sessionId: string, content: st
     }
   }
   let framing = KIND_FRAMING[session.kind as ChatKind];
-  if (session.kind === 'core_principle' && !getActive(userId)) framing = CORE_PRINCIPLE_INTERVIEW_FRAMING;
+  if (session.kind === 'core_principle') {
+    const hasRb = !opts.interviewMode && !!getActive(userId); // interviewMode：当作没有现有策略，从头访谈
+    if (!hasRb) framing = CORE_PRINCIPLE_INTERVIEW_FRAMING;
+    // 就绪信号：由 AI 判断交流是否已足够具体到可形成/修改策略，足够时在结尾单独一行输出 __READY__（前端据此显示「让 agent 提议」按钮）。
+    framing += `\n\n【就绪信号】当你判断目前的交流已经足够具体、可以${hasRb ? '提出明确的规则修改建议' : '形成一套可落地的交易策略'}时，在回复的最后另起一行只输出 __READY__（不要解释这个标记）；如果还需要继续了解、信息还不够，就不要输出它。`;
+  }
   const prompt = buildPrompt(persona, framing, history, extra, skillDirectives(userId));
   const aiCall = opts.aiCall || ((p: string) => defaultAiCall(userId, p, role));
   const { raw } = await aiCall(prompt);
-  return addMessage(sessionId, 'assistant', (raw || '').trim() || '（无回复）');
+  return addMessage(sessionId, 'assistant', stripThink(raw) || '（无回复）');
+}
+
+// 访谈开场：core_principle 房间且无当前策略、无历史消息时，由来财主动发第一问，引导用户聊出策略。
+export async function kickoffInterview(userId: string, sessionId: string, opts: PostOptions = {}): Promise<ChatMessage | null> {
+  const session = ownSession(userId, sessionId);
+  if (!session) throw new Error('NOT_FOUND');
+  if (session.kind !== 'core_principle') return null;
+  // 不因「已有当前策略」跳过：用户从「我还没想好，帮我从聊天聊出一套」入口进来，就是要重新访谈。
+  if (getMessages(userId, sessionId).length) return null;   // 已有对话，不重复开场
+  const persona = getCorePersona(userId);
+  const dir = skillDirectives(userId);
+  const prompt = `你的名字叫「${AGENT_NAME}」，是用户的操盘主助手。
+${persona}
+${dir ? `\n${dir}\n` : ''}
+当前场景：${CORE_PRINCIPLE_INTERVIEW_FRAMING}
+
+对话刚开始，用户还没开口。请你用中文主动开场：先一句话说明我们要一起把「当前策略」聊出来，再问出第一个问题（先问他平时主要看公司基本面、还是看走势、还是都看）。亲切、简短，一次只问一个问题。`;
+  const aiCall = opts.aiCall || ((p: string) => defaultAiCall(userId, p));
+  const { raw } = await aiCall(prompt);
+  return addMessage(sessionId, 'assistant', stripThink(raw) || '（无回复）');
 }

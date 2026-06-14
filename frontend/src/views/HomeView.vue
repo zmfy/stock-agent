@@ -148,14 +148,6 @@
               <div v-else-if="active.kind === 'screen' && !activeRulebook" class="room-actions">
                 <span class="muted">还没有当前策略，无法选股。先去「当前策略」房间定一套。</span>
               </div>
-              <div v-else-if="active.kind === 'core_principle'" class="room-actions">
-                <button v-if="needsInit" class="propose-btn" :disabled="synthesizing" @click="synthesizePrinciple">
-                  <span v-if="synthesizing" class="spinner"></span>{{ synthesizing ? '来财生成中…' : '🛠 根据我们的聊天，帮我生成当前策略' }}
-                </button>
-                <button v-else class="propose-btn" :disabled="proposing" @click="propose">
-                  <span v-if="proposing" class="spinner"></span>{{ proposing ? 'agent 拟定中…' : '🛠 根据本次讨论，让 agent 提议修改规则' }}
-                </button>
-              </div>
               <div v-if="analyzing" class="analyzing">正在按你的当前策略分析 {{ active.ref_id }} …</div>
               <div v-if="active && generating.has(active.kind)" class="gen-banner">
                 ⏳ 正在生成，可能需要一会儿。你可以先去别处，稍后回到本会话查看结果。
@@ -173,7 +165,7 @@
                   </div>
                   <div class="cp-guide muted">你想优化哪一方面？例如：放宽/收紧某条门槛、增删条件、调整仓位或止损、修改人设。说出你的想法，我们讨论后，点下方「🛠 让 agent 提议修改规则」，我会给出带版本号的修改方案供你确认。</div>
                 </template>
-                <StockText v-else :text="briefing" :clamp="false" />
+                <StockText v-else-if="!messages.length" :text="briefing" :clamp="false" />
               </div>
               <div v-else-if="active?.kind === 'screen' && briefing" class="briefing">
                 <ConclusionBubble :text="briefing" @detail="openDetail" />
@@ -203,8 +195,18 @@
                 <div v-if="active?.kind === 'ai_model' && !messages.length" class="msg assistant">
                   <div class="bubble">问我 AI 模型怎么选、各角色用哪个、报错怎么处理、插件干嘛用；要改配置点上方「🤖 模型配置」「🧷 任务分工」「🧩 能力插件」。</div>
                 </div>
-                <div v-for="m in messages" :key="m.id" class="msg" :class="m.role">
-                  <div class="bubble"><StockText :text="m.content" :clamp="active?.kind !== 'stock'" @detail="openDetail" /></div>
+                <div v-for="(m, mi) in messages" :key="m.id" class="msg" :class="m.role">
+                  <div class="bubble">
+                    <StockText :text="msgText(m.content)" :clamp="false" />
+                    <div v-if="active?.kind === 'core_principle' && m.role === 'assistant' && mi === messages.length - 1 && !sending && !proposal && msgReady(m.content)" class="bubble-action">
+                      <button v-if="needsInit || interviewMode" class="propose-btn" :disabled="synthesizing" @click="synthesizePrinciple">
+                        <span v-if="synthesizing" class="spinner"></span>{{ synthesizing ? '来财生成中…' : '🛠 根据我们的聊天，帮我生成当前策略' }}
+                      </button>
+                      <button v-else class="propose-btn" :disabled="proposing" @click="propose">
+                        <span v-if="proposing" class="spinner"></span>{{ proposing ? 'agent 拟定中…' : '🛠 根据本次讨论，让 agent 提议修改规则' }}
+                      </button>
+                    </div>
+                  </div>
                   <div v-if="m.created_at" class="mtime">{{ fmtTime(m.created_at) }}</div>
                 </div>
                 <div v-if="sending" class="msg assistant"><div class="bubble typing">思考中…</div></div>
@@ -376,6 +378,9 @@ const orderedSessions = computed(() => {
 });
 const active = ref<ChatSession | null>(null);
 const messages = ref<ChatMessage[]>([]);
+// AI 就绪信号 __READY__：交流足够具体可形成/修改策略时由 AI 输出。展示时隐藏标记，仅据此显示「提议」按钮。
+function msgText(c: string) { return (c || '').replace(/__READY__/g, '').trimEnd(); }
+function msgReady(c: string) { return (c || '').includes('__READY__'); }
 const input = ref('');
 const sending = ref(false);
 const chatErr = ref('');
@@ -521,6 +526,8 @@ const proposing = ref(false);
 const applying = ref(false);
 const synthesizing = ref(false);
 const synthFromScratch = ref(false);
+// 从「我还没想好，帮我从聊天聊出一套」进入：从头访谈、不带入现有策略；按钮走「从头生成」而非「修改提议」。
+const interviewMode = ref(false);
 const noChange = computed(() => {
   const d = proposal.value?.delta;
   return !!d && !d.personaChanged && !d.gates.changed.length && !d.gates.added.length && !d.gates.removed.length && !d.softRules.added.length && !d.softRules.removed.length && !d.positionRulesChangedKeys.length;
@@ -619,6 +626,7 @@ async function open(s: ChatSession) {
   active.value = s;
   chatErr.value = '';
   proposal.value = null;
+  interviewMode.value = false; // 切换会话即退出「从头访谈」模式
   messages.value = (await chatApi.getMessages(s.id)).data.data;
   scrollDown();
   // A freshly opened stock session auto-runs the rule-based analysis as its opener.
@@ -765,9 +773,22 @@ async function startInterview() {
   chatErr.value = '';
   try {
     await openCorePrinciple();
+    interviewMode.value = true; // 本次是「从头聊出新策略」：不带入现有策略（open() 已置 false，这里在其后置 true）
     // 从「更换模板」/「当前策略」弹窗触发时，要关掉弹窗，否则它会盖住刚打开的访谈房间。
     tplOpen.value = false;
     rulebookModalOpen.value = false;
+    // 空房间：让来财主动发开场白，引导用户聊出策略（后端在已有对话时会自行跳过）。
+    if (active.value?.kind === 'core_principle' && !messages.value.length) {
+      sending.value = true;
+      try {
+        const msg = (await chatApi.interviewKickoff(active.value.id)).data.data;
+        if (msg) messages.value.push(msg);
+      } catch (e: any) {
+        chatErr.value = e.response?.data?.message || '来财开场失败，请直接打字开始，或检查 AI 模型配置';
+      } finally {
+        sending.value = false;
+      }
+    }
   } catch (e: any) {
     chatErr.value = e.response?.data?.message || '进入访谈失败';
   }
@@ -872,7 +893,7 @@ async function send() {
   scrollDown();
   sending.value = true;
   try {
-    const reply = (await chatApi.postMessage(active.value.id, text)).data.data;
+    const reply = (await chatApi.postMessage(active.value.id, text, interviewMode.value)).data.data;
     messages.value = (await chatApi.getMessages(active.value.id)).data.data;
     void reply;
     scrollDown();
@@ -1059,6 +1080,7 @@ onUnmounted(() => {
 .sysrow { display: flex; justify-content: space-between; align-items: center; padding: 2px 0; }
 .sysrow .ord { display: flex; gap: 4px; }
 .propose-btn { width: 100%; background: #fff7e6; border: 1px solid #ffe0a3; border-radius: 6px; padding: 8px; cursor: pointer; font-size: 13px; }
+.bubble-action { margin-top: 10px; padding-top: 8px; border-top: 1px dashed var(--border, #e4e8ef); }
 .proposal { background: #f3faf3; border: 1px solid #cce8cc; border-radius: 8px; padding: 10px 12px; margin: 6px 0; font-size: 13px; }
 .proposal h4 { margin: 0 0 6px; }
 .proposal p { margin: 2px 0; }

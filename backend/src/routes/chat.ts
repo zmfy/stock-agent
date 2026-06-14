@@ -43,15 +43,27 @@ router.get('/sessions/:id/messages', (req: Request, res: Response) => {
 
 // POST /api/chat/sessions/:id/messages { content }
 router.post('/sessions/:id/messages', async (req: Request, res: Response) => {
-  const parsed = z.object({ content: z.string().min(1).max(4000) }).safeParse(req.body);
+  const parsed = z.object({ content: z.string().min(1).max(4000), interviewMode: z.boolean().optional() }).safeParse(req.body);
   if (!parsed.success) return errorResponse(res, 422, 'VALIDATION_ERROR', '请输入内容');
   try {
-    const reply = await chat.postMessage(req.user!.userId, req.params.id, parsed.data.content);
+    const reply = await chat.postMessage(req.user!.userId, req.params.id, parsed.data.content, { interviewMode: parsed.data.interviewMode });
     successResponse(res, reply, '已回复', 201);
   } catch (e: any) {
     if (e.message === 'NOT_FOUND') return errorResponse(res, 404, 'RESOURCE_NOT_FOUND', '会话不存在');
     if (e.message === 'NO_MODEL') return errorResponse(res, 400, 'BUSINESS_CONFLICT', '请先在「AI 模型」配置并启用一个可用模型');
     return errorResponse(res, 502, 'UPSTREAM_ERROR', `回复失败：${e.message || '未知错误'}`);
+  }
+});
+
+// POST /api/chat/sessions/:id/interview-kickoff — 访谈开场：core_principle 无策略无消息时，AI 主动发第一问
+router.post('/sessions/:id/interview-kickoff', async (req: Request, res: Response) => {
+  try {
+    const msg = await chat.kickoffInterview(req.user!.userId, req.params.id);
+    successResponse(res, msg, msg ? '已开场' : '无需开场', 201);
+  } catch (e: any) {
+    if (e.message === 'NOT_FOUND') return errorResponse(res, 404, 'RESOURCE_NOT_FOUND', '会话不存在');
+    if (e.message === 'NO_MODEL') return errorResponse(res, 400, 'BUSINESS_CONFLICT', '请先在「AI 模型」配置并启用一个可用模型');
+    return errorResponse(res, 502, 'UPSTREAM_ERROR', `开场失败：${e.message || '未知错误'}`);
   }
 });
 
