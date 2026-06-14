@@ -434,6 +434,14 @@ export function getRecentIndexBars(code: string, n: number): Bar[] {
   return rows.reverse();
 }
 
+// 大盘状态条回退用：取某指数 index_daily 最后一日收盘 + 前一日收盘（无数据返回 null）。
+export function getIndexDailyLatest(code: string): { date: string; close: number; prevClose: number | null } | null {
+  const bars = getRecentIndexBars(code, 2) as any[]; // oldest→newest
+  if (!bars.length) return null;
+  const last = bars[bars.length - 1];
+  return { date: last.date, close: last.close, prevClose: bars.length > 1 ? bars[bars.length - 2].close : null };
+}
+
 async function defaultIndexFetcher(userId: string, code: string, n: number): Promise<Bar[]> {
   const base = resolveSidecarBase(userId);
   if (!base) return [];

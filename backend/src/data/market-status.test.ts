@@ -46,3 +46,18 @@ describe('getMarketStatus', () => {
     expect(st.alertLevel).toBeNull();
   });
 });
+
+describe('getMarketStatus 回退到 index_daily', () => {
+  it('realtime 缓存为空时，取 index_daily 最后一日收盘(收盘 basis)', () => {
+    // index_daily 用无前缀代码 000001；状态条 key 为 sh000001
+    svc.cacheIndexBars([
+      { code: '000001', date: '2026-06-11', open: 3979, high: 3990, low: 3970, close: 3987, volume: 1 },
+      { code: '000001', date: '2026-06-12', open: 4017, high: 4040, low: 4010, close: 4031.51, volume: 1 },
+    ], 'test');
+    const st = getMarketStatus(WED_PRE, 'ok'); // 无 realtime 缓存
+    const sh = st.indices.find((x: any) => x.code === 'sh000001');
+    expect(sh).toMatchObject({ point: 4031.51, prevClose: 3987, basis: '收盘' });
+    expect(sh.changePct).toBeCloseTo(1.12, 1);
+    expect(st.updatedAt).toContain('2026-06-12');
+  });
+});
