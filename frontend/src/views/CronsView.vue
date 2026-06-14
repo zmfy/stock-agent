@@ -3,15 +3,17 @@
     <h2>定时任务</h2>
     <p v-if="!cronEnabled" class="err">⚠️ 定时未全局启用（ENABLE_CRON=false），以下配置将在启用后生效。</p>
     <table class="ctable">
-      <thead><tr><th>任务</th><th>每天时间</th><th>启用</th><th>最后运行</th><th>下次运行</th><th>操作</th></tr></thead>
+      <thead><tr><th>任务</th><th>频率</th><th>启用</th><th>最后运行</th><th>下次运行</th><th>操作</th></tr></thead>
       <tbody>
         <tr v-for="j in jobs" :key="j.key">
           <td><b>{{ j.label }}</b><div class="muted">{{ j.description }}</div></td>
           <td>
-            <template v-if="j.time !== null">
-              <input type="time" v-model="edit[j.key]" /> <button @click="saveTime(j)">保存</button>
-            </template>
-            <span v-else class="muted">自定义（{{ j.expr }}）</span>
+            <select v-model="freq[j.key]">
+              <option v-for="p in PRESETS" :key="p.value" :value="p.value">{{ p.label }}</option>
+            </select>
+            <input v-if="freq[j.key] === 'daily'" type="time" v-model="edit[j.key]" />
+            <button @click="saveFreq(j)">保存</button>
+            <div class="muted">当前：{{ j.expr }}</div>
           </td>
           <td><input type="checkbox" :checked="j.enabled" @change="toggle(j, ($event.target as HTMLInputElement).checked)" /></td>
           <td>
@@ -46,7 +48,18 @@ import { fmtCN } from '../utils/time';
 
 const jobs = ref<CronJob[]>([]);
 const cronEnabled = ref(true);
-const edit = reactive<Record<string, string>>({});
+const edit = reactive<Record<string, string>>({}); // 每天定时的 HH:MM
+const freq = reactive<Record<string, string>>({}); // 当前选中的频率预设(cron 表达式 或 'daily')
+
+const PRESETS: Array<{ label: string; value: string }> = [
+  { label: '每 5 分钟', value: '*/5 * * * *' },
+  { label: '每 15 分钟', value: '*/15 * * * *' },
+  { label: '每 30 分钟', value: '*/30 * * * *' },
+  { label: '每小时', value: '0 * * * *' },
+  { label: '每 2 小时', value: '0 */2 * * *' },
+  { label: '每 4 小时', value: '0 */4 * * *' },
+  { label: '每天定时…', value: 'daily' },
+];
 const msg = ref(''); const msgOk = ref(false);
 const logKey = ref<string | null>(null);
 const logLines = ref<Array<{ ts: string; level: string; message: string }>>([]);
@@ -56,11 +69,25 @@ async function load() {
   const d = await cronApi.list();
   cronEnabled.value = d.cronEnabled;
   jobs.value = d.jobs;
-  for (const j of d.jobs) if (j.time) edit[j.key] = j.time;
+  for (const j of d.jobs) {
+    // j.time != null 表示是「每天 HH:MM」型；否则匹配间隔预设，匹配不到默认每小时。
+    if (j.time) { freq[j.key] = 'daily'; edit[j.key] = j.time; }
+    else { freq[j.key] = PRESETS.some((p) => p.value === j.expr) ? j.expr : '0 * * * *'; if (!edit[j.key]) edit[j.key] = '09:00'; }
+  }
 }
-async function saveTime(j: CronJob) {
-  try { await cronApi.update(j.key, { time: edit[j.key] }); msgOk.value = true; msg.value = `${j.label} 已改为每天 ${edit[j.key]}`; await load(); }
-  catch (e: any) { msgOk.value = false; msg.value = e.response?.data?.message || '保存失败'; }
+async function saveFreq(j: CronJob) {
+  try {
+    if (freq[j.key] === 'daily') {
+      await cronApi.update(j.key, { time: edit[j.key] });
+      msg.value = `${j.label} 已改为每天 ${edit[j.key]}`;
+    } else {
+      await cronApi.update(j.key, { expr: freq[j.key] });
+      const lbl = PRESETS.find((p) => p.value === freq[j.key])?.label || freq[j.key];
+      msg.value = `${j.label} 已改为「${lbl}」`;
+    }
+    msgOk.value = true;
+    await load();
+  } catch (e: any) { msgOk.value = false; msg.value = e.response?.data?.message || '保存失败'; }
 }
 async function toggle(j: CronJob, enabled: boolean) {
   try { await cronApi.update(j.key, { enabled }); msgOk.value = true; msg.value = `${j.label} 已${enabled ? '启用' : '停用'}`; await load(); }

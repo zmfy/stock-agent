@@ -482,9 +482,9 @@ function mean(arr: number[]): number | null {
   return arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null;
 }
 
-export function getLatestMarket(): { date: string; limit_up_count: number | null; limit_down_count: number | null; sse_ma20_slope: number | null } | null {
+export function getLatestMarket(): { date: string; limit_up_count: number | null; limit_down_count: number | null; sse_ma20_slope: number | null; fetched_at: string | null; source: string | null } | null {
   return getDb()
-    .prepare('SELECT date, limit_up_count, limit_down_count, sse_ma20_slope FROM market_sentiment ORDER BY date DESC LIMIT 1')
+    .prepare('SELECT date, limit_up_count, limit_down_count, sse_ma20_slope, fetched_at, source FROM market_sentiment ORDER BY date DESC LIMIT 1')
     .get() as any;
 }
 
@@ -645,6 +645,18 @@ export async function refreshMarket(userId: string, order?: string[]): Promise<b
   if (data.limit_up_count === null && data.limit_down_count === null && data.sse_ma20_slope === null) return false;
   cacheMarket(today(), data, source ?? 'mixed');
   return true;
+}
+
+// 同步全部大盘指数日线，供状态条在非交易日/无实时时回退显示上一交易日收盘。
+// 源不支持的指数(如北证)会静默跳过 → 状态条相应显 —（如实暴露数据缺口）。
+// 仅由 nightly / 手动刷新调用——不放进 refreshMarket 热路径(个股分析每次都会触发)。
+export async function syncAllIndexBars(userId: string): Promise<void> {
+  const freshThrough = lastTradingDayBefore(todayCN());
+  await Promise.all(
+    MARKET_INDICES.map((idx) =>
+      ensureIndexBars(userId, idx.key.replace(/^(sh|sz|bj)/, ''), 25, { freshThrough }).catch(() => {})
+    )
+  );
 }
 
 // ---- snapshot assembly ----

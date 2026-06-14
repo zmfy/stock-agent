@@ -24,6 +24,23 @@
         </span>
       </template>
       <span v-if="!source.sidecarConfigured" class="ov-hint">可在「能力插件」启用 AkShare；仍可手动上传 CSV。</span>
+      <!-- 数据告警：并入状态栏。无告警显示绿点，有告警可点开看明细 -->
+      <span v-if="!alerts.length" class="ov-item ok"><b>●</b> 无数据告警</span>
+      <button v-else class="ov-item ov-alert" :class="alertErrorCount ? 'err' : 'warn'" @click="alertsOpen = !alertsOpen">
+        {{ alertErrorCount ? '🔴' : '🟡' }} 数据告警 {{ alerts.length }} 条（{{ alertErrorCount }} 错误 / {{ alertWarnCount }} 警告）{{ alertsOpen ? '▴' : '▾' }}
+      </button>
+    </section>
+
+    <section v-if="alertsOpen && alerts.length" class="alert-panel">
+      <ul class="alert-list">
+        <li v-for="a in alerts" :key="a.source" class="alert-item" :class="a.level">
+          <span class="badge">{{ a.level === 'error' ? '错误' : '警告' }}</span>
+          <span class="src">{{ a.source }}</span>
+          <span class="msg">{{ a.message }}</span>
+          <span v-if="a.since" class="since">{{ a.since }}</span>
+        </li>
+      </ul>
+      <p class="hint">从同步状态、定时任务、大盘数据、sidecar 健康实时计算；问题修复后自动消失，每 30 秒刷新。</p>
     </section>
 
     <nav class="subtabs">
@@ -205,6 +222,14 @@
         <button @click="refreshMarket" :disabled="busy">刷新大盘/情绪数据</button>
         <button @click="collectNews" :disabled="busy">采集热点新闻</button>
       </div>
+      <div class="mkt-status">
+        <b>大盘/情绪数据</b>
+        <template v-if="mkt && (mkt.limitUp != null || mkt.limitDown != null || mkt.sentimentSlope != null)">
+          <span>涨停 {{ mkt.limitUp ?? '—' }} · 跌停 {{ mkt.limitDown ?? '—' }} · 上证20日斜率 {{ mkt.sentimentSlope ?? '—' }}</span>
+          <span class="muted">数据日 {{ mkt.sentimentDate || '—' }} · 来源 {{ mkt.sentimentSource || '—' }} · 最后取得 {{ fmtCN(mkt.sentimentFetchedAt) }}</span>
+        </template>
+        <span v-else class="muted">暂无（点「刷新大盘/情绪数据」或等待定时任务）</span>
+      </div>
       <p v-if="collectMsg" :class="collectOk ? 'ok-msg' : 'err'">{{ collectMsg }}</p>
       <ul v-if="newsLog.length" class="news-log">
         <li v-for="n in newsLog" :key="n.id">
@@ -293,7 +318,8 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue';
-import { dataApi, type StockSnapshot, type DataSource, type ProxyConfig } from '../api/data';
+import { dataApi, type StockSnapshot, type DataSource, type ProxyConfig, type DataAlert } from '../api/data';
+import { marketApi, type MarketStatus } from '../api/market';
 import StockPicker from '../components/StockPicker.vue';
 import { useAuthStore } from '../stores/auth';
 import { fmtCN, fmtCNDate } from '../utils/time';
@@ -386,6 +412,16 @@ const showTdxHelp = ref(false);
 
 const newsLog = ref<Array<{ id: string; content_id: string; title: string; source: string; collected_at: string; adopted: number }>>([]);
 const openNews = ref<{ title: string; content: string } | null>(null);
+const mkt = ref<MarketStatus | null>(null);
+async function loadMarket() { try { mkt.value = (await marketApi.status()).data.data; } catch { /* ignore */ } }
+
+// 数据告警（并入本页：顶部状态栏显示，点开看明细）。从同步/定时/大盘/sidecar 实时计算，修复后自动消失。
+const alerts = ref<DataAlert[]>([]);
+const alertsOpen = ref(false);
+const alertErrorCount = computed(() => alerts.value.filter((a) => a.level === 'error').length);
+const alertWarnCount = computed(() => alerts.value.filter((a) => a.level === 'warn').length);
+let alertsTimer: ReturnType<typeof setInterval> | null = null;
+async function loadAlerts() { try { alerts.value = (await dataApi.getAlerts()).alerts; } catch { /* ignore */ } }
 async function loadNewsLog() { newsLog.value = await dataApi.newsLog(50); }
 async function showNewsContent(id: string) { openNews.value = await dataApi.newsContent(id); }
 
@@ -399,6 +435,7 @@ async function refreshMarket() {
       ? '大盘/情绪数据已刷新'
       : '未取到大盘数据：数据源暂不可达。请到「数据源」标签测速选用通达信服务器后重试（涨停/跌停依赖东方财富，该源不通时取不到）。';
     await loadSource();
+    await loadMarket();
   } catch (e: any) {
     collectOk.value = false; collectMsg.value = e.response?.data?.message || '刷新失败';
   } finally {
@@ -609,7 +646,7 @@ function jobPct(job: 'stock_universe' | 'eod') {
   return Math.round((s.done / s.total) * 100);
 }
 
-onBeforeUnmount(() => { if (jobTimer) clearInterval(jobTimer); });
+onBeforeUnmount(() => { if (jobTimer) clearInterval(jobTimer); if (alertsTimer) clearInterval(alertsTimer); });
 
 onMounted(async () => {
   await loadSource();
@@ -620,6 +657,9 @@ onMounted(async () => {
   await refreshJob('eod');
   runProbe();
   loadNewsLog();
+  loadMarket();
+  loadAlerts();
+  alertsTimer = setInterval(loadAlerts, 30000);
   // 始终刷新两个任务状态（不只在已知 running 时）——这样后台(cron/别处)起的任务，admin 一进页面也能看到进度。
   jobTimer = setInterval(() => {
     (['stock_universe', 'eod'] as const).forEach((j) => refreshJob(j));
@@ -639,6 +679,21 @@ onMounted(async () => {
 .ov-item.warn b { color: #cf1322; }
 .ov-item.syncing { color: #1677ff; }
 .ov-hint { color: #888; margin-left: auto; }
+.ov-alert { cursor: pointer; border: none; background: none; font-size: 13px; font-weight: 600; padding: 0; }
+.ov-alert.err { color: #cf1322; }
+.ov-alert.warn { color: #a76b00; }
+.alert-panel { margin-top: 10px; padding: 12px 14px; background: var(--surface, #fff); border: 1px solid var(--border, #e5e5e5); border-radius: 8px; }
+.alert-panel .hint { color: var(--muted, #888); font-size: 12px; margin: 10px 0 0; }
+.alert-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px; }
+.alert-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 8px; border-left: 4px solid; background: var(--surface-2, #f7f7f7); }
+.alert-item.error { border-color: #d33; }
+.alert-item.warn { border-color: #d9a300; }
+.alert-item .badge { font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 10px; color: #fff; }
+.alert-item.error .badge { background: #d33; }
+.alert-item.warn .badge { background: #d9a300; }
+.alert-item .src { font-family: monospace; font-size: 12px; color: var(--muted, #888); }
+.alert-item .msg { flex: 1; }
+.alert-item .since { color: var(--muted, #888); font-size: 12px; }
 .card { border: 1px solid #e5e5e5; border-radius: 8px; padding: 16px; margin-top: 16px; }
 .hint { color: #777; font-size: 12px; }
 .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
@@ -652,6 +707,8 @@ input { padding: 5px; }
 .snap tr.miss td { color: #c08; }
 .err { color: #c00; }
 .ok-msg { color: #2a8a2a; }
+.mkt-status { display: flex; flex-direction: column; gap: 2px; margin-top: 10px; padding: 8px 10px; background: var(--surface-2, #f5f5f5); border: 1px solid var(--border, #e5e5e5); border-radius: var(--radius-sm, 6px); font-size: 13px; }
+.mkt-status .muted { margin-top: 0; }
 .news-log { list-style: none; padding: 0; margin: 10px 0 0; max-height: 320px; overflow-y: auto; }
 .news-log li { padding: 5px 0; border-top: 1px solid #eee; font-size: 13px; }
 .news-log a { color: #34699a; text-decoration: none; }

@@ -19,15 +19,13 @@ export async function runNightly(): Promise<void> {
   if (!userId) return;
   // 每晚刷新交易日历（含本年节假日）。
   try { await syncTradeCalendar(userId); } catch { /* ignore */ }
-  // 每天采集当天重要财经新闻入库（含休市日）——下一个交易日早会作为判断凭据。
-  try { await data.refreshNews(userId); } catch { /* ignore */ }
+  // 注：新闻 + 大盘情绪 + 指数日线已拆到独立的 news_sentiment 定时任务（更高频、可在「定时任务」单独调）。
   try {
-    const market = await data.refreshMarket(userId);
     const codes = data.listCachedCodes();
     for (const code of codes) {
       await data.refreshStock(userId, code).catch(() => {});
     }
-    console.log(`[cron] nightly refresh done — market=${market}, codes=${codes.length}`);
+    console.log(`[cron] nightly refresh done — codes=${codes.length}`);
   } catch (e) {
     console.error('[cron] nightly refresh failed', e);
   }

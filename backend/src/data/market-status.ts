@@ -1,4 +1,4 @@
-import { getRealtime, inTradingSession, MARKET_INDICES, getIndexDailyLatest } from './service';
+import { getRealtime, inTradingSession, MARKET_INDICES, getIndexDailyLatest, getLatestMarket } from './service';
 import { getDataAlerts, Alert, SidecarState, AlertLevel } from './alerts';
 
 export interface IndexStatus {
@@ -12,6 +12,12 @@ export interface IndexStatus {
 export interface MarketStatus {
   updatedAt: string | null;
   indices: IndexStatus[];
+  limitUp: number | null;
+  limitDown: number | null;
+  sentimentDate: string | null;
+  sentimentSlope: number | null;
+  sentimentFetchedAt: string | null;
+  sentimentSource: string | null;
   alerts: Alert[];
   alertLevel: AlertLevel | null;
 }
@@ -60,5 +66,17 @@ export function getMarketStatus(nowMs: number, sidecar: SidecarState): MarketSta
       ? 'warn'
       : null;
 
-  return { updatedAt, indices, alerts, alertLevel };
+  const m = getLatestMarket();
+  return {
+    updatedAt,
+    indices,
+    limitUp: m?.limit_up_count ?? null,
+    limitDown: m?.limit_down_count ?? null,
+    sentimentDate: m?.date ?? null,
+    sentimentSlope: m?.sse_ma20_slope ?? null,
+    sentimentFetchedAt: m?.fetched_at ?? null,
+    sentimentSource: m?.source ?? null,
+    alerts,
+    alertLevel,
+  };
 }

@@ -11,7 +11,7 @@ router.use(authMiddleware, adminMiddleware);
 router.get('/', (_req: Request, res: Response) => successResponse(res, listCronJobs()));
 
 router.put('/:key', (req: Request, res: Response) => {
-  const parsed = z.object({ time: z.string().optional(), enabled: z.boolean().optional() }).safeParse(req.body);
+  const parsed = z.object({ time: z.string().optional(), enabled: z.boolean().optional(), expr: z.string().optional() }).safeParse(req.body);
   if (!parsed.success) return errorResponse(res, 422, 'VALIDATION_ERROR', '参数校验失败');
   try {
     applyCronChange(req.params.key, parsed.data);
@@ -20,6 +20,7 @@ router.put('/:key', (req: Request, res: Response) => {
   } catch (e: any) {
     if (e.message === 'UNKNOWN_JOB') return errorResponse(res, 404, 'RESOURCE_NOT_FOUND', '未知定时任务');
     if (e.message === 'BAD_TIME') return errorResponse(res, 422, 'VALIDATION_ERROR', '时间格式应为 HH:MM');
+    if (e.message === 'BAD_EXPR') return errorResponse(res, 422, 'VALIDATION_ERROR', 'cron 表达式不合法');
     return errorResponse(res, 400, 'BUSINESS_CONFLICT', e.message || '操作失败');
   }
 });

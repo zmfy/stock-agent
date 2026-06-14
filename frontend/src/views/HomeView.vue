@@ -6,6 +6,18 @@
     <aside class="rail" :class="{ open: railOpen }">
       <div class="brand">小作手 <span class="ver">v{{ APP_VERSION }}</span></div>
 
+      <!-- admin 运维菜单：放入左侧列表（取代顶部横向菜单） -->
+      <template v-if="auth.isAdmin">
+        <div class="sect-head">运维菜单</div>
+        <ul class="sessions">
+          <li v-for="s in settingsMenu" :key="s.key" :class="{ active: settingsKey === s.key }"
+              @click="settingsKey = s.key; railOpen = false">
+            <span class="kind">{{ s.icon }}</span>
+            <span class="stitle">{{ s.label }}</span>
+          </li>
+        </ul>
+      </template>
+
       <!-- 会话列表（admin 纯运维账号不显示聊天） -->
       <template v-if="!auth.isAdmin">
         <div class="sect-head">讨论记录</div>
@@ -40,13 +52,13 @@
         v-if="auth.isAdmin && dataAlerts.length"
         class="alert-bar"
         :class="alertErrorCount ? 'err' : 'warn'"
-        @click="settingsKey = 'alerts'"
+        @click="settingsKey = 'data'"
       >
         {{ alertErrorCount ? '🔴' : '🟡' }} 数据告警 {{ dataAlerts.length }} 条（{{ alertErrorCount }} 错误 / {{ alertWarnCount }} 警告）— 点击查看
       </div>
-      <nav class="topnav">
+      <nav class="topnav" :class="{ 'mobile-only': auth.isAdmin }">
         <button class="hamburger" title="菜单" @click="railOpen = !railOpen">☰</button>
-        <div class="tnav-scroll">
+        <div v-if="!auth.isAdmin" class="tnav-scroll">
           <button v-for="s in settingsMenu" :key="s.key" class="tnav" :class="{ active: settingsKey === s.key }" @click="settingsKey = s.key">
             <span class="ticon">{{ s.icon }}</span>{{ s.label }}
           </button>
@@ -122,12 +134,12 @@
                 <div v-if="strategyToday" class="daily-content">
                   <template v-if="!strategyToday.isTradingDay">
                     <div class="phase-head">🛌 休市日 · 新闻与板块</div>
-                    <ConclusionBubble v-if="strategyToday.holiday" :text="strategyToday.holiday.content" @detail="openDetail" />
+                    <StockText v-if="strategyToday.holiday" :text="strategyToday.holiday.content" :clamp="false" />
                     <p v-else class="muted">休市快报将于设定时间生成。</p>
                   </template>
                   <template v-else-if="strategyToday.phase === 'prejudge'">
                     <div class="phase-head">📈 盘前 · 今日策略预判</div>
-                    <ConclusionBubble v-if="strategyToday.prejudge" :text="strategyToday.prejudge.content" @detail="openDetail" />
+                    <StockText v-if="strategyToday.prejudge" :text="strategyToday.prejudge.content" :clamp="false" />
                     <p v-else class="muted">预判将于设定时间生成。</p>
                   </template>
                   <template v-else-if="strategyToday.phase === 'intraday'">
@@ -135,12 +147,12 @@
                     <p v-if="!strategyToday.intraday.length" class="muted">盘中小结将按你的间隔生成。</p>
                     <div v-for="(it, i) in [...strategyToday.intraday].reverse()" :key="i" class="intraday-item">
                       <div class="muted">{{ fmtCN(it.createdAt) }}</div>
-                      <ConclusionBubble :text="it.content" @detail="openDetail" />
+                      <StockText :text="it.content" :clamp="false" />
                     </div>
                   </template>
                   <template v-else>
                     <div class="phase-head">🔁 盘后 · 复盘</div>
-                    <ConclusionBubble v-if="strategyToday.review" :text="strategyToday.review.content" @detail="openDetail" />
+                    <StockText v-if="strategyToday.review" :text="strategyToday.review.content" :clamp="false" />
                     <p v-else class="muted">复盘将于设定时间生成。</p>
                   </template>
                 </div>
@@ -327,7 +339,6 @@ import RulebookView from './RulebookView.vue';
 import AiSettingsView from './AiSettingsView.vue';
 import PluginsView from './PluginsView.vue';
 import DataView from './DataView.vue';
-import DataAlertsView from './DataAlertsView.vue';
 import SettingsView from './SettingsView.vue';
 import StrategyHistoryView from './StrategyHistoryView.vue';
 import CronsView from './CronsView.vue';
@@ -348,7 +359,6 @@ const SETTINGS = [
   { key: 'strategy_history', label: '策略历史', icon: '🗓', comp: StrategyHistoryView, roles: 'user', hidden: true },
   { key: 'analysis', label: '分析历史', icon: '📊', comp: AnalysisView, roles: 'user', hidden: true },
   { key: 'data', label: '数据管理', icon: '📈', comp: DataView, roles: 'admin' },
-  { key: 'alerts', label: '数据告警', icon: '🚨', comp: DataAlertsView, roles: 'admin' },
   { key: 'ai', label: 'AI 模型', icon: '🤖', comp: AiSettingsView, roles: 'admin' },
   { key: 'plugins', label: '能力插件', icon: '🧩', comp: PluginsView, roles: 'admin' },
   { key: 'crons', label: '定时任务', icon: '⏰', comp: CronsView, roles: 'admin' },
@@ -404,7 +414,7 @@ const generating = reactive(new Set<string>());
 const genErr = reactive<Record<string, string>>({});
 const screen = ref<ScreenRun | null>(null);
 // 选股讨论只展示入选（A/B 通过）个股，未入选不显示
-const screenPicks = computed(() => (screen.value?.results || []).filter((r) => r.passedSystems.length));
+const screenPicks = computed(() => (screen.value?.results || []).filter((r) => (r.passedSystems || []).length));
 const screenHistory = ref<Array<{ created_at: string; note: string; picks: Array<{ code: string; name: string | null; reason: string }> }>>([]);
 const screenHistOpen = ref(false);
 
@@ -650,6 +660,10 @@ async function open(s: ChatSession) {
   // When opening a daily session, load today's strategy data.
   if (s.kind === 'daily') {
     await loadStrategyToday();
+    // 休市日进入时若还没有休市快报，自动用最新新闻生成一份。
+    if (strategyToday.value && !strategyToday.value.isTradingDay && !strategyToday.value.holiday && !strategyGenerating.value) {
+      await genStrategy('holiday');
+    }
   }
   // When opening a screen session, ensure screen data is loaded.
   if (s.kind === 'screen') {
@@ -1031,6 +1045,7 @@ onUnmounted(() => {
 /* 右侧主区：顶部功能栏 + 内容卡片 */
 .main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
 .topnav { display: flex; align-items: center; gap: 10px; padding: 12px 14px 0; }
+.topnav.mobile-only { display: none; } /* admin 菜单已移入左栏，桌面端隐藏空的顶栏；移动端在下方媒体查询里恢复(汉堡按钮用) */
 .hamburger { display: none; flex: none; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 16px; line-height: 1; padding: 6px 10px; cursor: pointer; color: var(--text); }
 .drawer-backdrop { display: none; }
 .tnav-scroll { flex: 1; min-width: 0; display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; }
@@ -1056,6 +1071,7 @@ onUnmounted(() => {
 /* ============ 移动端适配（<=768px）============ */
 @media (max-width: 768px) {
   .hamburger { display: inline-flex; align-items: center; }
+  .topnav.mobile-only { display: flex; } /* 移动端恢复顶栏(仅汉堡按钮，用于打开左栏抽屉) */
   /* 左栏变为抽屉 */
   .rail { position: fixed; z-index: 60; top: 0; bottom: 0; left: 0; width: 80%; max-width: 300px; transform: translateX(-100%); transition: transform 0.22s ease; }
   .rail.open { transform: translateX(0); box-shadow: 4px 0 22px rgba(0, 0, 0, 0.35); }

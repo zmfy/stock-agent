@@ -84,6 +84,7 @@ router.get('/snapshot/:code', async (req: Request, res: Response) => {
 router.post('/refresh', adminMiddleware, async (req: Request, res: Response) => {
   const userId = req.user!.userId;
   const marketOk = await svc.refreshMarket(userId);
+  await svc.syncAllIndexBars(userId).catch(() => {}); // 一并刷新全部大盘指数日线(状态条数据源)
   let snapshot = null;
   if (req.body?.code) {
     await svc.refreshStock(userId, String(req.body.code)).catch(() => {});

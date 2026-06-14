@@ -1,5 +1,5 @@
 import { getDb } from '../db';
-import { syncStockUniverse, ingestEod, getSyncStatus, ingestRealtime } from '../data/service';
+import { syncStockUniverse, ingestEod, getSyncStatus, ingestRealtime, refreshNews, refreshMarket, syncAllIndexBars } from '../data/service';
 import { ensureSeedGlobal } from '../data/sources-service';
 
 // 决定 EOD 本次拉取天数：无历史→365；有历史→从最新日期到今天的窗口(至少 2，封顶 365)
@@ -34,5 +34,14 @@ export async function runRealtime(): Promise<void> {
   const userId = pickRealtimeUserId();
   if (!userId) return;
   await ingestRealtime(userId);
+}
+
+// 新闻 + 大盘情绪 + 全部指数日线：全局抓取并入库共享给所有用户（用 admin 的数据源）。
+export async function runNewsSentiment(): Promise<void> {
+  const userId = pickRealtimeUserId();
+  if (!userId) return;
+  try { await refreshNews(userId); } catch { /* ignore */ }
+  try { await refreshMarket(userId); } catch { /* ignore */ }
+  try { await syncAllIndexBars(userId); } catch { /* ignore */ }
 }
 

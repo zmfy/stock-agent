@@ -44,10 +44,10 @@ describe('tracked wrapper', () => {
 });
 
 describe('listCronJobs + applyCronChange', () => {
-  it('lists 5 jobs with defaults and cronEnabled flag', () => {
+  it('lists 6 jobs with defaults and cronEnabled flag', () => {
     const { cronEnabled, jobs } = reg.listCronJobs();
     expect(typeof cronEnabled).toBe('boolean');
-    expect(jobs.length).toBe(5);
+    expect(jobs.length).toBe(6);
     expect(jobs.find((j: any) => j.key === 'strategy_tick')).toBeTruthy();
     expect(jobs.find((j: any) => j.key === 'meeting_morning')).toBeFalsy();
     expect(jobs.find((j: any) => j.key === 'nightly').time).toBe('23:00');
@@ -62,5 +62,12 @@ describe('listCronJobs + applyCronChange', () => {
   it('rejects bad time / unknown job', () => {
     expect(() => reg.applyCronChange('nightly', { time: '99:99' })).toThrow('BAD_TIME');
     expect(() => reg.applyCronChange('nope', { enabled: true })).toThrow('UNKNOWN_JOB');
+  });
+  it('applyCronChange 接受间隔 cron 表达式(expr)', () => {
+    reg.applyCronChange('news_sentiment', { expr: '*/30 * * * *' });
+    const n = reg.listCronJobs().jobs.find((j: any) => j.key === 'news_sentiment');
+    expect(n.expr).toBe('*/30 * * * *');
+    expect(n.time).toBeNull(); // 间隔型非「每天某时」
+    expect(() => reg.applyCronChange('news_sentiment', { expr: 'not a cron' })).toThrow('BAD_EXPR');
   });
 });

@@ -9,6 +9,8 @@
         </template>
         <span v-else class="muted">—</span>
       </span>
+      <span class="ix" :title="sentimentTip"><span class="ix-name">涨停</span><b class="up">{{ st.limitUp != null ? st.limitUp : '—' }}</b></span>
+      <span class="ix" :title="sentimentTip"><span class="ix-name">跌停</span><b class="down">{{ st.limitDown != null ? st.limitDown : '—' }}</b></span>
     </div>
     <div class="right">
       <button v-if="st.alertLevel" class="alert-toggle" @click="alertsOpen = !alertsOpen">⚠ 数据异常 {{ st.alerts.length }} 条</button>
@@ -24,7 +26,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { marketApi, type MarketStatus } from '../api/market';
 import CalendarPopover from './CalendarPopover.vue';
 
@@ -34,6 +36,16 @@ let timer: number | undefined;
 
 function pctClass(p: number | null) { return p == null ? '' : p >= 0 ? 'up' : 'down'; }
 function fmtUpdated(s: string | null) { return s ? String(s).slice(0, 16) : '—'; }
+// 涨停/跌停 的来源与取得时间(悬停可见)——情绪数据日期常与指数实时更新时间不同。
+const sentimentTip = computed(() => {
+  const s = st.value;
+  if (!s || (s.limitUp == null && s.limitDown == null)) return '暂无情绪数据';
+  const parts = [`情绪数据 ${s.sentimentDate || '—'}`];
+  if (s.sentimentSlope != null) parts.push(`上证20日斜率 ${s.sentimentSlope}`);
+  if (s.sentimentFetchedAt) parts.push(`取得于 ${String(s.sentimentFetchedAt).slice(0, 16)}`);
+  if (s.sentimentSource) parts.push(`来源 ${s.sentimentSource}`);
+  return parts.join(' · ');
+});
 async function load() {
   try {
     st.value = (await marketApi.status()).data.data;

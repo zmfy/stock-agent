@@ -345,10 +345,11 @@ async function remove(provider: string) {
   await reload();
 }
 
-// section 未传(admin 面板)→ 两段都显示；传了(房间 Modal)→ 只显示该段。不再用 tab。
+// section 未传(admin 面板)→ 只显示模型配置(Agent 设定/任务分工 不在 admin 出现)；
+// section='models'/'tasks'(房间 Modal)→ 只显示该段。Agent 设定仅经「任务分工」Modal进入。
 const props = defineProps<{ section?: 'models' | 'tasks' }>();
 const showModels = computed(() => !props.section || props.section === 'models');
-const showTasks = computed(() => !props.section || props.section === 'tasks');
+const showTasks = computed(() => props.section === 'tasks');
 
 // 各角色头像图标（与全站 emoji 风格一致，不引外部图标字体）。
 const ROLE_ICON: Record<string, string> = {

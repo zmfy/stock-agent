@@ -1,7 +1,7 @@
 import cron from 'node-cron';
 import { runNightly } from './nightly';
 import { runStrategyTick } from '../strategy/dispatcher';
-import { runStockUniverse, runEod, runRealtime } from './shared-data';
+import { runStockUniverse, runEod, runRealtime, runNewsSentiment } from './shared-data';
 import * as svc from '../data/service';
 
 export interface CronJobDef {
@@ -15,7 +15,8 @@ export interface CronJobDef {
 const TZ = 'Asia/Shanghai';
 
 export const CRON_JOBS: CronJobDef[] = [
-  { key: 'nightly', label: '夜间数据刷新', description: '清理日志/同步交易日历/刷新新闻+大盘+缓存个股', defaultExpr: '0 23 * * *', run: runNightly },
+  { key: 'nightly', label: '夜间数据刷新', description: '清理日志/同步交易日历/缓存个股日线', defaultExpr: '0 23 * * *', run: runNightly },
+  { key: 'news_sentiment', label: '新闻+大盘情绪刷新', description: '拉财经新闻 + 涨停跌停/大盘斜率 + 全部指数日线(全局共享给所有用户)', defaultExpr: '0 * * * *', run: () => runNewsSentiment() },
   { key: 'stock_universe', label: '股票库同步', description: '全量名单 diff 入库', defaultExpr: '25 9 * * *', run: () => runStockUniverse() },
   { key: 'eod', label: '行情 EOD 入库', description: '全量个股日线(首次365/之后增量)', defaultExpr: '0 1 * * *', run: () => runEod() },
   { key: 'realtime', label: '实时行情(交易时段)', description: 'TDX 拉已缓存股票实时盘口五档，每5分钟、仅交易时段', defaultExpr: '*/5 * * * *', run: () => runRealtime() },
@@ -125,11 +126,15 @@ export function listCronJobs(nowMs: number = Date.now()): { cronEnabled: boolean
   return { cronEnabled: process.env.ENABLE_CRON !== 'false', jobs };
 }
 
-export function applyCronChange(key: string, input: { time?: string; enabled?: boolean }): void {
+export function applyCronChange(key: string, input: { time?: string; enabled?: boolean; expr?: string }): void {
   if (!CRON_JOBS.find((j) => j.key === key)) throw new Error('UNKNOWN_JOB');
   const cfg = svc.getCronConfig();
   const o = { ...(cfg[key] || {}) };
-  if (input.time !== undefined) o.expr = timeToExpr(input.time); // 非法 time 抛 BAD_TIME
+  if (input.expr !== undefined) {
+    if (!cron.validate(input.expr)) throw new Error('BAD_EXPR'); // 任意 cron 表达式(间隔型如 */30 * * * *)
+    o.expr = input.expr;
+  }
+  if (input.time !== undefined) o.expr = timeToExpr(input.time); // 非法 time 抛 BAD_TIME（time 优先级高于 expr）
   if (input.enabled !== undefined) o.enabled = input.enabled;
   cfg[key] = o;
   svc.setCronConfig(cfg);

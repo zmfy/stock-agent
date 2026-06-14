@@ -143,6 +143,15 @@ export async function runScreen(
   return { note, results, discussion };
 }
 
+// 兼容历史记录:旧版用 aPass/bPass,新版用 passedSystems[]。统一成 passedSystems 后再交给前端。
+function normalizeResult(x: any): ScreenResult {
+  if (Array.isArray(x?.passedSystems)) return x as ScreenResult;
+  const passedSystems: string[] = [];
+  if (x?.aPass) passedSystems.push('A');
+  if (x?.bPass) passedSystems.push('B');
+  return { ...x, passedSystems };
+}
+
 export function getLatest(userId: string): { note: string; results: ScreenResult[]; discussion: string; created_at: string } | null {
   const row = getDb()
     .prepare('SELECT source_note, results, discussion, created_at FROM screenings WHERE user_id = ? ORDER BY created_at DESC LIMIT 1')
@@ -150,7 +159,7 @@ export function getLatest(userId: string): { note: string; results: ScreenResult
   if (!row) return null;
   let results: ScreenResult[] = [];
   try {
-    results = JSON.parse(row.results);
+    results = (JSON.parse(row.results) as any[]).map(normalizeResult);
   } catch {
     results = [];
   }

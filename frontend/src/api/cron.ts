@@ -21,7 +21,7 @@ export interface CronList {
 
 export const cronApi = {
   list: () => api.get<{ data: CronList }>('/cron').then((r) => r.data.data),
-  update: (key: string, body: { time?: string; enabled?: boolean }) => api.put(`/cron/${key}`, body).then((r) => r.data.data as CronJob),
+  update: (key: string, body: { time?: string; enabled?: boolean; expr?: string }) => api.put(`/cron/${key}`, body).then((r) => r.data.data as CronJob),
   runNow: (key: string) => api.post(`/cron/${key}/run`).then((r) => r.data),
   log: (key: string) => api.get(`/cron/${key}/log`).then((r) => r.data.data as Array<{ ts: string; level: string; message: string }>),
 };

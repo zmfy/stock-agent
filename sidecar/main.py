@@ -78,6 +78,7 @@ from fastapi import FastAPI, Body
 import akshare as ak
 import tdx
 import proxy
+import direct_sources
 
 app = FastAPI(title="stock-agent akshare sidecar")
 
@@ -346,22 +347,17 @@ QUOTE_PROVIDERS = [
 
 def _fund_baostock(code, days): return _bs_fund(code)
 def _fund_em(code, days):       return _ak_fund(code)
-def _sentiment_em(_code, _days):
-    return _market_sentiment_em()   # 抽出现有 /market/sentiment 主体
-def _news_provider(fn_name):
-    def _f(_code, limit):
-        f = getattr(ak, fn_name, None)
-        if not f: return None
-        df = f()
-        rows = []
-        for _, r in df.head(limit or 20).iterrows():
-            title = r.get("标题") or r.get("内容") or r.get("summary")
-            ts = r.get("发布时间") or r.get("时间") or r.get("datetime") or r.get("publish_time") or ""
-            summary = r.get("摘要") or r.get("内容") or ""
-            if title:
-                rows.append({"title": str(title), "summary": str(summary)[:200], "content": str(summary), "published_at": str(ts)})
-        return rows or None
-    return _f
+
+# 新闻 / 涨停跌停：eastmoney host 直连可达、经 socks5 代理会被掐断（行情 push2his 反之必须走代理），
+# 故这两类源始终直连——代理生效时走「无补丁」子进程绕开，代理关闭时直接进程内调用（同一份 direct_sources 逻辑）。
+def _news_direct(_code, limit):
+    d = proxy.run_direct_json("news", limit or 20) if proxy.proxy_active() else direct_sources.fetch_news(limit or 20)
+    rows = d.get("rows") if isinstance(d, dict) else None
+    return rows or None
+
+def _sentiment_direct(_code, _days):
+    d = proxy.run_direct_json("sentiment", 0) if proxy.proxy_active() else direct_sources.fetch_sentiment()
+    return d if isinstance(d, dict) else None
 
 def _fund_tdx(code, _days=0): return tdx.finance_fundamentals(code)
 
@@ -412,12 +408,10 @@ PROVIDERS = {
         {"key": "baostock", "label": "BaoStock", "fn": _fund_baostock},
     ],
     "sentiment": [
-        {"key": "em", "label": "东方财富", "fn": _sentiment_em},
+        {"key": "direct", "label": "东方财富(直连)", "fn": _sentiment_direct},
     ],
     "news": [
-        {"key": "em",   "label": "东方财富", "fn": _news_provider("stock_info_global_em")},
-        {"key": "cjzc", "label": "财经早餐", "fn": _news_provider("stock_info_cjzc_em")},
-        {"key": "cls",  "label": "财联社",   "fn": _news_provider("stock_info_global_cls")},
+        {"key": "direct", "label": "财经新闻(直连)", "fn": _news_direct},
     ],
 }
 
@@ -602,31 +596,6 @@ def tx_quote(code: str, days: int = 120):
 @app.get("/tx/name/{code}")
 def provider_name(code: str):
     return stock_name(code)
-
-
-def _market_sentiment_em() -> dict | None:
-    out = {"limit_up_count": None, "limit_down_count": None, "sse_ma20_slope": None}
-    today = datetime.now().strftime("%Y%m%d")
-    try:
-        out["limit_up_count"] = int(len(ak.stock_zt_pool_em(date=today)))
-    except Exception:
-        pass
-    try:
-        out["limit_down_count"] = int(len(ak.stock_zt_pool_dtgc_em(date=today)))
-    except Exception:
-        pass
-    try:
-        idx = ak.stock_zh_index_daily(symbol="sh000001").tail(21)
-        closes = idx["close"].astype(float).tolist()
-        ma_today = sum(closes[-20:]) / 20
-        ma_prev = sum(closes[-21:-1]) / 20
-        out["sse_ma20_slope"] = round(ma_today - ma_prev, 4)
-    except Exception:
-        pass
-    # Return None when every field is None so probe/route treats total failure as unreachable.
-    if out["limit_up_count"] is None and out["limit_down_count"] is None and out["sse_ma20_slope"] is None:
-        return None
-    return out
 
 
 @app.get("/market/sentiment")
