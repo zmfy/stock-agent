@@ -305,7 +305,7 @@ export async function postMessage(userId: string, sessionId: string, content: st
   if (!extra && session.kind === 'screen') {
     const s = getLatestScreen(userId);
     if (s) {
-      const top = s.results.slice(0, 12).map((r: any) => `${r.code} ${r.name ?? ''} ${r.aPass || r.bPass ? '入选' : '未入选'} · ${r.reason ?? ''}`).join('\n');
+      const top = s.results.slice(0, 12).map((r: any) => `${r.code} ${r.name ?? ''} ${(r.passedSystems?.length || r.aPass || r.bPass) ? '入选' : '未入选'} · ${r.reason ?? ''}`).join('\n');
       extra = `本次选股范围：${s.note}\n讨论纪要：${s.discussion || '（无）'}\n候选与结果：\n${top}`;
     }
   }

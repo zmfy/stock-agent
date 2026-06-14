@@ -6,6 +6,7 @@ import { getProvider } from '../ai/providers';
 import { chat } from '../ai/manager';
 import { summarizeChangeReason } from './memory';
 import { getMessages } from '../chat/service';
+import { extractJsonObject } from './json-extract';
 
 export interface ProposalPayload {
   persona: string;
@@ -46,7 +47,7 @@ ${[context, instruction].filter(Boolean).join('\n')}
  "soft_remove":["要删除的软判断原文"],
  "position_patch":{}
 }
-没有的字段省略或给空数组。只输出 JSON，不要解释或思考过程。`;
+没有的字段省略或给空数组。系统可含 A/B/C…；零仓位/复盘系统(不配仓位风险)只评估不交易。只输出 JSON，不要解释或思考过程。`;
 }
 
 interface Patch {
@@ -69,14 +70,7 @@ function num(v: any): number | null {
 }
 
 export function parsePatch(text: string): Patch | null {
-  const s = text.indexOf('{');
-  const e = text.lastIndexOf('}');
-  if (s === -1 || e <= s) return null;
-  try {
-    return JSON.parse(text.slice(s, e + 1)) as Patch;
-  } catch {
-    return null;
-  }
+  return extractJsonObject(text) as Patch | null;
 }
 
 // Apply a patch onto the active rulebook to produce a full proposal payload.
@@ -101,7 +95,7 @@ export function applyPatch(active: FullRulebook, patch: Patch): ProposalPayload 
   for (const a of patch.gates_add || []) {
     if (!a.gate_key || !VALID_OPS.includes(a.op)) continue;
     next.push({
-      system: a.system || 'A', gate_key: String(a.gate_key), label: String(a.label ?? a.gate_key), field: String(a.field ?? a.gate_key),
+      system: /^[A-Z]$/.test(String(a.system)) ? String(a.system) : 'A', gate_key: String(a.gate_key), label: String(a.label ?? a.gate_key), field: String(a.field ?? a.gate_key),
       op: a.op, threshold: num(a.threshold), threshold2: num(a.threshold2), ref_field: a.ref_field ?? null, unit: String(a.unit ?? ''), veto: a.veto ? 1 : 0, teach: String(a.teach ?? ''),
     });
   }
@@ -111,7 +105,7 @@ export function applyPatch(active: FullRulebook, patch: Patch): ProposalPayload 
     .filter((r) => !softRemove.has(r.text))
     .map((r) => ({ system: r.system, text: r.text, teach: r.teach }));
   for (const sa of patch.soft_add || []) {
-    if (sa?.text) softRules.push({ system: sa.system || 'A', text: String(sa.text), teach: String(sa.teach ?? '') });
+    if (sa?.text) softRules.push({ system: /^[A-Z]$/.test(String(sa.system)) ? String(sa.system) : 'A', text: String(sa.text), teach: String(sa.teach ?? '') });
   }
 
   return {
@@ -170,12 +164,12 @@ export function nextLabel(current: string, magnitude: 'major' | 'minor'): string
   return `${current} ${magnitude === 'major' ? 'v2.0' : 'v1.1'}`;
 }
 
-export async function defaultAiCall(userId: string, prompt: string): Promise<string> {
+export async function defaultAiCall(userId: string, prompt: string, maxTokens = 4000): Promise<string> {
   const cfg = getModelForRole(userId, 'review') || getModelForRole(userId, 'core');
   if (!cfg) throw new Error('NO_MODEL');
   const style = getProvider(cfg.provider)?.apiStyle || 'openai';
   const acct = cfg.scope === 'shared' && cfg.ownerConfigId ? { userId, configId: cfg.ownerConfigId } : undefined;
-  return chat(style, { baseUrl: cfg.baseUrl, model: cfg.model, apiKey: cfg.apiKey }, prompt, 4000, acct);
+  return chat(style, { baseUrl: cfg.baseUrl, model: cfg.model, apiKey: cfg.apiKey }, prompt, maxTokens, acct);
 }
 
 export interface ProposeResult {

@@ -183,7 +183,7 @@
                   </div>
                   <div class="screen-results">
                     <div v-for="r in screenPicks" :key="r.code" class="srow" @click="openStockCode(r.code)">
-                      <span class="badge2" :class="r.aPass ? 'a' : 'b'">{{ r.aPass ? 'A' : 'B' }}</span>
+                      <span class="badge2" :class="r.passedSystems[0] === 'A' ? 'a' : 'b'">{{ r.passedSystems.join('/') }}</span>
                       {{ r.name || r.code }} <span class="muted">{{ r.code }} · {{ r.reason }}</span>
                     </div>
                     <div v-if="!screenPicks.length" class="muted">本次无入选个股。</div>
@@ -233,16 +233,16 @@
             <h4>📋 来财据我们的聊天生成的当前策略：<b>{{ proposal.suggestedLabel }}</b></h4>
             <p class="synth-persona"><b>人设：</b>{{ (proposal as any).proposal.persona }}</p>
             <div v-for="sys in synthSystems" :key="sys" class="synth-sys">
-              <b>{{ sys }} 系统硬门槛：</b>
-              <ul>
+              <b>{{ sys }} 系统：</b>
+              <ul v-if="(proposal as any).proposal.gates.some((x: any) => x.system === sys)">
                 <li v-for="g in (proposal as any).proposal.gates.filter((x: any) => x.system === sys)" :key="g.gate_key">
                   {{ g.label }}：{{ gateCond(g) }}{{ g.veto ? '（一票否决）' : '' }}
+                  <span v-if="g.teach" class="muted">— 目的：{{ g.teach }}</span>
                 </li>
               </ul>
-            </div>
-            <div v-if="(proposal as any).proposal.softRules.length" class="synth-soft">
-              <b>软判断：</b>
-              <ul><li v-for="(s, i) in (proposal as any).proposal.softRules" :key="i">{{ (s as any).text }}</li></ul>
+              <ul v-if="(proposal as any).proposal.softRules.some((x: any) => x.system === sys)" class="synth-soft">
+                <li v-for="(s, i) in (proposal as any).proposal.softRules.filter((x: any) => x.system === sys)" :key="'s' + i">软判断：{{ (s as any).text }}<span v-if="(s as any).teach" class="muted"> — 目的：{{ (s as any).teach }}</span></li>
+              </ul>
             </div>
             <p v-if="proposedAt" class="muted">🕐 {{ fmtCN(proposedAt) }}</p>
             <div class="ops">
@@ -257,7 +257,6 @@
                 <textarea v-model="input" rows="2" placeholder="输入消息，Enter 发送" @keydown.enter.exact.prevent="send"></textarea>
                 <button :disabled="sending || !input.trim()" @click="send">发送</button>
               </div>
-              <p v-if="chatErr" class="err">{{ chatErr }}</p>
             </template>
           </div>
 
@@ -405,7 +404,7 @@ const generating = reactive(new Set<string>());
 const genErr = reactive<Record<string, string>>({});
 const screen = ref<ScreenRun | null>(null);
 // 选股讨论只展示入选（A/B 通过）个股，未入选不显示
-const screenPicks = computed(() => (screen.value?.results || []).filter((r) => r.aPass || r.bPass));
+const screenPicks = computed(() => (screen.value?.results || []).filter((r) => r.passedSystems.length));
 const screenHistory = ref<Array<{ created_at: string; note: string; picks: Array<{ code: string; name: string | null; reason: string }> }>>([]);
 const screenHistOpen = ref(false);
 
@@ -482,20 +481,33 @@ function buildCpBriefing(rb: FullRulebook | null): string {
       '先聊第一个：你平时主要看公司基本面（业绩、估值），还是看走势（均线、突破），还是两者都看？\n\n' +
       '（聊得差不多了，点下方「🛠 根据我们的聊天，帮我生成当前策略」，我就帮你总结成一套规则。）'
     );
-  const systems = [...new Set(rb.gates.map((g) => g.system))].sort();
+  // 系统 = 门槛 + 软判断的并集（零仓位/复盘系统如 C 可能只有软判断）。每系统展示硬门槛 + 软判断。
+  const systems = [...new Set([...rb.gates.map((g) => g.system), ...rb.softRules.map((r) => r.system)])].sort();
   const blocks = systems
     .map((sys) => {
-      const lines = rb.gates.filter((g) => g.system === sys).map((g) => `· ${g.label}：${gateCond(g)}${g.veto ? '（一票否决）' : ''}`).join('\n');
-      return `${sys} 系统硬门槛：\n${lines || '（无）'}`;
+      const gs = rb.gates.filter((g) => g.system === sys);
+      const srs = rb.softRules.filter((r) => r.system === sys);
+      const parts: string[] = [];
+      if (gs.length) parts.push('硬门槛：\n' + gs.map((g) => `· ${g.label}：${gateCond(g)}${g.veto ? '（一票否决）' : ''}${g.teach ? '\n  └ 目的：' + g.teach : ''}`).join('\n'));
+      if (srs.length) parts.push('软判断：\n' + srs.map((r) => `· ${r.text}${r.teach ? '\n  └ 目的：' + r.teach : ''}`).join('\n'));
+      const tag = gs.length ? '' : '（零仓位/复盘）';
+      return `【${sys} 系统${tag}】\n${parts.join('\n') || '（无）'}`;
     })
     .join('\n\n');
-  const prio = (rb.positionRules as any)?.system_priority;
-  const prioLine = Array.isArray(prio) && prio.length > 1 ? `\n系统优先级：${prio.join(' > ')}\n` : '';
+  const pr = (rb.positionRules as any) || {};
+  const fmtMap = (m: any) => (m && typeof m === 'object' ? Object.entries(m).map(([k, v]) => `${k} ${v}`).join('、') : String(m));
+  const prLines: string[] = [];
+  if (Array.isArray(pr.system_priority) && pr.system_priority.length > 1) prLines.push(`系统优先级：${pr.system_priority.join(' > ')}`);
+  if (pr.single_trade_risk_pct) prLines.push(`单笔风险%：${fmtMap(pr.single_trade_risk_pct)}`);
+  if (pr.single_stock_cap_pct) prLines.push(`单票上限%：${fmtMap(pr.single_stock_cap_pct)}`);
+  if (pr.exits) prLines.push('出场：' + (typeof pr.exits === 'object' ? Object.entries(pr.exits).map(([k, v]) => `${k}: ${Array.isArray(v) ? (v as any[]).join('/') : v}`).join('；') : String(pr.exits)));
+  if (pr.circuit_breaker) prLines.push(`熔断：${Array.isArray(pr.circuit_breaker) ? pr.circuit_breaker.join('；') : pr.circuit_breaker}`);
+  const prBlock = prLines.length ? `\n仓位 / 出场 / 熔断：\n${prLines.join('\n')}\n` : '';
   const changed = rb.version.created_at ? `（最后更换：${fmtCNDate(rb.version.created_at)}）` : '';
   return (
     `【当前策略 ${rb.version.version_label}${changed}】\n` +
-    `人设：${rb.version.persona}\n${prioLine}\n` +
-    `${blocks}\n\n` +
+    `人设：${rb.version.persona}\n\n` +
+    `${blocks}\n${prBlock}\n` +
     `———\n你想优化哪一方面？例如：放宽/收紧某条门槛、增删条件、调整仓位或止损、修改人设。\n` +
     `说出你的想法，我们讨论后，点下方「🛠 让 agent 提议修改规则」，我会给出带版本号的修改方案供你确认。`
   );
@@ -533,8 +545,10 @@ const noChange = computed(() => {
   return !!d && !d.personaChanged && !d.gates.changed.length && !d.gates.added.length && !d.gates.removed.length && !d.softRules.added.length && !d.softRules.removed.length && !d.positionRulesChangedKeys.length;
 });
 const synthSystems = computed<string[]>(() => {
-  const gs = ((proposal.value as any)?.proposal?.gates || []) as Array<{ system: string }>;
-  return [...new Set(gs.map((g) => g.system))].sort();
+  const p = (proposal.value as any)?.proposal;
+  const gs = (p?.gates || []) as Array<{ system: string }>;
+  const ss = (p?.softRules || []) as Array<{ system: string }>;
+  return [...new Set([...gs.map((g) => g.system), ...ss.map((r) => r.system)])].sort();
 });
 
 
@@ -593,7 +607,7 @@ async function applyProposal() {
     await nextTick();
     if (msgsEl.value) msgsEl.value.scrollTop = msgsEl.value.scrollHeight;
   } catch (e: any) {
-    chatErr.value = e.response?.data?.message || '采纳失败';
+    await noteErrorToSession(active.value?.id, e.response?.data?.message || '采纳失败');
   } finally {
     applying.value = false;
   }
@@ -796,7 +810,7 @@ async function startInterview() {
         const msg = (await chatApi.interviewKickoff(active.value.id)).data.data;
         if (msg) messages.value.push(msg);
       } catch (e: any) {
-        chatErr.value = e.response?.data?.message || '来财开场失败，请直接打字开始，或检查 AI 模型配置';
+        await noteErrorToSession(active.value?.id, e.response?.data?.message || '来财开场失败，请直接打字开始，或检查 AI 模型配置');
       } finally {
         sending.value = false;
       }
@@ -849,7 +863,7 @@ async function openScreen() {
 }
 async function runScreen() {
   if (needsInit.value) {
-    chatErr.value = '你还没有当前策略，无法按当前策略选股。先点上方/中间的「🗣 和来财聊出我的当前策略」定一套吧。';
+    await noteErrorToSession(active.value?.id, '你还没有当前策略，无法按当前策略选股。先点「🗣 和来财聊出我的当前策略」定一套吧。');
     return;
   }
   // 已在后台选股中：只切回选股会话，不重复触发
@@ -910,7 +924,7 @@ async function send() {
     void reply;
     scrollDown();
   } catch (e: any) {
-    chatErr.value = e.response?.data?.message || '发送失败';
+    await noteErrorToSession(active.value?.id, e.response?.data?.message || '发送失败');
   } finally {
     sending.value = false;
   }

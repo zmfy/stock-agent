@@ -27,7 +27,7 @@ router.get('/templates', (_req: Request, res: Response) => {
 });
 
 const gateSchema = z.object({
-  system: z.enum(['A', 'B']),
+  system: z.string().regex(/^[A-Z]$/, '系统须为单个大写字母'),
   gate_key: z.string().min(1),
   label: z.string(),
   field: z.string(),
@@ -41,7 +41,7 @@ const gateSchema = z.object({
 });
 
 const softRuleSchema = z.object({
-  system: z.enum(['A', 'B']),
+  system: z.string().regex(/^[A-Z]$/, '系统须为单个大写字母'),
   text: z.string().min(1),
   teach: z.string(),
 });

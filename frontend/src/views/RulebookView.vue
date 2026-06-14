@@ -23,8 +23,11 @@
         <p v-if="shown.version.note" class="muted">说明：{{ shown.version.note }}</p>
 
         <template v-for="sys in systemsOf" :key="sys">
-          <h3>{{ sys }} 系统 · 硬门槛</h3>
-          <GateTable :gates="gatesOf(sys)" />
+          <template v-if="gatesOf(sys).length">
+            <h3>{{ sys }} 系统 · 硬门槛</h3>
+            <GateTable :gates="gatesOf(sys)" />
+          </template>
+          <h3 v-else>{{ sys }} 系统 · 零仓位/复盘（无硬门槛）</h3>
           <template v-if="softOf(sys).length">
             <h4>{{ sys }} 系统 · 软判断</h4>
             <ul class="soft"><li v-for="r in softOf(sys)" :key="r.id">{{ r.text }} <span class="muted">— {{ r.teach }}</span></li></ul>
@@ -154,7 +157,8 @@ const noChange = computed(
     !diff.value.positionRulesChangedKeys.length
 );
 
-const systemsOf = computed(() => [...new Set(shown.value.gates.map((g) => g.system))].sort());
+// 系统 = 门槛与软判断里出现过的所有系统并集（零仓位/复盘系统 如 C 可能只有软判断、没有硬门槛）。
+const systemsOf = computed(() => [...new Set([...shown.value.gates.map((g) => g.system), ...shown.value.softRules.map((r) => r.system)])].sort());
 function gatesOf(sys: string) {
   return shown.value.gates.filter((g) => g.system === sys);
 }

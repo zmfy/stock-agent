@@ -1,6 +1,7 @@
 import { ProposalPayload, defaultAiCall } from './propose-service';
 import { SeedGate, SeedSoftRule } from './baseline-v3';
 import { getMessages } from '../chat/service';
+import { extractJsonObject } from './json-extract';
 
 // 合成与门槛只能用这些真实存在的数据字段(源自 StockSnapshot/模板)
 export const SYNTH_FIELDS = [
@@ -25,7 +26,7 @@ ${conversation}
 硬门槛的 field 只能用下面这些真实存在的数据字段（用别的字段会被丢弃）：
 roe_ttm(ROE%), pe(市盈率), pb(市净率), ps(市销率), net_profit(归母净利,元), turnover_rate(换手率%), ma5/ma10/ma20/ma60(均线), close(现价), year_high(年内最高), limit_up_count(涨停家数), limit_down_count(跌停家数), sse_ma20_slope(上证20日线斜率)
 算子只能用：>= > <= < between gt_field（gt_field 用 ref_field 指定参照字段，如 close gt_field ma20 表示现价站上20日线）
-系统：A=个股基本面/趋势，B=大盘情绪。
+系统：可用 A/B/C… 任意单字母标签区分不同打法。给出仓位风险配置(positionRules.single_trade_risk_pct)的系统=真实交易系统；纯复盘/零仓位（只做认知训练、不下单）的系统不要在 single_trade_risk_pct 里配置，它只评估门槛不参与选股与仓位。
 
 只输出一个 JSON，结构如下，不要解释或思考过程：
 {
@@ -38,14 +39,7 @@ roe_ttm(ROE%), pe(市盈率), pb(市净率), ps(市销率), net_profit(归母净
 }
 
 export function parseSynth(text: string): any | null {
-  const s = text.indexOf('{');
-  const e = text.lastIndexOf('}');
-  if (s === -1 || e <= s) return null;
-  try {
-    return JSON.parse(text.slice(s, e + 1));
-  } catch {
-    return null;
-  }
+  return extractJsonObject(text);
 }
 
 export function validateSynth(obj: any): { versionLabel: string; proposal: ProposalPayload } {
@@ -53,7 +47,7 @@ export function validateSynth(obj: any): { versionLabel: string; proposal: Propo
   for (const a of obj?.gates || []) {
     if (!a || !a.gate_key || !SYNTH_FIELDS.includes(a.field) || !VALID_OPS.includes(a.op)) continue;
     gates.push({
-      system: a.system === 'B' ? 'B' : 'A',
+      system: /^[A-Z]$/.test(String(a.system)) ? String(a.system) : 'A',
       gate_key: String(a.gate_key),
       label: String(a.label ?? a.gate_key),
       field: String(a.field),
@@ -70,7 +64,7 @@ export function validateSynth(obj: any): { versionLabel: string; proposal: Propo
 
   const softRules: SeedSoftRule[] = [];
   for (const r of obj?.softRules || []) {
-    if (r?.text) softRules.push({ system: r.system === 'B' ? 'B' : 'A', text: String(r.text), teach: String(r.teach ?? '') });
+    if (r?.text) softRules.push({ system: /^[A-Z]$/.test(String(r.system)) ? String(r.system) : 'A', text: String(r.text), teach: String(r.teach ?? '') });
   }
 
   const positionRules = obj?.positionRules && typeof obj.positionRules === 'object' ? obj.positionRules : {};
@@ -92,7 +86,8 @@ export async function synthesizeRulebook(
 ): Promise<{ proposal: ProposalPayload; suggestedLabel: string }> {
   const msgs = getMessages(userId, sessionId);
   const conversation = msgs.map((m: any) => `${m.role === 'user' ? '用户' : '助手'}：${m.content}`).join('\n');
-  const aiCall = opts.aiCall || ((p: string) => defaultAiCall(userId, p));
+  // 多系统/大策略的 JSON 较长，叠加推理模型的 <think> 思考块，需要更大的输出预算，否则会被截断成不完整 JSON。
+  const aiCall = opts.aiCall || ((p: string) => defaultAiCall(userId, p, 16000));
   const raw = await aiCall(buildSynthesizePrompt(conversation));
   const obj = parseSynth(raw);
   if (!obj) throw new Error('PARSE_FAILED');

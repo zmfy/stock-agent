@@ -314,3 +314,9 @@ export function diffVersions(userId: string, aId: string, bId: string): Rulebook
     positionRulesChangedKeys,
   };
 }
+
+// 真实交易系统 = positionRules.single_trade_risk_pct 里风险>0 的系统；无配置的系统(如 C)为零仓位/复盘。
+export function tradeableSystems(positionRules: any): string[] {
+  const risk = (positionRules && positionRules.single_trade_risk_pct) || {};
+  return Object.keys(risk).filter((k) => Number(risk[k]) > 0).sort();
+}

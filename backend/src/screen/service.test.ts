@@ -28,17 +28,17 @@ beforeAll(() => {
 });
 
 describe('screen service', () => {
-  it('screenCode: good stock aPass=true, bad stock aPass=false', async () => {
+  it('screenCode: good stock passedSystems contains A, bad stock does not pass A', async () => {
     const good = await svc.screenCode(USER, '600001');
     const bad = await svc.screenCode(USER, '600002');
-    expect(good.aPass).toBe(true);
-    expect(bad.aPass).toBe(false);
+    expect(good.passedSystems).toContain('A');
+    expect(bad.passedSystems).not.toContain('A'); // roe/pe fails A, B checks market sentiment only
     expect(bad.failed).toEqual(expect.arrayContaining(['roe_ttm', 'pe']));
   });
 
   it('screenCodes sorts qualifying first', async () => {
     const res = await svc.screenCodes(USER, ['600002', '600001']);
-    expect(res[0].code).toBe('600001'); // aPass sorted first
+    expect(res[0].code).toBe('600001'); // passedSystems non-empty sorted first
   });
 
   it('resolveUniverse falls back to cached codes when no sidecar/codes', async () => {
@@ -59,7 +59,7 @@ describe('screen service', () => {
     const r = await svc.screenCode(USER, '600001');
     expect(typeof r.reason).toBe('string');
     expect(r.reason.length).toBeGreaterThan(0);
-    expect(r.aPass || r.bPass ? r.reason.includes('通过') : r.reason.includes('未入选')).toBe(true);
+    expect(r.passedSystems.length ? r.reason.includes('通过') : r.reason.includes('未入选')).toBe(true);
   });
 
   it('getHistory 返回最近选股(含 picks)', async () => {
@@ -77,9 +77,33 @@ describe('选股讨论结论锚点', () => {
     const out = await svc.discussScreen(
       'u-anchor',
       '测试范围',
-      [{ code: '600519', name: '贵州茅台', aPass: true, bPass: false, passed: 1, total: 1, failed: [], reason: '入选' }],
+      [{ code: '600519', name: '贵州茅台', passedSystems: ['A'], passed: 1, total: 1, failed: [], reason: '入选' }],
       aiCall,
     );
     expect(out).toContain('\n🧠 来财推荐：\n');
+  });
+});
+
+describe('screen 多系统：C 零仓位不参与选股', () => {
+  it('能过 A 的个股 passedSystems 含 A、不含零仓位系统 C', async () => {
+    const rbsvc = require('../rulebook/service');
+    const U = 'u-multi-screen';
+    rbsvc.createVersion(U, {
+      versionLabel: '多系统', persona: 'p', parentVersionId: null,
+      gates: [
+        { system: 'A', gate_key: 'np', label: '净利>0', field: 'net_profit', op: '>', threshold: 0, threshold2: null, ref_field: null, unit: '元', veto: 1, teach: '' },
+        { system: 'C', gate_key: 'cd', label: '复盘项', field: 'net_profit', op: '>', threshold: 0, threshold2: null, ref_field: null, unit: '元', veto: 1, teach: '' },
+      ],
+      softRules: [],
+      positionRules: { single_trade_risk_pct: { A: 1.0 } },
+    });
+    const v = rbsvc.listVersions(U)[0];
+    rbsvc.activateVersion(U, v.id);
+    seedStock('600000', { net_profit: 1e8 });
+    const svc2 = require('./service');
+    const r = await svc2.screenCode(U, '600000');
+    expect(Array.isArray(r.passedSystems)).toBe(true);
+    expect(r.passedSystems).toContain('A');
+    expect(r.passedSystems).not.toContain('C');
   });
 });

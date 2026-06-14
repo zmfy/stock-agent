@@ -47,6 +47,18 @@ describe('validateSynth', () => {
   it('throws SYNTH_EMPTY when no legal gate survives', () => {
     expect(() => syn.validateSynth({ gates: [{ field: 'nope', op: '>=', gate_key: 'a' }] })).toThrow('SYNTH_EMPTY');
   });
+
+  it('保留 C 系统，不折叠成 A', () => {
+    const obj = {
+      versionLabel: 'v', persona: 'p',
+      gates: [{ system: 'C', gate_key: 'c1', label: '复盘', field: 'close', op: '>', threshold: 0, unit: '', veto: 1, teach: '' }],
+      softRules: [{ system: 'C', text: '只复盘' }],
+      positionRules: {},
+    };
+    const r = syn.validateSynth(obj);
+    expect(r.proposal.gates[0].system).toBe('C');
+    expect(r.proposal.softRules[0].system).toBe('C');
+  });
 });
 
 describe('parseSynth', () => {
@@ -55,6 +67,10 @@ describe('parseSynth', () => {
   });
   it('returns null on garbage', () => {
     expect(syn.parseSynth('no json here')).toBeNull();
+  });
+  it('忽略 <think> 块里的花括号(推理模型)', () => {
+    const raw = '<think>我先想想 {草稿: 不算数}</think>\n{"versionLabel":"v","gates":[]}';
+    expect(syn.parseSynth(raw)).toEqual({ versionLabel: 'v', gates: [] });
   });
 });
 

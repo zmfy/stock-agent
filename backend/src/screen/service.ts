@@ -1,6 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
 import { getDb } from '../db';
-import { getActive } from '../rulebook/service';
+import { getActive, tradeableSystems } from '../rulebook/service';
 import { getStockSnapshot, listCachedCodes } from '../data/service';
 import { evaluateGates } from '../analysis/rule-engine';
 import { resolveSidecarBase, fetchHotSectors, fetchSectorStocks } from '../data/sidecar';
@@ -35,7 +35,7 @@ export async function discussScreen(
   const rbText = rb ? `当前策略【${rb.version.version_label}】硬门槛：${rb.gates.map((g) => `${g.system}:${g.label}`).join('、')}。` : '';
   const top = results.slice(0, 12);
   const listText = top.length
-    ? top.map((r) => `- ${r.name || r.code}(${r.code})：${r.aPass ? 'A通过' : r.bPass ? 'B通过' : '未过'}，门槛 ${r.passed}/${r.total}`).join('\n')
+    ? top.map((r) => `- ${r.name || r.code}(${r.code})：${r.passedSystems.length ? r.passedSystems.join('/') + ' 通过' : '未过'}，门槛 ${r.passed}/${r.total}`).join('\n')
     : '（本次无候选）';
 
   const dataOut = (await aiCall(
@@ -57,8 +57,7 @@ export async function discussScreen(
 export interface ScreenResult {
   code: string;
   name: string | null;
-  aPass: boolean;
-  bPass: boolean;
+  passedSystems: string[];
   passed: number;
   total: number;
   failed: string[];
@@ -70,24 +69,23 @@ export async function screenCode(userId: string, code: string): Promise<ScreenRe
   if (!rb) throw new Error('NO_RULEBOOK');
   const snap = await getStockSnapshot(userId, code);
   const ev = evaluateGates(snap, rb.gates);
-  const aVetoGates = ev.gateResults.filter((g) => g.system === 'A' && g.veto === 1);
-  const bVetoGates = ev.gateResults.filter((g) => g.system === 'B' && g.veto === 1);
-  // strict: selected only if every veto gate actually PASSES (data-missing -> not selected)
-  const aPass = aVetoGates.length > 0 && aVetoGates.every((g) => g.status === 'pass');
-  const bPass = bVetoGates.length > 0 && bVetoGates.every((g) => g.status === 'pass');
+  const tradeable = tradeableSystems(rb.positionRules);
+  const passedSystems = tradeable.filter((sys) => {
+    const veto = ev.gateResults.filter((g) => g.system === sys && g.veto === 1);
+    return veto.length > 0 && veto.every((g) => g.status === 'pass');
+  });
   const passed = ev.gateResults.filter((g) => g.status === 'pass').length;
   const failed = ev.gateResults.filter((g) => g.status === 'fail').map((g) => g.gate_key);
-  const selected = aPass || bPass;
   let reason: string;
-  if (selected) {
-    const sys = aPass ? 'A' : 'B';
+  if (passedSystems.length) {
+    const sys = passedSystems[0];
     const passedLabels = ev.gateResults.filter((g) => g.system === sys && g.status === 'pass').map((g) => g.label);
-    reason = `入选（${sys} 系统）：通过 ${passedLabels.join('、') || '（无明确门槛）'}`;
+    reason = `入选（${passedSystems.join('、')} 系统）：通过 ${passedLabels.join('、') || '（无明确门槛）'}`;
   } else {
     const blockers = ev.gateResults.filter((g) => g.veto === 1 && g.status !== 'pass').map((g) => `${g.label}${g.status === 'unknown' ? '(数据缺失)' : '(未达标)'}`);
     reason = `未入选：${blockers.join('、') || '无符合系统'}`;
   }
-  return { code, name: snap.name, aPass, bPass, passed, total: ev.gateResults.length, failed, reason };
+  return { code, name: snap.name, passedSystems, passed, total: ev.gateResults.length, failed, reason };
 }
 
 export async function screenCodes(userId: string, codes: string[]): Promise<ScreenResult[]> {
@@ -100,8 +98,8 @@ export async function screenCodes(userId: string, codes: string[]): Promise<Scre
       /* skip a code that errors */
     }
   }
-  // qualifying (A or B pass) first, then by passed-gate count
-  return out.sort((a, b) => Number(b.aPass || b.bPass) - Number(a.aPass || a.bPass) || b.passed - a.passed);
+  // qualifying (passedSystems non-empty) first, then by passed-gate count
+  return out.sort((a, b) => (b.passedSystems.length ? 1 : 0) - (a.passedSystems.length ? 1 : 0) || b.passed - a.passed);
 }
 
 export async function resolveUniverse(
@@ -164,7 +162,7 @@ export function getHistory(userId: string, limit = 20): Array<{ created_at: stri
   return rows.map((r) => {
     let parsed: ScreenResult[] = [];
     try { parsed = JSON.parse(r.results); } catch { /* ignore */ }
-    const picks = parsed.filter((x) => x.aPass || x.bPass).map((x) => ({ code: x.code, name: x.name, reason: x.reason || '' }));
+    const picks = parsed.filter((x) => (x.passedSystems?.length) || (x as any).aPass || (x as any).bPass).map((x) => ({ code: x.code, name: x.name, reason: x.reason || '' }));
     return { created_at: r.created_at, note: r.source_note, picks };
   });
 }

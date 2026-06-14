@@ -3,8 +3,7 @@ import api from './client';
 export interface ScreenResult {
   code: string;
   name: string | null;
-  aPass: boolean;
-  bPass: boolean;
+  passedSystems: string[];
   passed: number;
   total: number;
   failed: string[];

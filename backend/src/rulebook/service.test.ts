@@ -80,4 +80,10 @@ describe('rulebook service', () => {
     expect(svc.listVersions(USER).length).toBeGreaterThan(0); // 版本保留
   });
 
+  it('tradeableSystems 只取有仓位风险(>0)的系统', () => {
+    expect(svc.tradeableSystems({ single_trade_risk_pct: { A: 1.0, B: 0.5, C: 0 } })).toEqual(['A', 'B']);
+    expect(svc.tradeableSystems({ single_trade_risk_pct: { A: 1.0 } })).toEqual(['A']);
+    expect(svc.tradeableSystems({})).toEqual([]);
+  });
+
 });

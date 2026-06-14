@@ -87,3 +87,22 @@ describe('rulebook routes', () => {
     expect(res.status).toBe(404);
   });
 });
+
+describe('apply 接受 C 系统门槛', () => {
+  it('含 system:C 的门槛可保存(不再 422)', async () => {
+    const body = {
+      versionLabel: '三系统 v1',
+      proposal: {
+        persona: '纪律操盘',
+        gates: [
+          { system: 'A', gate_key: 'roe', label: 'ROE', field: 'roe_ttm', op: '>=', threshold: 10, threshold2: null, ref_field: null, unit: '%', veto: 1, teach: '' },
+          { system: 'C', gate_key: 'c_demo', label: '复盘项', field: 'close', op: '>', threshold: 0, threshold2: null, ref_field: null, unit: '', veto: 1, teach: '零仓位复盘' },
+        ],
+        softRules: [{ system: 'C', text: '只复盘不下单', teach: '' }],
+        positionRules: { single_trade_risk_pct: { A: 1.0 } },
+      },
+    };
+    const r = await request(app).post('/api/rulebook/apply').set(auth()).send(body);
+    expect(r.status).toBe(201);
+  });
+});

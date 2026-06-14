@@ -3,7 +3,7 @@ import api from './client';
 export interface Gate {
   id: string;
   version_id: string;
-  system: 'A' | 'B';
+  system: string;
   gate_key: string;
   label: string;
   field: string;
@@ -20,7 +20,7 @@ export interface Gate {
 export interface SoftRule {
   id: string;
   version_id: string;
-  system: 'A' | 'B';
+  system: string;
   text: string;
   teach: string;
 }
