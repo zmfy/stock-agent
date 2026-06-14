@@ -59,10 +59,12 @@ export async function validateStock(userId: string, snapshot: StockSnapshot): Pr
   checks.push({ name: '数据新鲜度', ok: recent, detail: qDate ? `行情日期 ${qDate}${recent ? '' : '（过旧）'}` : '无行情日期' });
 
   // light range sanity
-  const rangeIssues: string[] = [];
-  if (snap.pe !== null && snap.pe !== undefined && snap.pe < 0) rangeIssues.push('PE 为负');
+  const rangeIssues: string[] = []; // 硬阻断：确属坏数据
+  const rangeNotes: string[] = []; // 仅提示：合法但需注意，不阻断
   if (snap.close !== null && snap.close !== undefined && snap.close <= 0) rangeIssues.push('收盘价非正');
-  checks.push({ name: '数值合理性', ok: rangeIssues.length === 0, detail: rangeIssues.length ? rangeIssues.join('、') : '数值在合理范围' });
+  // PE 为负 = 公司亏损，是合法可分析的数据，不再硬拦；仅提示，交给规则门槛/AI 判断。
+  if (snap.pe !== null && snap.pe !== undefined && snap.pe < 0) rangeNotes.push('PE 为负(亏损)');
+  checks.push({ name: '数值合理性', ok: rangeIssues.length === 0, detail: [...rangeIssues, ...rangeNotes].join('、') || '数值在合理范围' });
 
   // cross-source: live-compare the primary close against each secondary data source
   let crossMismatch = false;

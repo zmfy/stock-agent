@@ -187,9 +187,14 @@ def parse_f10_indicators(txt):
     lines = txt.split("\n")
     hdr = None
     for ln in lines:
+        # 必须是「分列表头行」(split 出 ≥3 段)，否则会误命中标题行
+        # "…★本栏包括【1.主要财务指标】…更新日期:YYYY-MM-DD"——新版「通达信沪深京F10」标题里
+        # 就含"财务指标"+日期、却无列分隔，split 后只有 1 段 → 旧逻辑误判致整表解析失败。
         if "财务指标" in ln and re.search(r"\d{4}-\d{2}-\d{2}", ln):
-            hdr = [x.strip() for x in ln.split("｜")]
-            break
+            cells = [x.strip() for x in ln.split("｜")]
+            if len(cells) >= 3:
+                hdr = cells
+                break
     if not hdr or len(hdr) < 3:
         return None
     dates = hdr[2:]
