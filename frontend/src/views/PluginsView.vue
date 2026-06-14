@@ -1,9 +1,5 @@
 <template>
   <div class="plugins">
-    <header class="bar">
-      <h1>能力插件</h1>
-      <router-link to="/">返回</router-link>
-    </header>
     <p class="hint">
       内置的 <b>MCP 工具</b>（浏览网页、取数据）和<b>技能 Skill</b>（探索、记忆等）<b>默认已全部启用</b>，一般无需改动。
       如果你清楚自己在做什么，可在这里停用某些插件、调整配置，或添加自定义插件。实际连接/生效在后续计划接入。

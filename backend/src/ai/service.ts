@@ -287,13 +287,13 @@ export function getActiveConfig(userId: string): ResolvedConfig | null {
   return getModelForRole(userId, 'core');
 }
 
-function pickProviderByTier(pool: ResolvedConfig[], prefer: ReturnType<typeof getRole>): string | null {
+function pickConfigByTier(pool: ResolvedConfig[], prefer: ReturnType<typeof getRole>): ResolvedConfig | null {
   const p = prefer?.prefer ?? 'balanced';
   for (const tier of searchOrder(p)) {
     const hit = pool.find((c) => tierOf(c.model) === tier);
-    if (hit) return hit.provider;
+    if (hit) return hit;
   }
-  return pool[0]?.provider ?? null;
+  return pool[0] ?? null;
 }
 
 // The main agent assigns a model to each task role from the enabled pool.
@@ -325,9 +325,15 @@ export async function autoAssignRoles(
   }
 
   for (const r of subRoles) {
-    let provider = mapping[r.key];
-    if (!provider || !pool.find((c) => c.provider === provider)) provider = pickProviderByTier(pool, getRole(r.key))!;
-    if (provider) setRoleAssignment(userId, r.key, { mode: 'manual', provider });
+    // 按 AI 给的 provider 名找池中条目(自有优先，enabledConfigs 已把自有排前)；找不到则按档位挑。
+    const entry = pool.find((c) => c.provider === mapping[r.key]) || pickConfigByTier(pool, getRole(r.key));
+    if (!entry) continue;
+    // 共享(admin)模型必须按 sharedConfigId 钉，否则 setRoleAssignment 的 provider 路径只查自有配置会失败。
+    if (entry.scope === 'shared') {
+      setRoleAssignment(userId, r.key, { mode: 'manual', sharedConfigId: entry.ownerConfigId });
+    } else {
+      setRoleAssignment(userId, r.key, { mode: 'manual', provider: entry.provider, model: entry.model });
+    }
   }
 }
 
@@ -339,6 +345,7 @@ export function listRoleAssignments(userId: string): Array<{
   mode: 'manual' | 'auto';
   pinnedProvider: string | null;
   pinnedModel: string | null;
+  pinnedSharedConfigId: string | null;
   resolvedProvider: string | null;
   resolvedModel: string | null;
 }> {
@@ -352,6 +359,7 @@ export function listRoleAssignments(userId: string): Array<{
       mode: a?.mode ?? 'auto',
       pinnedProvider: a?.provider ?? null,
       pinnedModel: a?.model ?? null,
+      pinnedSharedConfigId: a?.shared_config_id ?? null,
       resolvedProvider: resolved?.provider ?? null,
       resolvedModel: resolved?.model ?? null,
     };

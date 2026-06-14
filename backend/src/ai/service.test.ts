@@ -95,3 +95,25 @@ describe('ai_helper 角色', () => {
     expect(s.getModelForRole('u-aih', 'ai_helper')).toEqual(s.getModelForRole('u-aih', 'core'));
   });
 });
+
+describe('autoAssignRoles 能用上 admin 共享模型', () => {
+  it('纯共享池时按 sharedConfigId 钉子 agent(不因 provider 自有查不到而失败)', async () => {
+    const s = require('./service');
+    const db = require('../db').getDb();
+    const adminId = (db.prepare("SELECT id FROM users WHERE role='admin' LIMIT 1").get() as { id: string }).id;
+    s.saveConfig(adminId, 'deepseek', { apiKey: 'sk-shared12345678', baseUrl: 'https://api.deepseek.com/v1', model: 'deepseek-chat' });
+    s.setEnabled(adminId, 'deepseek', true);
+    s.setShared(adminId, 'deepseek', { shared: true });
+    const U = 'u-autoassign'; // 无任何自有模型，只能用共享
+    await s.autoAssignRoles(U, { aiCall: async () => '{}' }); // 空映射→按档位挑唯一的共享条目
+    const a = s.getRoleAssignment(U, 'data');
+    expect(a.mode).toBe('manual');
+    expect(a.shared_config_id).toBeTruthy();
+    expect(a.provider).toBeNull();
+    expect(s.getModelForRole(U, 'data')?.model).toBe('deepseek-chat');
+    // listRoleAssignments 要暴露 pinnedSharedConfigId，否则前端下拉无法回显共享分配
+    const la = s.listRoleAssignments(U).find((x: any) => x.role === 'data');
+    expect(la.pinnedSharedConfigId).toBe(a.shared_config_id);
+    expect(la.resolvedModel).toBe('deepseek-chat');
+  });
+});

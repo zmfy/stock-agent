@@ -53,6 +53,7 @@ export interface RoleAssignment {
   mode: 'manual' | 'auto';
   pinnedProvider: string | null;
   pinnedModel: string | null;
+  pinnedSharedConfigId: string | null;
   resolvedProvider: string | null;
   resolvedModel: string | null;
 }

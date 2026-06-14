@@ -25,6 +25,13 @@
         </div>
       </template>
       <p class="risk-note">⚠️ 仅研究辅助 · 不构成投资建议 · 盈亏自负</p>
+      <div class="rail-user">
+        <button class="mini uname-btn" @click="userMenuOpen = !userMenuOpen">👤 {{ auth.user?.nickname || auth.user?.username }} ▾</button>
+        <div v-if="userMenuOpen" class="user-menu">
+          <button @click="settingsKey = 'account'; userMenuOpen = false">账号设置</button>
+          <button @click="logout">登出</button>
+        </div>
+      </div>
     </aside>
 
     <!-- 右侧：顶部功能栏（聊天框之外，常驻） + 聊天 或 功能面板 -->
@@ -40,17 +47,9 @@
       <nav class="topnav">
         <button class="hamburger" title="菜单" @click="railOpen = !railOpen">☰</button>
         <div class="tnav-scroll">
-          <button v-if="!auth.isAdmin" class="tnav" :class="{ active: !settingsKey }" @click="goChat">💬 聊天</button>
           <button v-for="s in settingsMenu" :key="s.key" class="tnav" :class="{ active: settingsKey === s.key }" @click="settingsKey = s.key">
             <span class="ticon">{{ s.icon }}</span>{{ s.label }}
           </button>
-        </div>
-        <div class="topnav-user">
-          <button class="mini uname-btn" @click="userMenuOpen = !userMenuOpen">👤 {{ auth.user?.nickname || auth.user?.username }} ▾</button>
-          <div v-if="userMenuOpen" class="user-menu">
-            <button @click="settingsKey = 'account'; userMenuOpen = false">账号设置</button>
-            <button @click="logout">登出</button>
-          </div>
         </div>
       </nav>
 
@@ -106,7 +105,8 @@
                     <button v-else class="mini" @click="openCorePrinciple">去「当前策略」定一套 →</button>
                   </template>
                   <template v-if="active.kind === 'ai_model'">
-                    <button class="mini" @click="aiModelModalOpen = true">🤖 AI 模型</button>
+                    <button class="mini" @click="aiModelsOpen = true">🤖 模型配置</button>
+                    <button class="mini" @click="aiTasksOpen = true">🧷 任务分工</button>
                     <button class="mini" @click="pluginsModalOpen = true">🧩 能力插件</button>
                   </template>
                   <template v-if="active.kind === 'history'">
@@ -201,7 +201,7 @@
 
               <div class="msgs" ref="msgsEl">
                 <div v-if="active?.kind === 'ai_model' && !messages.length" class="msg assistant">
-                  <div class="bubble">问我 AI 模型怎么选、各角色用哪个、报错怎么处理、插件干嘛用；要改配置点上方「🤖 AI 模型」「🧩 能力插件」。</div>
+                  <div class="bubble">问我 AI 模型怎么选、各角色用哪个、报错怎么处理、插件干嘛用；要改配置点上方「🤖 模型配置」「🧷 任务分工」「🧩 能力插件」。</div>
                 </div>
                 <div v-for="m in messages" :key="m.id" class="msg" :class="m.role">
                   <div class="bubble"><StockText :text="m.content" :clamp="active?.kind !== 'stock'" @detail="openDetail" /></div>
@@ -268,8 +268,11 @@
     <Modal v-if="rulebookModalOpen" title="当前策略" @close="rulebookModalOpen = false">
       <RulebookView />
     </Modal>
-    <Modal v-if="aiModelModalOpen" title="AI 模型" @close="aiModelModalOpen = false">
-      <AiSettingsView />
+    <Modal v-if="aiModelsOpen" title="模型配置" @close="aiModelsOpen = false">
+      <AiSettingsView section="models" />
+    </Modal>
+    <Modal v-if="aiTasksOpen" title="任务分工" @close="aiTasksOpen = false">
+      <AiSettingsView section="tasks" />
     </Modal>
     <Modal v-if="strategyHistOpen" title="策略历史" @close="strategyHistOpen = false"><StrategyHistoryView /></Modal>
     <Modal v-if="analysisHistOpen" title="分析历史" @close="analysisHistOpen = false"><AnalysisView /></Modal>
@@ -356,10 +359,6 @@ const settingsMenu = computed(() =>
   SETTINGS.filter((s: any) => !s.hidden && (s.roles === 'both' || s.roles === (auth.isAdmin ? 'admin' : 'user'))),
 );
 const currentSettingsComp = computed(() => SETTINGS.find((s) => s.key === settingsKey.value)?.comp);
-function goChat() {
-  if (auth.isAdmin) return; // admin 纯运维账号无聊天视图，防止被程序化调用落入聊天壳
-  settingsKey.value = '';
-}
 const router = useRouter();
 const route = useRoute();
 
@@ -423,7 +422,8 @@ const railOpen = ref(false); // 移动端左栏抽屉
 const activeRulebook = ref<FullRulebook | null>(null);
 const templates = ref<TemplateMeta[]>([]);
 const tplOpen = ref(false);
-const aiModelModalOpen = ref(false);
+const aiModelsOpen = ref(false);
+const aiTasksOpen = ref(false);
 const pluginsModalOpen = ref(false);
 const strategyHistOpen = ref(false);
 const analysisHistOpen = ref(false);
@@ -765,6 +765,9 @@ async function startInterview() {
   chatErr.value = '';
   try {
     await openCorePrinciple();
+    // 从「更换模板」/「当前策略」弹窗触发时，要关掉弹窗，否则它会盖住刚打开的访谈房间。
+    tplOpen.value = false;
+    rulebookModalOpen.value = false;
   } catch (e: any) {
     chatErr.value = e.response?.data?.message || '进入访谈失败';
   }
@@ -985,7 +988,8 @@ onUnmounted(() => {
 .drawer-backdrop { display: none; }
 .tnav-scroll { flex: 1; min-width: 0; display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; }
 .tnav-scroll::-webkit-scrollbar { height: 6px; }
-.topnav-user { flex: none; display: flex; align-items: center; gap: 8px; }
+.rail-user { margin-top: auto; position: relative; padding-top: 8px; }
+.rail-user .uname-btn { width: 100%; }
 .tnav { flex: none; white-space: nowrap; background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 6px 13px; font-size: 13px; cursor: pointer; color: var(--text-soft); display: inline-flex; align-items: center; gap: 5px; transition: all 0.15s; }
 .tnav:hover { border-color: var(--accent); color: var(--accent-600); }
 .tnav.active { background: #e5484d; color: #fff; border-color: #e5484d; }
@@ -1103,8 +1107,7 @@ onUnmounted(() => {
 .phase-head { font-weight: 700; margin: 4px 0; }
 .intraday-item { border-left: 3px solid var(--border, #e5e5e5); padding-left: 10px; margin-bottom: 10px; }
 .uname-btn { white-space: nowrap; }
-.topnav-user { position: relative; }
-.user-menu { position: absolute; top: 110%; right: 0; z-index: 60; background: var(--surface, #fff); border: 1px solid var(--border, #e5e5e5); border-radius: 8px; box-shadow: 0 6px 24px rgba(0,0,0,0.12); display: flex; flex-direction: column; min-width: 120px; }
+.user-menu { position: absolute; bottom: calc(100% + 4px); left: 0; z-index: 60; background: var(--surface, #fff); border: 1px solid var(--border, #e5e5e5); border-radius: 8px; box-shadow: 0 6px 24px rgba(0,0,0,0.12); display: flex; flex-direction: column; min-width: 120px; }
 .user-menu button { background: none; border: none; text-align: left; padding: 8px 14px; font-size: 13px; cursor: pointer; }
 .user-menu button:hover { background: var(--hover, #f5f5f5); }
 </style>

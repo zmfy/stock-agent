@@ -1,21 +1,11 @@
 <template>
   <div class="ai">
-    <header class="bar">
-      <h1>AI 模型</h1>
-      <router-link to="/">返回</router-link>
-    </header>
-
-    <nav class="subtabs">
-      <button :class="{ active: tab === 'models' }" @click="tab = 'models'">模型配置</button>
-      <button :class="{ active: tab === 'tasks' }" @click="tab = 'tasks'">任务分工</button>
-    </nav>
-
-    <p class="hint">
+    <p v-if="showModels" class="hint">
       去对应 AI 公司申请 API Key，回到这里配置并<b>启用多个模型</b>，再在「任务分工」里把不同任务交给不同模型
       （数据类用快/便宜的，分析类用强的），或让 agent 自动挑。Key 加密存储、只属于你。
     </p>
 
-    <div v-show="tab === 'models'">
+    <div v-if="showModels">
     <!-- 配置提供商 -->
     <section class="card">
       <h2>配置提供商</h2>
@@ -119,37 +109,82 @@
     </section>
     </div>
 
-    <div v-show="tab === 'tasks'">
-    <!-- 任务分工 -->
-    <section class="card" v-if="configs.length">
-      <div class="card-head">
-        <h2>任务分工</h2>
-        <button @click="autoAssign" :disabled="assigning">🤖 {{ assigning ? '主 agent 分配中…' : '让主 agent 分配' }}</button>
+    <div v-if="showTasks">
+    <!-- Agent 设定：主 agent 卡片置顶 + 一键设定 + 子 agent 卡片列 -->
+    <section class="agent-setup">
+      <h2>Agent 设定</h2>
+      <p class="as-intro">先给主 agent「来财」选模型、设好人设；再一键为各子 agent 起草人设并分配模型，之后可手动微调。「自动」= 系统按任务挑。</p>
+      <p v-if="!configs.length" class="as-warn">还没有可用模型——请先在「模型配置」里添加并启用至少一个模型。</p>
+
+      <!-- 主 agent -->
+      <div v-if="coreRow" class="agent-card core">
+        <div class="ac-head">
+          <div class="ac-avatar core">{{ ROLE_ICON.core }}</div>
+          <div class="ac-meta">
+            <div class="ac-name-row"><span class="ac-name">{{ coreRow.r.label }}</span><span class="ac-badge">主脑 · 仅你可定</span></div>
+            <div class="ac-sub">{{ coreRow.r.hint }}</div>
+          </div>
+        </div>
+        <template v-if="coreRow.profile">
+          <label class="ac-label">人设</label>
+          <textarea class="ac-textarea" v-model="coreRow.profile.persona" rows="3"></textarea>
+        </template>
+        <label class="ac-label">模型</label>
+        <div class="ac-assign">
+          <select v-if="configs.length" :value="roleValue(coreRow.r)" @change="onRoleChange(coreRow.r, $event)">
+            <option value="" disabled>选择主 agent 模型</option>
+            <option v-for="o in modelOptions" :key="o.key" :value="o.key">{{ o.label }}</option>
+          </select>
+          <span v-else class="ac-dash">—</span>
+          <button v-if="coreRow.profile" class="ac-save" @click="saveProfile(coreRow.profile)">保存</button>
+        </div>
+        <div class="ac-actual">
+          <span class="ac-ico" :class="coreRow.r.resolvedProvider ? 'ok' : 'no'">{{ coreRow.r.resolvedProvider ? '✓' : '!' }}</span>实际生效
+          <span v-if="coreRow.r.resolvedProvider" class="ac-pill">{{ providerLabel(coreRow.r.resolvedProvider) }} · {{ coreRow.r.resolvedModel }}</span>
+          <span v-else class="ac-none">未设定</span>
+        </div>
       </div>
-      <p class="hint"><b>主 agent</b> 的模型由你指定（默认是初始化向导里配的那个，不参与「让主 agent 分配」）。「让主 agent 分配」只为<b>子 agent</b> 指派；子 agent 也可每行手动改（选「自动」=系统按任务自动挑）。</p>
-      <table>
-        <thead><tr><th>任务</th><th>分配（可手动改）</th><th>实际使用</th></tr></thead>
-        <tbody>
-          <tr v-for="r in roles" :key="r.role">
-            <td>{{ r.label }}<div class="muted">{{ r.hint }}</div></td>
-            <td>
-              <select :value="roleValue(r)" @change="onRoleChange(r, $event)">
-                <option v-if="r.role === 'core'" value="" disabled>选择主 agent 模型</option>
-                <option v-else value="__auto__">自动（由 agent 挑）</option>
-                <option v-for="o in modelOptions" :key="o.key" :value="o.key">{{ o.label }}</option>
-              </select>
-              <span v-if="r.role === 'core'" class="coretag">主 agent · 仅你可定</span>
-            </td>
-            <td :class="r.resolvedProvider ? 'ok-msg' : 'err'">
-              {{ r.resolvedProvider ? `${providerLabel(r.resolvedProvider)} · ${r.resolvedModel}` : '无可用模型' }}
-            </td>
-          </tr>
-        </tbody>
-      </table>
+
+      <!-- 一键设定子 agent：先人设后分配；主 agent 模型未设时禁用 -->
+      <div class="as-action">
+        <div class="as-btnrow">
+          <button class="as-mainbtn" :disabled="!coreModelSet || working" @click="setupSubs">🪄 {{ working ? '设定中…' : '一键设定子 agent（起草人设 + 分配模型）' }}</button>
+          <button class="as-savebtn" :disabled="savingAll" @click="saveAll">💾 {{ savingAll ? '保存中…' : '保存全部人设' }}</button>
+        </div>
+        <span v-if="!coreModelSet" class="as-hint">先为主 agent 选定 AI 模型，才能设定子 agent。</span>
+      </div>
+
+      <div class="as-subhead">子助手</div>
+      <div class="as-sublist">
+        <div v-for="row in subRows" :key="row.r.role" class="agent-card" :class="{ disabled: !coreModelSet }">
+          <div class="ac-head">
+            <div class="ac-avatar">{{ ROLE_ICON[row.r.role] || '🤖' }}</div>
+            <div class="ac-meta">
+              <div class="ac-name">{{ row.r.label }}</div>
+              <div class="ac-sub">{{ row.r.hint }}</div>
+            </div>
+          </div>
+          <template v-if="row.profile">
+            <label class="ac-label">人设</label>
+            <textarea class="ac-textarea" v-model="row.profile.persona" rows="2" :disabled="!coreModelSet"></textarea>
+          </template>
+          <label class="ac-label">分配模型</label>
+          <div class="ac-assign">
+            <select v-if="configs.length" :value="roleValue(row.r)" @change="onRoleChange(row.r, $event)" :disabled="!coreModelSet">
+              <option value="__auto__">自动（由 agent 挑）</option>
+              <option v-for="o in modelOptions" :key="o.key" :value="o.key">{{ o.label }}</option>
+            </select>
+            <span v-else class="ac-dash">—</span>
+          </div>
+          <div class="ac-actual">
+            <span class="ac-ico" :class="row.r.resolvedProvider ? 'ok' : 'no'">{{ row.r.resolvedProvider ? '✓' : '!' }}</span>实际生效
+            <span v-if="row.r.resolvedProvider" class="ac-pill">{{ providerLabel(row.r.resolvedProvider) }} · {{ row.r.resolvedModel }}</span>
+            <span v-else class="ac-none">无可用模型</span>
+          </div>
+        </div>
+      </div>
+      <p v-if="profileMsg" :class="profileOk ? 'ok-msg' : 'err'">{{ profileMsg }}</p>
       <p v-if="roleMsg" :class="roleOk ? 'ok-msg' : 'err'">{{ roleMsg }}</p>
-    </section>
-    <section v-else class="card">
-      <p class="hint">请先在「模型配置」里添加并启用至少一个模型，再来这里把任务分配给不同模型。</p>
     </section>
     </div>
   </div>
@@ -158,6 +193,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue';
 import { aiApi, type ProviderDef, type AiConfig, type RoleAssignment, type SharedModel } from '../api/ai';
+import { agentApi, type AgentProfile } from '../api/agent';
 import { useAuthStore } from '../stores/auth';
 
 const auth = useAuthStore();
@@ -228,6 +264,7 @@ async function reload() {
   configs.value = (await aiApi.getConfigs()).data.data;
   roles.value = (await aiApi.getRoles()).data.data;
   shared.value = (await aiApi.getShared()).data.data;
+  profiles.value = (await agentApi.getProfiles()).data.data;
   for (const c of configs.value) {
     if (!shareForm[c.provider]) {
       const p = secondsToForm(c.sharePeriodSeconds || 0);
@@ -308,18 +345,60 @@ async function remove(provider: string) {
   await reload();
 }
 
-const tab = ref<'models' | 'tasks'>('models');
-const assigning = ref(false);
-async function autoAssign() {
-  assigning.value = true;
-  roleMsg.value = '';
+// section 未传(admin 面板)→ 两段都显示；传了(房间 Modal)→ 只显示该段。不再用 tab。
+const props = defineProps<{ section?: 'models' | 'tasks' }>();
+const showModels = computed(() => !props.section || props.section === 'models');
+const showTasks = computed(() => !props.section || props.section === 'tasks');
+
+// 各角色头像图标（与全站 emoji 风格一致，不引外部图标字体）。
+const ROLE_ICON: Record<string, string> = {
+  core: '🧠', data: '🗄️', analysis: '⚖️', qualitative: '📰', review: '🕘', validation: '🔎', ai_helper: '🤖',
+};
+
+// Agent 人设（主 + 各子 agent）：默认系统设定，可改后保存；可让来财起草子 agent。
+const profiles = ref<AgentProfile[]>([]);
+// 人设 + 任务分配合并展示：每个角色配对其 profile（profile 为 profiles 内同一引用，v-model 直接可改）。
+const roleRows = computed(() => roles.value.map((r) => ({ r, profile: profiles.value.find((p) => p.role === r.role) })));
+const coreRow = computed(() => roleRows.value.find((x) => x.r.role === 'core'));
+const subRows = computed(() => roleRows.value.filter((x) => x.r.role !== 'core'));
+// 主 agent 是否已有可用 AI 模型——未设定则禁用「一键设定子 agent」与所有子 agent 设定。
+const coreModelSet = computed(() => !!coreRow.value?.r.resolvedProvider);
+const profileMsg = ref(''); const profileOk = ref(false);
+const working = ref(false);
+const savingAll = ref(false);
+// 保存全部人设：一次性把所有角色（主 + 各子 agent）的 persona 落库（子 agent 不再单独保存）。
+async function saveAll() {
+  savingAll.value = true; profileMsg.value = '';
   try {
-    roles.value = (await aiApi.autoAssignRoles()).data.data;
-    roleOk.value = true; roleMsg.value = '主 agent 已完成分配（可再手动微调）';
+    for (const p of profiles.value) await agentApi.setProfile(p.role, p.persona);
+    profileOk.value = true; profileMsg.value = '已保存全部人设';
   } catch (e: any) {
-    roleOk.value = false; roleMsg.value = e.response?.data?.message || '分配失败';
+    profileOk.value = false; profileMsg.value = e.response?.data?.message || '保存失败';
   } finally {
-    assigning.value = false;
+    savingAll.value = false;
+  }
+}
+async function saveProfile(p: AgentProfile) {
+  try {
+    await agentApi.setProfile(p.role, p.persona);
+    profileMsg.value = `已保存：${p.label}`; profileOk.value = true;
+  } catch (e: any) {
+    profileMsg.value = e.response?.data?.message || '保存失败'; profileOk.value = false;
+  }
+}
+// 一键：先让来财起草子 agent 人设，再为子 agent 自动分配模型。主 agent 模型未设时不可用。
+async function setupSubs() {
+  if (!coreModelSet.value) return;
+  working.value = true; profileMsg.value = ''; roleMsg.value = '';
+  try {
+    await agentApi.generateSubs();      // 1) 起草子 agent 人设
+    await aiApi.autoAssignRoles();       // 2) 给子 agent 分配模型
+    await reload();                      // 刷新人设 + 分配
+    profileOk.value = true; profileMsg.value = '已为子 agent 起草人设并分配模型';
+  } catch (e: any) {
+    profileOk.value = false; profileMsg.value = e.response?.data?.message || '设定失败';
+  } finally {
+    working.value = false;
   }
 }
 
@@ -339,6 +418,7 @@ const modelOptions = computed(() => {
 });
 function roleValue(r: RoleAssignment) {
   if (r.mode !== 'manual') return '__auto__';
+  if (r.pinnedSharedConfigId) return `shared:${r.pinnedSharedConfigId}`; // 共享(admin)模型的回显
   return `${r.pinnedProvider}|${r.pinnedModel || r.resolvedModel || ''}`;
 }
 
@@ -391,4 +471,44 @@ th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid #eee; font
 .ok-msg { color: #2a8a2a; }
 .danger { color: #c00; }
 button:disabled { opacity: 0.5; cursor: not-allowed; }
+/* Agent 设定 */
+.agent-setup h2 { font-size: 18px; font-weight: 600; margin: 0 0 6px; }
+.as-intro { font-size: 13px; color: var(--text-soft); margin: 0 0 16px; line-height: 1.7; }
+.as-warn { font-size: 13px; color: var(--accent-ink); background: var(--accent-soft); border-radius: var(--radius-sm); padding: 8px 10px; margin: 0 0 14px; }
+
+.agent-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; }
+.agent-card.core { border: 2px solid var(--info); }
+.agent-card.disabled { opacity: 0.5; }
+
+.ac-head { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+.ac-avatar { width: 36px; height: 36px; border-radius: 50%; background: var(--surface-2); display: flex; align-items: center; justify-content: center; font-size: 18px; flex: none; }
+.ac-avatar.core { width: 40px; height: 40px; background: var(--info-soft); font-size: 20px; }
+.ac-meta { flex: 1; min-width: 0; }
+.ac-name-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ac-name { font-size: 15px; font-weight: 600; }
+.agent-card.core .ac-name { font-size: 16px; }
+.ac-badge { font-size: 12px; background: var(--info-soft); color: var(--info); padding: 2px 8px; border-radius: var(--radius-sm); }
+.ac-sub { font-size: 13px; color: var(--text-soft); margin-top: 2px; }
+
+.ac-label { display: block; font-size: 13px; color: var(--text-soft); margin: 0 0 6px; }
+.agent-setup .ac-textarea { width: 100%; resize: vertical; margin-bottom: 14px; }
+.ac-assign { display: flex; align-items: center; gap: 10px; }
+.agent-setup .ac-assign select { flex: 1; min-width: 0; }
+.ac-save { flex: none; padding: 0 16px; }
+.ac-dash { color: var(--muted); }
+
+.ac-actual { font-size: 12px; color: var(--text-soft); margin-top: 10px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.ac-ico { font-weight: 700; }
+.ac-ico.ok { color: var(--ok); }
+.ac-ico.no { color: var(--accent); }
+.ac-pill { background: var(--surface-2); color: var(--text); padding: 2px 8px; border-radius: var(--radius-sm); border: 1px solid var(--border); }
+.ac-none { color: var(--muted); }
+
+.as-action { margin: 16px 0; display: flex; flex-direction: column; gap: 6px; }
+.as-btnrow { display: flex; gap: 10px; align-items: stretch; }
+.as-mainbtn { flex: 1; padding: 12px; font-size: 14px; font-weight: 600; }
+.as-savebtn { flex: none; padding: 0 18px; font-size: 14px; font-weight: 600; }
+.as-hint { font-size: 12px; color: var(--muted); }
+.as-subhead { font-size: 13px; color: var(--muted); margin-bottom: 10px; padding-left: 2px; }
+.as-sublist { display: flex; flex-direction: column; gap: 12px; }
 </style>

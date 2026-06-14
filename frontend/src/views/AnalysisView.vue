@@ -1,10 +1,5 @@
 <template>
   <div class="analysis">
-    <header class="bar">
-      <h1>{{ focusCode ? '完整报告' : '分析历史' }}</h1>
-      <router-link to="/">返回</router-link>
-    </header>
-
     <p v-if="!focusCode" class="hint card">这里汇总你所有个股的分析历史（在个股讨论里分析后自动存档）。点下方任意一条查看完整报告。清空对话不会删除这里的历史。</p>
     <p v-if="err" class="err card">{{ err }}</p>
     <p v-else-if="busy && focusCode" class="card hint">正在加载 {{ focusCode }} 的报告…</p>
