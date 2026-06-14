@@ -71,4 +71,13 @@ describe('rulebook service', () => {
   it('activateVersion throws for an unknown version', () => {
     expect(() => svc.activateVersion(USER, 'does-not-exist')).toThrow('NOT_FOUND');
   });
+
+  it('clearActive 取消激活，getActive 变 null（版本仍在）', () => {
+    svc.instantiateBaseline(USER);
+    expect(svc.getActive(USER)).toBeTruthy();
+    svc.clearActive(USER);
+    expect(svc.getActive(USER)).toBeNull();
+    expect(svc.listVersions(USER).length).toBeGreaterThan(0); // 版本保留
+  });
+
 });

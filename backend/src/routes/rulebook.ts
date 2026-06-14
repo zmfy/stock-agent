@@ -103,6 +103,12 @@ router.post('/versions/:id/activate', (req: Request, res: Response) => {
   }
 });
 
+// POST /api/rulebook/clear-active — 清空当前策略（变成空策略，从头再聊）；版本保留可恢复
+router.post('/clear-active', (req: Request, res: Response) => {
+  svc.clearActive(req.user!.userId);
+  successResponse(res, null, '已清空当前策略');
+});
+
 // GET /api/rulebook/versions/:id/diff?against=<otherId>  (against defaults to active)
 router.get('/versions/:id/diff', (req: Request, res: Response) => {
   const userId = req.user!.userId;

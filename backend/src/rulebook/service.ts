@@ -244,6 +244,11 @@ export function createVersion(userId: string, payload: VersionPayload): FullRule
   return getVersionRaw(userId, versionId)!;
 }
 
+// 清空当前策略：取消所有版本的激活（变成「无当前策略」=空策略）。版本记录保留，可再激活恢复。
+export function clearActive(userId: string): void {
+  getDb().prepare('UPDATE rulebook_versions SET is_active = 0 WHERE user_id = ?').run(userId);
+}
+
 export function activateVersion(userId: string, versionId: string): void {
   const db = getDb();
   const target = db

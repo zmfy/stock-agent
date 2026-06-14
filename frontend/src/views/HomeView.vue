@@ -772,8 +772,20 @@ async function openCorePrinciple() {
 async function startInterview() {
   chatErr.value = '';
   try {
+    // 「我还没想好，帮我从聊天聊出一套」= 从头来：先清空当前策略，变成空策略（历史版本仍保留、可在「当前策略」里恢复）。
+    if (activeRulebook.value) {
+      if (!confirm('这会清空当前策略、从头重新聊出一套（历史版本仍保留，可在「当前策略」里恢复）。确定？')) return;
+      await rulebookApi.clearActive();
+      activeRulebook.value = null;
+      needsInit.value = true;
+    }
     await openCorePrinciple();
-    interviewMode.value = true; // 本次是「从头聊出新策略」：不带入现有策略（open() 已置 false，这里在其后置 true）
+    // 清空本房间历史消息，确保从空白开始访谈。
+    if (active.value) {
+      await chatApi.clearMessages(active.value.id);
+      messages.value = [];
+    }
+    interviewMode.value = true;
     // 从「更换模板」/「当前策略」弹窗触发时，要关掉弹窗，否则它会盖住刚打开的访谈房间。
     tplOpen.value = false;
     rulebookModalOpen.value = false;
