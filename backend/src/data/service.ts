@@ -2,7 +2,7 @@ import { getDb } from '../db';
 import { QuoteRow, StockSnapshot, RealtimeQuoteView } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import { resolveSidecarBase, fetchFundamentals, fetchQuotes, fetchMarket, fetchName, fetchNews, fetchAllStocks, orderedProviders, fetchRealtime, fetchIndexBars, fetchIndexRealtime, fetchProfile } from './sidecar';
-import { recordCollected } from './news-log';
+import { recordCollected, listTitleLog } from './news-log';
 import { lastTradingDayBefore, isTradingDay } from './trade-calendar';
 
 // ---- hot news ----
@@ -876,4 +876,20 @@ export function getStockDict(): { version: string; items: [string, string][] } {
     .all() as { code: string; name: string }[];
   const agg = db.prepare('SELECT COUNT(*) AS n, MAX(fetched_at) AS m FROM stock_names').get() as { n: number; m: string | null };
   return { version: `${agg.n}:${agg.m ?? ''}`, items: rows.map((r) => [r.code, r.name]) };
+}
+
+export function relatedNews(
+  code: string, name: string | null, industry: string | null, limit = 8
+): Array<{ contentId: string; title: string; collectedAt: string; related: boolean }> {
+  const rows = listTitleLog(100); // {content_id, title, collected_at, ...} 已按 collected_at desc
+  const seen = new Set<string>();
+  const uniq = rows.filter((r) => (seen.has(r.content_id) ? false : (seen.add(r.content_id), true)));
+  const baseName = (name || '').replace(/(股份|集团|科技|控股|实业|有限公司|公司)$/g, '').trim();
+  const kw = [baseName, industry || ''].filter((k) => k && k.length >= 2);
+  const isRel = (t: string) => kw.some((k) => t.includes(k));
+  const related = uniq.filter((r) => isRel(r.title));
+  const rest = uniq.filter((r) => !isRel(r.title));
+  return [...related, ...rest].slice(0, limit).map((r) => ({
+    contentId: r.content_id, title: r.title, collectedAt: r.collected_at, related: isRel(r.title),
+  }));
 }

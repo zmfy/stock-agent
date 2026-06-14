@@ -34,3 +34,20 @@ describe('量比 / 已开盘分钟', () => {
     expect(svc.computeVolumeRatio(1000, 30, 0)).toBeNull();
   });
 });
+
+describe('relatedNews', () => {
+  const { recordCollected } = require('./news-log');
+  it('命中股名/行业优先，不足补最近', () => {
+    recordCollected([
+      { title: '贵州茅台发布年度分红方案', source: 't' },
+      { title: '某科技公司财报', source: 't' },
+      { title: '白酒板块今日走强', source: 't' },
+      { title: '大盘震荡收跌', source: 't' },
+    ]);
+    const out = svc.relatedNews('600519', '贵州茅台', '白酒', 3);
+    expect(out.length).toBe(3);
+    expect(out[0].related).toBe(true); // 含「贵州茅台」或「白酒」的排前
+    expect(out.some((n: any) => n.title.includes('茅台') || n.title.includes('白酒'))).toBe(true);
+    expect(out.every((n: any) => typeof n.contentId === 'string' && n.title)).toBe(true);
+  });
+});
