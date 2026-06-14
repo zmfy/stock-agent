@@ -247,6 +247,22 @@ describe('data routes', () => {
     const r = await request(app).post('/api/data/proxy').set(h()).send({ enabled: true, scheme: 'ftp', host: 'x', port: 1 });
     expect(r.status).toBe(422);
   });
+
+  it('GET /stock-detail/:code 组装实时/资料/新闻', async () => {
+    const db = require('../db').getDb();
+    db.prepare("INSERT OR REPLACE INTO quote_daily (code,date,open,high,low,close,volume,source) VALUES ('600519','2026-06-11',100,100,100,100,1000,'t')").run();
+    db.prepare("INSERT OR REPLACE INTO quote_daily (code,date,open,high,low,close,volume,source) VALUES ('600519','2026-06-12',100,112,99,110,1200,'t')").run();
+    jest.spyOn(require('../data/sidecar'), 'fetchProfile').mockResolvedValue({ industry: '白酒', summary: '贵州茅台酒股份有限公司', products: '茅台酒及系列酒' });
+    const r = await request(app).get('/api/data/stock-detail/600519').set(h());
+    expect(r.status).toBe(200);
+    expect(r.body.data.code).toBe('600519');
+    // 非交易时段：basis='收盘'，price=最后收盘 110，prevClose=100 → limitUp=110。
+    // 交易时段且无 realtime_quote 行时会落回收盘同理，结果一致。
+    expect(r.body.data.live.price).toBe(110);
+    expect(r.body.data.live.limitUp).toBe(110); // 收盘基准：昨收100×1.1
+    expect(r.body.data.profile.products).toContain('茅台');
+    expect(Array.isArray(r.body.data.news)).toBe(true);
+  });
 });
 
 describe('GET /api/data/stocks/dict', () => {

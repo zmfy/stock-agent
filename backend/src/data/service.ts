@@ -4,6 +4,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { resolveSidecarBase, fetchFundamentals, fetchQuotes, fetchMarket, fetchName, fetchNews, fetchAllStocks, orderedProviders, fetchRealtime, fetchIndexBars, fetchIndexRealtime, fetchProfile } from './sidecar';
 import { recordCollected, listTitleLog } from './news-log';
 import { lastTradingDayBefore, isTradingDay } from './trade-calendar';
+import { beijingDate } from '../strategy/service';
 
 // ---- hot news ----
 export function listNews(limit = 30): Array<{ title: string; summary: string; published_at: string; fetched_at: string }> {
@@ -892,4 +893,60 @@ export function relatedNews(
   return [...related, ...rest].slice(0, limit).map((r) => ({
     contentId: r.content_id, title: r.title, collectedAt: r.collected_at, related: isRel(r.title),
   }));
+}
+
+export interface StockDetail {
+  code: string; name: string | null;
+  live: { basis: '实时' | '收盘'; price: number | null; prevClose: number | null; changePct: number | null;
+          limitUp: number | null; limitDown: number | null; turnoverRate: number | null; volumeRatio: number | null; asOf: string | null };
+  profile: { industry: string | null; summary: string | null; products: string | null;
+             roeTtm: number | null; pe: number | null; pb: number | null; ps: number | null; netProfit: number | null; updatedAt: string | null };
+  news: Array<{ contentId: string; title: string; collectedAt: string; related: boolean }>;
+}
+
+// fetched_at(UTC 'YYYY-MM-DD HH:MM:SS') → 北京日 'YYYY-MM-DD'
+function cnDateOf(ts: string | null | undefined): string | null {
+  if (!ts) return null;
+  const t = new Date(String(ts).replace(' ', 'T') + 'Z').getTime();
+  if (Number.isNaN(t)) return String(ts).slice(0, 10);
+  return new Date(t + 8 * 3600 * 1000).toISOString().slice(0, 10);
+}
+const n2 = (v: any): number | null => (v == null || v === '' || Number.isNaN(Number(v)) ? null : Number(v));
+
+export async function getStockDetail(userId: string, code: string, refresh = false): Promise<StockDetail> {
+  const c = code.replace(/^(sh|sz|bj)/i, '');
+  const name = getCachedName(c);
+  const now = Date.now();
+  const rt = getRealtime(c);
+  const bars = getRecentBars(c, 6); // 升序，最多6根
+  const session = inTradingSession(now);
+  const today = beijingDate(now);
+
+  let basis: '实时' | '收盘' = '收盘';
+  let price: number | null = null, prevClose: number | null = null, vol: number | null = null, asOf: string | null = null;
+  if (session && rt && rt.price != null && cnDateOf(rt.fetched_at) === today) {
+    basis = '实时'; price = n2(rt.price); prevClose = n2(rt.prev_close); vol = n2(rt.volume); asOf = rt.fetched_at ?? null;
+  } else if (bars.length) {
+    const last = bars[bars.length - 1];
+    const prev = bars.length >= 2 ? bars[bars.length - 2] : null;
+    price = n2(last.close); prevClose = prev ? n2(prev.close) : null; vol = n2(last.volume); asOf = last.date;
+  }
+  const changePct = price != null && prevClose ? Math.round(((price - prevClose) / prevClose) * 10000) / 100 : null;
+  const { up: limitUp, down: limitDown } = computeLimitPrices(prevClose, c, name);
+
+  const f = getCachedFundamentals(c);
+  const priorVols = bars.slice(0, Math.max(0, bars.length - 1)).slice(-5).map((b) => n2(b.volume)).filter((x): x is number => x != null);
+  const avg5 = priorVols.length ? priorVols.reduce((a, b) => a + b, 0) / priorVols.length : null;
+  const volumeRatio = basis === '实时' ? computeVolumeRatio(vol, elapsedTradingMinutes(now), avg5) : null;
+
+  const profile = await getStockProfile(userId, c, refresh);
+  const news = relatedNews(c, name, profile.industry, 8);
+
+  return {
+    code: c, name,
+    live: { basis, price, prevClose, changePct, limitUp, limitDown, turnoverRate: n2(f.turnover_rate), volumeRatio, asOf },
+    profile: { industry: profile.industry, summary: profile.summary, products: profile.products,
+               roeTtm: n2(f.roe_ttm), pe: n2(f.pe), pb: n2(f.pb), ps: n2(f.ps), netProfit: n2(f.net_profit), updatedAt: profile.updatedAt },
+    news,
+  };
 }

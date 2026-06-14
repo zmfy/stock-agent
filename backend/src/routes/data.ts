@@ -80,6 +80,16 @@ router.get('/snapshot/:code', async (req: Request, res: Response) => {
   successResponse(res, snap);
 });
 
+// GET /api/data/stock-detail/:code — 个股面板：实时/收盘 + 公司资料 + 相关新闻
+router.get('/stock-detail/:code', async (req: Request, res: Response) => {
+  try {
+    const detail = await svc.getStockDetail(req.user!.userId, req.params.code, req.query.refresh === '1');
+    successResponse(res, detail);
+  } catch (e: any) {
+    return errorResponse(res, 502, 'UPSTREAM_ERROR', `获取个股信息失败：${e?.message || ''}`);
+  }
+});
+
 // POST /api/data/refresh  { code? }
 router.post('/refresh', adminMiddleware, async (req: Request, res: Response) => {
   const userId = req.user!.userId;
