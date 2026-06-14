@@ -187,14 +187,6 @@
 
               <template v-if="active?.kind === 'screen' && screen">
                 <div class="screen-box">
-                  <button class="fold" @click="screenHistOpen = !screenHistOpen">{{ screenHistOpen ? '▾' : '▸' }} 历史选股记录（{{ screenHistory.length }}）</button>
-                  <div v-if="screenHistOpen" class="screen-hist">
-                    <div v-for="(h, i) in screenHistory" :key="i" class="sh-row">
-                      <div class="muted">{{ fmtCN(h.created_at) }} · {{ h.note }}</div>
-                      <div v-for="p in h.picks" :key="p.code" class="sh-pick" @click="openStockCode(p.code)">{{ p.name || p.code }} <span class="muted">{{ p.code }} · {{ p.reason }}</span></div>
-                      <div v-if="!h.picks.length" class="muted">（本次无入选）</div>
-                    </div>
-                  </div>
                   <div class="screen-results">
                     <div v-for="r in screenPicks" :key="r.code" class="srow" @click="openStockCode(r.code)">
                       <span class="badge2" :class="r.passedSystems[0] === 'A' ? 'a' : 'b'">{{ r.passedSystems.join('/') }}</span>
@@ -273,6 +265,19 @@
               </div>
             </template>
           </div>
+
+          <!-- 右：选股讨论的历史选股记录面板 -->
+          <aside v-if="active?.kind === 'screen' && screen" class="chat-side">
+            <div class="side-head">🗂 历史选股记录（{{ screenHistory.length }}）</div>
+            <div class="side-body">
+              <div v-for="(h, i) in screenHistory" :key="i" class="sh-row">
+                <div class="muted">{{ fmtCN(h.created_at) }} · {{ h.note }}</div>
+                <div v-for="p in h.picks" :key="p.code" class="sh-pick" @click="openStockCode(p.code)">{{ p.name || p.code }} <span class="muted">{{ p.code }} · {{ p.reason }}</span></div>
+                <div v-if="!h.picks.length" class="muted">（本次无入选）</div>
+              </div>
+              <div v-if="!screenHistory.length" class="muted">暂无历史选股记录。</div>
+            </div>
+          </aside>
 
         </div>
       </section>
@@ -415,7 +420,6 @@ const screen = ref<ScreenRun | null>(null);
 // 选股讨论只展示入选（A/B 通过）个股，未入选不显示
 const screenPicks = computed(() => (screen.value?.results || []).filter((r) => (r.passedSystems || []).length));
 const screenHistory = ref<Array<{ created_at: string; note: string; picks: Array<{ code: string; name: string | null; reason: string }> }>>([]);
-const screenHistOpen = ref(false);
 const stratHistFold = ref(false); // 历史房间:策略历史折叠(默认展开)
 const analHistFold = ref(false);  // 历史房间:分析历史折叠(默认展开)
 
@@ -1081,6 +1085,7 @@ onUnmounted(() => {
   .topnav { padding: 10px 10px 0; }
   .chat-row { flex-direction: column; }
   .cp-side, .convo { width: auto; }
+  .chat-side { flex: none; max-height: 32vh; }
   .bubble { max-width: 88%; }
 }
 .empty { margin: auto; text-align: center; color: var(--text-soft); max-width: 460px; }
@@ -1143,7 +1148,9 @@ onUnmounted(() => {
 .err { color: var(--danger); }
 .screen-box { background: #f7faff; border: 1px solid #d6e4ff; border-radius: 8px; padding: 8px 12px; margin: 6px 0; flex: 0 0 auto; max-height: 40vh; overflow-y: auto; }
 .screen-results { margin-top: 6px; }
-.screen-hist { margin: 6px 0; border-top: 1px dashed #d6e4ff; padding-top: 6px; max-height: 260px; overflow-y: auto; }
+.chat-side { flex: 0 0 300px; display: flex; flex-direction: column; background: #f7faff; border: 1px solid #d6e4ff; border-radius: 8px; overflow: hidden; align-self: stretch; min-height: 0; }
+.side-head { padding: 8px 12px; font-size: 13px; font-weight: 600; color: #2563a8; border-bottom: 1px solid #d6e4ff; flex: 0 0 auto; }
+.side-body { padding: 8px 12px; overflow-y: auto; min-height: 0; }
 .sh-row { margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid #eef2fa; }
 .sh-row:last-child { border-bottom: none; margin-bottom: 0; }
 .sh-pick { padding: 3px 6px; border-radius: 4px; cursor: pointer; font-size: 12px; display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
