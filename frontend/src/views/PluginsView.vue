@@ -1,8 +1,12 @@
 <template>
   <div class="plugins">
-    <p class="hint">
+    <p v-if="auth.isAdmin" class="hint">
       内置的 <b>MCP 工具</b>（浏览网页、取数据）和<b>技能 Skill</b>（探索、记忆等）<b>默认已全部启用</b>，一般无需改动。
       如果你清楚自己在做什么，可在这里停用某些插件、调整配置，或添加自定义插件。实际连接/生效在后续计划接入。
+    </p>
+    <p v-else class="hint">
+      管理员配置的<b>MCP 工具</b>和<b>技能 Skill</b>你只能<b>开关使用</b>、不能改配置。
+      但你可以在下方<b>添加并管理自己使用的</b>自定义 MCP / 技能（增删改都只影响你自己）。
     </p>
 
     <section class="card">
@@ -100,7 +104,7 @@ const PluginCard = defineComponent({
                   ' 共享',
                 ])
               : null,
-            h('button', { onClick: () => (open.value = !open.value) }, open.value ? '收起' : '配置'),
+            (props.isAdmin || props.p.source === 'custom') ? h('button', { onClick: () => (open.value = !open.value) }, open.value ? '收起' : '配置') : null,
             props.p.source === 'custom' ? h('button', { class: 'danger', onClick: () => emit('remove', props.p) }, '删除') : null,
           ]),
         ]),

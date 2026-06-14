@@ -1,161 +1,77 @@
 <template>
-  <div class="analysis">
-    <p v-if="!focusCode" class="hint card">这里汇总你所有个股的分析历史（在个股讨论里分析后自动存档）。点下方任意一条查看完整报告。清空对话不会删除这里的历史。</p>
-    <p v-if="err" class="err card">{{ err }}</p>
-    <p v-else-if="busy && focusCode" class="card hint">正在加载 {{ focusCode }} 的报告…</p>
+  <div class="ah">
+    <p v-if="err" class="err">{{ err }}</p>
+    <p v-if="!reports.length && !err" class="muted">还没有分析记录。在「个股讨论」里分析任意股票后，会自动存档到这里。</p>
 
-    <section v-if="report" class="card report">
-      <div class="rhead">
-        <h2>{{ report.stock_code }} {{ report.stock_name || '' }}</h2>
-        <div class="meta">
-          规则版本 {{ report.rulebook_version_id?.slice(0, 8) }} · 数据 {{ report.data_date }} ·
-          模型 {{ report.ai_provider }}/{{ report.ai_model }} · {{ fmtCN(report.created_at) }}
-        </div>
-      </div>
-
-      <div class="prov">
-        <span v-if="report.validation" :class="report.validation.trusted ? 'ok' : 'warn'">
-          数据校验：{{ report.validation.trusted ? '✅ 通过' : '⚠️ 存疑' }}（{{ authorityCn(report.validation.authority) }}）
-        </span>
-        <span v-if="report.sources?.quote">· 行情 {{ report.sources.quote.source }}@{{ report.sources.quote.date }}</span>
-        <span v-if="report.sources?.fundamentals">· 基本面 {{ report.sources.fundamentals.source }}@{{ report.sources.fundamentals.date }}</span>
-        <span v-if="report.sources?.sidecarBase">· 源 {{ report.sources.sidecarBase }}</span>
-      </div>
-
-      <p class="oneliner">👉 {{ report.one_liner }}</p>
-
-      <template v-for="sys in systemsOf" :key="sys">
-        <h3>{{ sys }} 系统</h3>
-        <GateTable :rows="gatesOf(sys)" />
-        <p v-if="sys === 'A' && report.a_conclusion" class="concl"><b>A 结论：</b>{{ report.a_conclusion }}</p>
-        <p v-if="sys === 'B' && report.b_conclusion" class="concl"><b>B 结论：</b>{{ report.b_conclusion }}</p>
-      </template>
-
-      <!-- 无当前策略的通用分析：没有门槛系统，直接展示综合研判 -->
-      <p v-if="!systemsOf.length && report.a_conclusion" class="concl">{{ report.a_conclusion }}</p>
-
-      <p v-if="report.exception_channel" class="concl"><b>例外通道：</b>{{ report.exception_channel }}</p>
-      <p class="concl"><b>仓位建议：</b>{{ report.position_suggestion }}</p>
-
-      <div v-if="report.teach_notes?.length" class="teach">
-        <h4>📘 教学</h4>
-        <ul><li v-for="(t, i) in report.teach_notes" :key="i"><b>{{ labelOf(t.gate_key) }}</b>：{{ t.note }}</li></ul>
-      </div>
+    <section v-for="r in reports" :key="r.id" class="card" @click="openReport(r)">
+      <span class="tag">{{ r.stock_code }}</span>
+      <span v-if="r.stock_name" class="name">{{ r.stock_name }}</span>
+      <span class="date">{{ fmtCN(r.created_at) }}</span>
+      <span class="summary">{{ r.one_liner }}</span>
     </section>
 
-    <section class="card" v-if="!focusCode && reports.length">
-      <h2>历史报告</h2>
-      <table>
-        <thead><tr><th>代码</th><th>一句话结论</th><th>模型</th><th>时间</th></tr></thead>
-        <tbody>
-          <tr v-for="r in reports" :key="r.id" @click="view(r.id)" class="rrow">
-            <td>{{ r.stock_code }} {{ r.stock_name || '' }}</td>
-            <td>{{ r.one_liner }}</td>
-            <td class="muted">{{ r.ai_model }}</td>
-            <td class="muted">{{ fmtCN(r.created_at) }}</td>
-          </tr>
-        </tbody>
-      </table>
-    </section>
+    <Modal v-if="selected" :title="`${selected.stock_code} ${selected.stock_name || ''} · ${fmtCN(selected.created_at)}`" @close="selected = null">
+      <ReportDetail v-if="loaded[selected.id]" :report="loaded[selected.id]" />
+      <p v-else-if="err" class="err">{{ err }}</p>
+      <p v-else class="muted">加载中…</p>
+    </Modal>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, defineComponent, h } from 'vue';
+import { ref, reactive, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
-import { analysisApi, type AnalysisReport, type ReportSummary, type GateResult } from '../api/analysis';
+import { analysisApi, type AnalysisReport, type ReportSummary } from '../api/analysis';
 import { fmtCN } from '../utils/time';
+import Modal from './Modal.vue';
+import ReportDetail from '../components/ReportDetail.vue';
 
 const route = useRoute();
 const focusCode = ref<string>(typeof route.query.code === 'string' ? route.query.code : '');
 
-const ICON: Record<string, string> = { pass: '✅', fail: '❌', unknown: '⚠️' };
-
-const GateTable = defineComponent({
-  props: { rows: { type: Array as () => GateResult[], required: true } },
-  setup(props) {
-    const cond = (r: GateResult) =>
-      r.op === 'gt_field' ? `${r.field}>${r.ref_field}` : r.op === 'between' ? `${r.threshold}~${r.threshold2}` : `${r.op}${r.threshold}`;
-    return () =>
-      h('table', { class: 'gates' }, [
-        h('thead', [h('tr', [h('th', '门槛'), h('th', '要求'), h('th', '实测'), h('th', '结果'), h('th', '类型')])]),
-        h('tbody', props.rows.map((r) =>
-          h('tr', { key: r.gate_key, title: r.teach }, [
-            h('td', r.label),
-            h('td', `${cond(r)}${r.unit}`),
-            h('td', r.actual === null ? '—' : String(r.actual)),
-            h('td', ICON[r.status] || '?'),
-            h('td', { class: 'muted' }, r.veto ? '否决' : '质量'),
-          ])
-        )),
-      ]);
-  },
-});
-
-const busy = ref(false);
 const err = ref('');
-const report = ref<AnalysisReport | null>(null);
 const reports = ref<ReportSummary[]>([]);
+const selected = ref<ReportSummary | null>(null);
+const loaded = reactive<Record<string, AnalysisReport>>({});
 
-const systemsOf = computed(() => [...new Set((report.value?.gate_results || []).map((g) => g.system))].sort());
-function gatesOf(sys: string) {
-  return report.value?.gate_results.filter((g) => g.system === sys) || [];
-}
-function labelOf(key: string) {
-  return report.value?.gate_results.find((g) => g.gate_key === key)?.label || key;
-}
-function authorityCn(a: string) {
-  return { uploaded: '以上传数据为准', cross: '交叉验证', internal: '合理性检查', none: '无来源' }[a] || a;
-}
-
-async function view(id: string) {
-  report.value = (await analysisApi.getReport(id)).data.data;
-  window.scrollTo({ top: 0, behavior: 'smooth' });
-}
 async function loadList() {
-  reports.value = (await analysisApi.listReports()).data.data;
+  try {
+    reports.value = (await analysisApi.listReports()).data.data;
+  } catch (e: any) {
+    err.value = e.response?.data?.message || '加载分析历史失败';
+  }
+}
+
+async function openReport(r: ReportSummary) {
+  selected.value = r;
+  err.value = '';
+  if (!loaded[r.id]) {
+    try {
+      loaded[r.id] = (await analysisApi.getReport(r.id)).data.data;
+    } catch (e: any) {
+      err.value = e.response?.data?.message || '加载报告失败';
+    }
+  }
 }
 
 onMounted(async () => {
-  if (focusCode.value) {
-    // 直达模式：直接展示该股最近一份报告，没有就现跑一次
-    busy.value = true;
-    try {
-      report.value = (await analysisApi.getLatestByCode(focusCode.value)).data.data;
-    } catch {
-      try {
-        report.value = (await analysisApi.run(focusCode.value)).data.data;
-      } catch (e: any) {
-        err.value = e.response?.data?.message || '暂无报告，且重新分析失败';
-      }
-    } finally {
-      busy.value = false;
-    }
-    return;
-  }
   await loadList();
+  // 直达模式（标准路由 /analysis?code=）：自动弹出该股最近一份报告。
+  if (focusCode.value) {
+    const m = reports.value.find((r) => r.stock_code === focusCode.value);
+    if (m) await openReport(m);
+  }
 });
 </script>
 
 <style scoped>
-.analysis { max-width: 960px; margin: 0; padding: 0 16px; }
-.bar { display: flex; justify-content: space-between; align-items: baseline; }
-.card { border: 1px solid #e5e5e5; border-radius: 8px; padding: 16px; margin-top: 16px; }
-.run { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-.run input { padding: 6px; }
-.hint { color: #888; font-size: 12px; width: 100%; margin: 0; }
-.rhead h2 { margin: 0; }
-.meta { color: #999; font-size: 12px; }
-.prov { font-size: 12px; color: #888; margin: 6px 0; }
-.prov .ok { color: #2a8a2a; }
-.prov .warn { color: #c08; }
-.oneliner { background: #f3faf3; border: 1px solid #cce8cc; padding: 8px 12px; border-radius: 6px; font-weight: 600; }
-.concl { margin: 6px 0; }
-:deep(table.gates), table { width: 100%; border-collapse: collapse; margin: 6px 0 12px; }
-:deep(table.gates th), :deep(table.gates td), th, td { text-align: left; padding: 5px 8px; border-bottom: 1px solid #eee; font-size: 13px; }
-.teach { background: #fafafa; border-radius: 6px; padding: 8px 12px; }
+.ah { max-width: 960px; margin: 0; padding: 0; }
 .muted { color: #999; }
 .err { color: #c00; }
-.rrow { cursor: pointer; }
-.rrow:hover { background: #f7f7f7; }
+.card { display: flex; align-items: center; gap: 8px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; margin-bottom: 10px; cursor: pointer; font-size: 13px; transition: border-color 0.12s; }
+.card:hover { border-color: var(--info, #2563a8); }
+.tag { font-size: 11px; padding: 1px 8px; border-radius: 8px; background: #e8f3ff; color: #2563a8; font-weight: 600; }
+.name { color: #333; }
+.date { color: #666; }
+.summary { flex: 1; color: #888; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 </style>

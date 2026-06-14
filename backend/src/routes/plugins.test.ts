@@ -78,6 +78,34 @@ describe('plugins routes', () => {
   });
 });
 
+describe('普通用户:可加/管自己的，不能改 admin 配置的', () => {
+  it('用户开关「使用」内置插件可以(200)', async () => {
+    const off = await request(app).post('/api/plugins/playwright/enable').set(h(userTok)).send({ enabled: false });
+    expect(off.status).toBe(200);
+    const on = await request(app).post('/api/plugins/playwright/enable').set(h(userTok)).send({ enabled: true });
+    expect(on.status).toBe(200);
+  });
+  it('用户能新增(201)并改配置/删除自己加的自定义插件(200)', async () => {
+    const add = await request(app).post('/api/plugins/custom').set(h(userTok)).send({ key: 'myskill', label: '我的技能', kind: 'skill', config: { a: 1 } });
+    expect(add.status).toBe(201);
+    const cfg = await request(app).put('/api/plugins/myskill/config').set(h(userTok)).send({ config: { a: 2 } });
+    expect(cfg.status).toBe(200);
+    const del = await request(app).delete('/api/plugins/myskill').set(h(userTok));
+    expect(del.status).toBe(200);
+  });
+  it('用户不能改/删 admin 配置的内置插件(403)', async () => {
+    const cfg = await request(app).put('/api/plugins/akshare-data/config').set(h(userTok)).send({ config: { url: 'http://y' } });
+    expect(cfg.status).toBe(403);
+    const del = await request(app).delete('/api/plugins/playwright').set(h(userTok));
+    expect(del.status).toBe(403);
+  });
+  it('用户经 enable 夹带 config 被忽略(不写入个人覆盖)', async () => {
+    await request(app).post('/api/plugins/fetch/enable').set(h(userTok)).send({ enabled: true, config: { sneaky: 1 } });
+    const res = await request(app).get('/api/plugins').set(h(userTok));
+    expect(res.body.data.find((p: any) => p.key === 'fetch').config.sneaky).toBeUndefined();
+  });
+});
+
 describe('shared plugins routes', () => {
   it('admin 才能共享：用户 403、admin 200', async () => {
     await request(app).post('/api/plugins/custom').set(h(adminTok)).send({ key: 'shmcp', label: '共享MCP', kind: 'mcp', transport: 'http', config: { url: 'http://x' } });

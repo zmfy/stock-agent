@@ -121,10 +121,6 @@
                     <button class="mini" @click="aiTasksOpen = true">🧷 任务分工</button>
                     <button class="mini" @click="pluginsModalOpen = true">🧩 能力插件</button>
                   </template>
-                  <template v-if="active.kind === 'history'">
-                    <button class="mini" @click="strategyHistOpen = true">🗂 策略历史</button>
-                    <button class="mini" @click="analysisHistOpen = true">📊 分析历史</button>
-                  </template>
                   <button class="mini clear-cur" @click="clearCurrent" title="清空当前会话的消息">🧹 清理</button>
                 </span>
               </div>
@@ -157,6 +153,12 @@
                   </template>
                 </div>
               </div>
+              <div v-else-if="active.kind === 'history'" class="history-room">
+                <button class="hist-fold" @click="stratHistFold = !stratHistFold">{{ stratHistFold ? '▸' : '▾' }} 🗂 策略历史</button>
+                <div v-show="!stratHistFold" class="hist-scroll"><StrategyHistoryView /></div>
+                <button class="hist-fold" @click="analHistFold = !analHistFold">{{ analHistFold ? '▸' : '▾' }} 📊 分析历史</button>
+                <div v-show="!analHistFold" class="hist-scroll"><AnalysisView /></div>
+              </div>
               <div v-else-if="active.kind === 'screen' && !activeRulebook" class="room-actions">
                 <span class="muted">还没有当前策略，无法选股。先去「当前策略」房间定一套。</span>
               </div>
@@ -180,7 +182,7 @@
                 <StockText v-else-if="!messages.length" :text="briefing" :clamp="false" />
               </div>
               <div v-else-if="active?.kind === 'screen' && briefing" class="briefing">
-                <ConclusionBubble :text="briefing" @detail="openDetail" />
+                <StockText :text="briefing" :clamp="false" />
               </div>
 
               <template v-if="active?.kind === 'screen' && screen">
@@ -287,8 +289,6 @@
     <Modal v-if="aiTasksOpen" title="任务分工" @close="aiTasksOpen = false">
       <AiSettingsView section="tasks" />
     </Modal>
-    <Modal v-if="strategyHistOpen" title="策略历史" @close="strategyHistOpen = false"><StrategyHistoryView /></Modal>
-    <Modal v-if="analysisHistOpen" title="分析历史" @close="analysisHistOpen = false"><AnalysisView /></Modal>
     <Modal v-if="pluginsModalOpen" title="能力插件" @close="pluginsModalOpen = false">
       <PluginsView />
     </Modal>
@@ -345,7 +345,6 @@ import CronsView from './CronsView.vue';
 import ScheduleSettings from './ScheduleSettings.vue';
 import StockPicker from '../components/StockPicker.vue';
 import StockText from '../components/StockText.vue';
-import ConclusionBubble from '../components/ConclusionBubble.vue';
 import MarkdownModal from '../components/MarkdownModal.vue';
 import ReportModal from '../components/ReportModal.vue';
 import Modal from './Modal.vue';
@@ -417,6 +416,8 @@ const screen = ref<ScreenRun | null>(null);
 const screenPicks = computed(() => (screen.value?.results || []).filter((r) => (r.passedSystems || []).length));
 const screenHistory = ref<Array<{ created_at: string; note: string; picks: Array<{ code: string; name: string | null; reason: string }> }>>([]);
 const screenHistOpen = ref(false);
+const stratHistFold = ref(false); // 历史房间:策略历史折叠(默认展开)
+const analHistFold = ref(false);  // 历史房间:分析历史折叠(默认展开)
 
 const dataAlerts = ref<DataAlert[]>([]);
 const alertErrorCount = computed(() => dataAlerts.value.filter((a) => a.level === 'error').length);
@@ -439,8 +440,6 @@ const tplOpen = ref(false);
 const aiModelsOpen = ref(false);
 const aiTasksOpen = ref(false);
 const pluginsModalOpen = ref(false);
-const strategyHistOpen = ref(false);
-const analysisHistOpen = ref(false);
 const tplSelected = ref<string[]>([]);
 const orderedKeys = ref<string[]>([]);
 const composeRes = ref<{ conflict: boolean; conflictFields: string[]; systems: any[]; versionLabel: string } | null>(null);
@@ -1099,6 +1098,11 @@ onUnmounted(() => {
 .sess-spin { margin-left: 4px; }
 .pin-card.gen { background: #eef7ee; cursor: pointer; border: 1px dashed #b7d7b7; text-align: left; }
 .fold { text-align: left; background: none; border: none; color: #666; font-size: 12px; cursor: pointer; padding: 2px 4px; }
+.history-room { display: flex; flex-direction: column; }
+.hist-fold { display: block; width: 100%; text-align: left; background: none; border: none; color: var(--text); font-size: 14px; font-weight: 600; cursor: pointer; padding: 8px 2px 4px; }
+.hist-fold + .hist-scroll { margin-bottom: 8px; }
+/* 默认约显示 3 条记录，多的滚动查看 */
+.hist-scroll { max-height: 168px; overflow-y: auto; padding-right: 4px; }
 .srow { padding: 4px 6px; border-radius: 4px; cursor: pointer; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .srow:hover { background: #f3f3f3; }
 .badge2 { display: inline-block; width: 16px; text-align: center; border-radius: 4px; font-size: 11px; margin-right: 4px; }

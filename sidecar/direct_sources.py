@@ -64,12 +64,70 @@ def fetch_sentiment():
     return out
 
 
+def _f(v):
+    try:
+        return round(float(v), 4)
+    except Exception:
+        return None
+
+
+def _sina_sector_spot():
+    import akshare as ak
+    return ak.stock_sector_spot(indicator="行业")  # cols: label, 板块, 涨跌幅 ...
+
+
+def fetch_sectors_hot(top=5):
+    """热门行业板块（按涨跌幅）：东方财富优先、新浪兜底。返回 [{name, change}]。"""
+    import akshare as ak
+    try:
+        df = ak.stock_board_industry_name_em()
+        if df is not None and len(df):
+            if "涨跌幅" in df.columns:
+                df = df.sort_values("涨跌幅", ascending=False)
+            rows = [{"name": r.get("板块名称") or r.get("板块"), "change": _f(r.get("涨跌幅"))} for _, r in df.head(top).iterrows()]
+            rows = [x for x in rows if x["name"]]
+            if rows:
+                return rows
+    except Exception:
+        pass
+    try:
+        s = _sina_sector_spot().sort_values("涨跌幅", ascending=False)
+        return [{"name": str(r.get("板块")), "change": _f(r.get("涨跌幅"))} for _, r in s.head(top).iterrows() if r.get("板块")]
+    except Exception:
+        return []
+
+
+def fetch_sector_cons(name):
+    """板块成分股（按板块名）：东方财富优先；新浪兜底(名字→label→成分)。返回 [{code, name}]。"""
+    import akshare as ak
+    try:
+        df = ak.stock_board_industry_cons_em(symbol=name)
+        if df is not None and len(df):
+            return [{"code": str(r.get("代码")), "name": r.get("名称")} for _, r in df.iterrows()]
+    except Exception:
+        pass
+    try:
+        s = _sina_sector_spot()
+        row = s[s["板块"].astype(str) == str(name)]
+        label = str(row.iloc[0]["label"]) if not row.empty else None
+        if label:
+            d = ak.stock_sector_detail(sector=label)
+            return [{"code": str(r.get("code"))[-6:], "name": r.get("name")} for _, r in d.iterrows() if r.get("code")]
+    except Exception:
+        pass
+    return []
+
+
 if __name__ == "__main__":
     kind = sys.argv[1] if len(sys.argv) > 1 else "news"
-    arg = int(sys.argv[2]) if len(sys.argv) > 2 else 20
+    raw = sys.argv[2] if len(sys.argv) > 2 else "20"
     if kind == "news":
-        print(json.dumps(fetch_news(arg), ensure_ascii=False))
+        print(json.dumps(fetch_news(int(raw)), ensure_ascii=False))
     elif kind == "sentiment":
         print(json.dumps(fetch_sentiment(), ensure_ascii=False))
+    elif kind == "sectors_hot":
+        print(json.dumps(fetch_sectors_hot(int(raw)), ensure_ascii=False))
+    elif kind == "sector_cons":
+        print(json.dumps(fetch_sector_cons(raw), ensure_ascii=False))
     else:
         print(json.dumps(None, ensure_ascii=False))

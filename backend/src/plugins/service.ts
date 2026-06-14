@@ -137,6 +137,12 @@ export function addCustom(
     );
 }
 
+// 该 key 是否为「该用户自己添加的自定义插件」。用于权限:普通用户只能改/删自己加的,
+// 不能动 admin 配置的内置插件或管理员共享插件。
+export function ownsCustom(userId: string, key: string): boolean {
+  return rowFor(userId, key)?.source === 'custom';
+}
+
 export function updateConfig(userId: string, key: string, config: Record<string, unknown>): void {
   const def = getCatalogPlugin(key);
   const existing = rowFor(userId, key);

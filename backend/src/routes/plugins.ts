@@ -27,11 +27,13 @@ router.get('/enabled', (req: Request, res: Response) => {
 const enableSchema = z.object({ enabled: z.boolean(), config: z.record(z.unknown()).optional() });
 
 // POST /api/plugins/:key/enable
+// 开关「使用」对所有用户开放；但 config 仅 admin 可经此带入——普通用户「只能使用、不能修改」，config 字段一律忽略。
 router.post('/:key/enable', (req: Request, res: Response) => {
   const parsed = enableSchema.safeParse(req.body);
   if (!parsed.success) return errorResponse(res, 422, 'VALIDATION_ERROR', '参数校验失败');
   try {
-    svc.setEnabled(req.user!.userId, req.params.key, parsed.data.enabled, parsed.data.config);
+    const cfg = req.user!.role === 'admin' ? parsed.data.config : undefined;
+    svc.setEnabled(req.user!.userId, req.params.key, parsed.data.enabled, cfg);
     successResponse(res, null, parsed.data.enabled ? '已启用' : '已停用');
   } catch (e: any) {
     if (e.message === 'UNKNOWN_PLUGIN') return errorResponse(res, 404, 'RESOURCE_NOT_FOUND', '未知插件');
@@ -68,7 +70,7 @@ const customSchema = z.object({
   config: z.record(z.unknown()),
 });
 
-// POST /api/plugins/custom
+// POST /api/plugins/custom — 所有用户都能添加「自己使用」的自定义 MCP/skill。
 router.post('/custom', (req: Request, res: Response) => {
   const parsed = customSchema.safeParse(req.body);
   if (!parsed.success) return errorResponse(res, 422, 'VALIDATION_ERROR', parsed.error.errors[0]?.message || '参数校验失败');
@@ -81,10 +83,14 @@ router.post('/custom', (req: Request, res: Response) => {
   }
 });
 
-// PUT /api/plugins/:key/config
+// PUT /api/plugins/:key/config — admin 可改任意；普通用户只能改「自己添加的自定义插件」，
+// 不能改 admin 配置的内置插件 / 管理员共享插件。
 router.put('/:key/config', (req: Request, res: Response) => {
   const parsed = z.object({ config: z.record(z.unknown()) }).safeParse(req.body);
   if (!parsed.success) return errorResponse(res, 422, 'VALIDATION_ERROR', '参数校验失败');
+  if (req.user!.role !== 'admin' && !svc.ownsCustom(req.user!.userId, req.params.key)) {
+    return errorResponse(res, 403, 'FORBIDDEN', '只能修改自己添加的插件');
+  }
   try {
     svc.updateConfig(req.user!.userId, req.params.key, parsed.data.config);
     successResponse(res, null, '配置已更新');
@@ -94,8 +100,11 @@ router.put('/:key/config', (req: Request, res: Response) => {
   }
 });
 
-// DELETE /api/plugins/:key
+// DELETE /api/plugins/:key — admin 可删任意；普通用户只能删「自己添加的自定义插件」。
 router.delete('/:key', (req: Request, res: Response) => {
+  if (req.user!.role !== 'admin' && !svc.ownsCustom(req.user!.userId, req.params.key)) {
+    return errorResponse(res, 403, 'FORBIDDEN', '只能删除自己添加的插件');
+  }
   svc.remove(req.user!.userId, req.params.key);
   successResponse(res, null, '已移除');
 });

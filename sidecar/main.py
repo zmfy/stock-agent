@@ -509,61 +509,23 @@ def news(limit: int = 20, order: str = ""):
     return {"source": None, "rows": []}
 
 
-# 热门板块 + 成分:东方财富(_em)在本网络常被 RST → 退新浪(stock_sector_spot/detail，行业板块)。
-# 契约保持「按板块名」：hot 返回名字，cons 收名字（新浪路径内部把名字解析成 sina label 再取成分）。
-def _sina_sector_spot():
-    return ak.stock_sector_spot(indicator="行业")  # cols: label, 板块, 涨跌幅 ...
-
-def _sina_label_for(name: str):
-    try:
-        s = _sina_sector_spot()
-        row = s[s["板块"].astype(str) == str(name)]
-        return str(row.iloc[0]["label"]) if not row.empty else None
-    except Exception:
-        return None
-
-
+# 热门板块 + 成分:东方财富(_em)/新浪(stock_sector_spot/detail) 都是 eastmoney/sina HTTP 源,
+# 经 socks5 出站代理会被掐断(实测 /sectors/hot 走代理超时、直连 sina 1s 可达),故与新闻/情绪同样走直连:
+# 代理生效→无补丁子进程直连;代理关闭→进程内直调。逻辑单一真源在 direct_sources。
 @app.get("/sectors/hot")
 def sectors_hot(top: int = 5):
-    # 1) 东方财富
-    try:
-        df = ak.stock_board_industry_name_em()
-        if df is not None and len(df):
-            col = "涨跌幅" if "涨跌幅" in df.columns else None
-            if col:
-                df = df.sort_values(col, ascending=False)
-            rows = [{"name": r.get("板块名称") or r.get("板块"), "change": _f(r.get("涨跌幅"))} for _, r in df.head(top).iterrows()]
-            rows = [x for x in rows if x["name"]]
-            if rows:
-                return rows
-    except Exception:
-        pass
-    # 2) 新浪(行业板块) 兜底
-    try:
-        s = _sina_sector_spot().sort_values("涨跌幅", ascending=False)
-        return [{"name": str(r.get("板块")), "change": _f(r.get("涨跌幅"))} for _, r in s.head(top).iterrows() if r.get("板块")]
-    except Exception:
-        return []
+    if proxy.proxy_active():
+        r = proxy.run_direct_json("sectors_hot", top)
+        return r if isinstance(r, list) else []
+    return direct_sources.fetch_sectors_hot(top)
 
 
 @app.get("/sectors/{name}/cons")
 def sector_cons(name: str):
-    # 1) 东方财富
-    try:
-        df = ak.stock_board_industry_cons_em(symbol=name)
-        if df is not None and len(df):
-            return [{"code": str(r.get("代码")), "name": r.get("名称")} for _, r in df.iterrows()]
-    except Exception:
-        pass
-    # 2) 新浪兜底：名字 → label → 成分(code)
-    try:
-        label = _sina_label_for(name)
-        if label:
-            d = ak.stock_sector_detail(sector=label)
-            return [{"code": str(r.get("code"))[-6:], "name": r.get("name")} for _, r in d.iterrows() if r.get("code")]
-    except Exception:
-        pass
-    return []
+    if proxy.proxy_active():
+        r = proxy.run_direct_json("sector_cons", name)
+        return r if isinstance(r, list) else []
+    return direct_sources.fetch_sector_cons(name)
 
 
 def _mkt_prefix(code: str) -> str:
