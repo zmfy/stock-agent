@@ -280,6 +280,11 @@ def _ak_fund(code: str) -> dict:
 @app.get("/fundamentals/{code}")
 def fundamentals(code: str, order: str = ""):
     code = code[-6:]
+    # 通达信 F10 经 socks5 代理偶发卡死(实时/日线正常)；代理生效时走无补丁子进程直连取 TDX 基本面。
+    if proxy.proxy_active():
+        d = proxy.run_direct_json("fundamentals", code, timeout=35)
+        if isinstance(d, dict) and any(d.get(k) is not None for k in ("pe", "pb", "ps", "roe_ttm", "net_profit")):
+            return {"source": "tdx-direct", "data": d}
     merged: dict = {}
     first_source = None
     for reg in _order_providers("fundamentals", order):

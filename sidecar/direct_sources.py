@@ -118,6 +118,13 @@ def fetch_sector_cons(name):
     return []
 
 
+def fetch_fundamentals(code):
+    """通达信 F10 基本面(roe_ttm/pe/pb/ps/net_profit/turnover_rate)。
+    走直连子进程——TDX 实时/日线经 socks5 代理正常，但 F10 经该代理偶发卡死(实测)，直连稳定。"""
+    import tdx
+    return tdx.finance_fundamentals(code) or {}
+
+
 if __name__ == "__main__":
     kind = sys.argv[1] if len(sys.argv) > 1 else "news"
     raw = sys.argv[2] if len(sys.argv) > 2 else "20"
@@ -129,5 +136,7 @@ if __name__ == "__main__":
         print(json.dumps(fetch_sectors_hot(int(raw)), ensure_ascii=False))
     elif kind == "sector_cons":
         print(json.dumps(fetch_sector_cons(raw), ensure_ascii=False))
+    elif kind == "fundamentals":
+        print(json.dumps(fetch_fundamentals(raw), ensure_ascii=False))
     else:
         print(json.dumps(None, ensure_ascii=False))
