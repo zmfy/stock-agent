@@ -1239,6 +1239,7 @@ onUnmounted(() => {
 .up { color: #d33; }
 .down { color: #2a8a2a; }
 .sd-refresh { float: right; padding: 0 6px; font-size: 12px; }
+.sd-sec .tag { font-size: 11px; padding: 1px 8px; border-radius: 8px; background: #eef; color: #446; }
 .sd-sec { padding: 8px 0; border-bottom: 1px solid #eef2fa; }
 .sd-sec:last-child { border-bottom: none; }
 .sd-sub { font-size: 12px; font-weight: 600; color: #2563a8; margin-bottom: 4px; }
